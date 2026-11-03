@@ -6,6 +6,8 @@ import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import nodemailer from 'nodemailer';
 import multer from 'multer';
+import { generateRoyaltyForecast } from './src/utils/mlForecasting';
+import { ForecastModelType, ForecastScenario, CombinedChartPoint } from './src/types';
 
 dotenv.config();
 
@@ -2308,6 +2310,114 @@ app.get('/api/dashboard/royalties/export', (req, res) => {
   res.setHeader('Content-Type', 'text/csv');
   res.setHeader('Content-Disposition', `attachment; filename="Rudraatma_Royalty_Statement_${targetMonth || 'All_Time'}.csv"`);
   return res.send(csvContent);
+});
+
+// Machine Learning Revenue Forecast Endpoint
+app.get('/api/dashboard/royalties/forecast', (req, res) => {
+  const user = getAuthenticatedUser(req);
+  if (!user) return res.status(401).json({ error: 'Unauthorized.' });
+
+  const dashboard = getUserDashboard(user.id);
+  const rawModel = req.query.model as string;
+  const modelType: ForecastModelType =
+    rawModel === 'holt_winters' || rawModel === 'linear_regression' || rawModel === 'polynomial'
+      ? rawModel
+      : 'ensemble';
+
+  const rawScenario = req.query.scenario as string;
+  const scenario: ForecastScenario =
+    rawScenario === 'conservative' || rawScenario === 'optimistic' ? rawScenario : 'baseline';
+
+  const confidenceLevel = req.query.confidenceLevel
+    ? (Number(req.query.confidenceLevel) === 80 ? 80 : Number(req.query.confidenceLevel) === 95 ? 95 : 90)
+    : 90;
+
+  const plannedReleases = req.query.plannedReleases ? Math.max(0, Math.min(4, Number(req.query.plannedReleases))) : 0;
+  const playlistTraction = req.query.playlistTraction === 'true' || req.query.playlistPlacements === '1';
+
+  try {
+    const forecast = generateRoyaltyForecast(dashboard.monthlyRoyalties, {
+      modelType,
+      scenario,
+      confidenceLevel,
+      plannedReleases,
+      playlistTraction
+    });
+
+    return res.json({
+      success: true,
+      forecast
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || 'Failed to compute forecast.' });
+  }
+});
+
+// Download Machine Learning Forecast CSV
+app.get('/api/dashboard/royalties/forecast/export', (req, res) => {
+  const user = getAuthenticatedUser(req);
+  if (!user) return res.status(401).json({ error: 'Unauthorized.' });
+
+  const dashboard = getUserDashboard(user.id);
+  const rawModel = req.query.model as string;
+  const modelType: ForecastModelType =
+    rawModel === 'holt_winters' || rawModel === 'linear_regression' || rawModel === 'polynomial'
+      ? rawModel
+      : 'ensemble';
+
+  const rawScenario = req.query.scenario as string;
+  const scenario: ForecastScenario =
+    rawScenario === 'conservative' || rawScenario === 'optimistic' ? rawScenario : 'baseline';
+
+  try {
+    const forecast = generateRoyaltyForecast(dashboard.monthlyRoyalties, {
+      modelType,
+      scenario,
+      confidenceLevel: 95
+    });
+
+    const headers = [
+      'Month',
+      'Cycle Label',
+      'Record Type',
+      'Status / Model',
+      'Projected / Actual Net Royalty (INR)',
+      'Lower Bound (95% CI)',
+      'Upper Bound (95% CI)',
+      'Projected Streams',
+      'Spotify Share (INR)',
+      'Apple Music Share (INR)',
+      'YouTube Music Share (INR)',
+      'JioSaavn Share (INR)',
+      'Amazon Music Share (INR)',
+      'Other DSPs Share (INR)'
+    ];
+
+    const rows = forecast.combinedChartData.map((pt: CombinedChartPoint) => [
+      pt.month,
+      pt.monthLabel,
+      pt.isForecast ? 'Forecast (ML Projections)' : 'Historical Actuals',
+      pt.isForecast ? `${modelType.toUpperCase()} (${scenario})` : (pt.status || 'Verified'),
+      (pt.isForecast ? pt.forecastNet : pt.actualNet || 0)?.toFixed(2),
+      pt.lowerBound !== undefined ? pt.lowerBound.toFixed(2) : 'N/A',
+      pt.upperBound !== undefined ? pt.upperBound.toFixed(2) : 'N/A',
+      (pt.isForecast ? pt.forecastStreams : pt.actualStreams || 0)?.toString(),
+      (pt.spotify || 0).toFixed(2),
+      (pt.appleMusic || 0).toFixed(2),
+      (pt.youtubeMusic || 0).toFixed(2),
+      (pt.jioSaavn || 0).toFixed(2),
+      (pt.amazonMusic || 0).toFixed(2),
+      (pt.otherDSPs || 0).toFixed(2)
+    ]);
+
+    const csvContent = [headers.join(','), ...rows.map((row: (string | undefined)[]) => row.map(val => `"${val || ''}"`).join(','))].join('\n');
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="Rudraatma_ML_Royalty_Forecast_${forecast.quarterLabel.replace(/[^a-zA-Z0-9_-]/g, '_')}.csv"`);
+    return res.send(csvContent);
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || 'Failed to export forecast CSV.' });
+  }
 });
 
 // Invite Team Member

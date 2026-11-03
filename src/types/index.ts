@@ -237,3 +237,65 @@ export interface UserSubscription {
   cancelledAt?: string;
 }
 
+export type ForecastModelType = 'ensemble' | 'holt_winters' | 'linear_regression' | 'polynomial';
+export type ForecastScenario = 'conservative' | 'baseline' | 'optimistic';
+
+export interface ForecastMonthData {
+  month: string;
+  monthLabel: string;
+  isForecast: true;
+  projectedNetRoyalty: number;
+  projectedGrossRoyalty: number;
+  lowerBound: number;
+  upperBound: number;
+  projectedStreams: number;
+  confidenceScore: number;
+  spotify: number;
+  appleMusic: number;
+  youtubeMusic: number;
+  jioSaavn: number;
+  amazonMusic: number;
+  otherDSPs: number;
+  projectedPayoutDate: string;
+}
+
+export interface CombinedChartPoint {
+  month: string;
+  monthLabel: string;
+  isForecast: boolean;
+  actualNet?: number;
+  actualGross?: number;
+  actualStreams?: number;
+  forecastNet?: number;
+  forecastGross?: number;
+  forecastStreams?: number;
+  lowerBound?: number;
+  upperBound?: number;
+  rangeSpan?: [number, number];
+  spotify?: number;
+  appleMusic?: number;
+  youtubeMusic?: number;
+  jioSaavn?: number;
+  amazonMusic?: number;
+  otherDSPs?: number;
+  status?: string;
+}
+
+export interface QuarterlyForecastResult {
+  quarterLabel: string;
+  projectedQuarterNetTotal: number;
+  projectedQuarterGrossTotal: number;
+  projectedQuarterStreams: number;
+  previousQuarterNetTotal: number;
+  projectedQoQGrowth: number;
+  projectedAvgRPM: number;
+  rSquared: number;
+  mape: number;
+  rmse: number;
+  modelType: ForecastModelType;
+  scenario: ForecastScenario;
+  forecastMonths: ForecastMonthData[];
+  combinedChartData: CombinedChartPoint[];
+}
+
+

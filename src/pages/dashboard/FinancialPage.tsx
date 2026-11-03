@@ -39,6 +39,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useRouter } from '../../context/RouterContext';
 import { DashboardLayout } from '../../components/dashboard/DashboardLayout';
 import { MonthlyRoyalty, DspRoyaltyShare, TrackRoyalty, TransactionItem } from '../../types';
+import { MLRevenueForecast } from '../../components/dashboard/MLRevenueForecast';
 
 // Custom Dark Tooltip for Royalty Trends Chart
 const CustomTrendsTooltip = ({ active, payload, label }: any) => {
@@ -142,8 +143,8 @@ export const FinancialPage: React.FC = () => {
   const [topTracks, setTopTracks] = useState<TrackRoyalty[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
-  // Active Tab: 'trends' | 'dsp' | 'statements' | 'payout'
-  const [activeTab, setActiveTab] = useState<'trends' | 'dsp' | 'statements' | 'payout'>('trends');
+  // Active Tab: 'trends' | 'forecast' | 'dsp' | 'statements' | 'payout'
+  const [activeTab, setActiveTab] = useState<'trends' | 'forecast' | 'dsp' | 'statements' | 'payout'>('trends');
 
   // Chart Controls
   const [timeRange, setTimeRange] = useState<'6m' | 'all'>('6m');
@@ -423,6 +424,7 @@ export const FinancialPage: React.FC = () => {
         <div className="flex items-center gap-2 border-b border-slate-800 overflow-x-auto pb-px">
           {[
             { id: 'trends', label: 'Monthly Trends (Recharts)', icon: BarChart3 },
+            { id: 'forecast', label: 'ML Royalty Forecast', icon: Sparkles },
             { id: 'dsp', label: 'DSP Platform Breakdown', icon: PieIcon },
             { id: 'statements', label: 'Monthly Statements', icon: FileSpreadsheet },
             { id: 'payout', label: 'Payout & Bank Settlement', icon: Wallet }
@@ -449,6 +451,35 @@ export const FinancialPage: React.FC = () => {
         {/* TAB 1: VISUAL RECHARTS MONTHLY ROYALTY TRENDS DASHBOARD */}
         {activeTab === 'trends' && (
           <div className="space-y-6">
+            {/* ML Royalty Forecast Teaser Banner */}
+            <div className="p-4 rounded-2xl bg-gradient-to-r from-blue-950/50 via-slate-900 to-indigo-950/40 border border-blue-900/40 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-3.5">
+                <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center shrink-0">
+                  <Sparkles className="w-5 h-5 text-cyan-400 animate-pulse" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-semibold text-white font-display">
+                      Next-Quarter Machine Learning Royalty Forecast Ready
+                    </h3>
+                    <span className="text-[10px] font-mono text-cyan-400 hidden md:inline">
+                      Ensemble Multi-Factor Engine
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Explore multi-scenario projections, confidence intervals (80%–95%), and DSP share allocations for the next quarter.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setActiveTab('forecast')}
+                className="inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white rounded-xl text-xs font-semibold shrink-0 transition-all shadow-md shadow-blue-500/20"
+              >
+                <span>Explore ML Forecast</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
             {/* Chart Container Card */}
             <div className="p-6 rounded-2xl bg-[#090e1a] border border-slate-800 space-y-6">
               {/* Header and Controls */}
@@ -913,6 +944,14 @@ export const FinancialPage: React.FC = () => {
               </div>
             </div>
           </div>
+        )}
+
+        {/* TAB: MACHINE LEARNING REVENUE FORECAST (RECHARTS VISUALIZATION) */}
+        {activeTab === 'forecast' && (
+          <MLRevenueForecast
+            monthlyRoyalties={monthlyRoyalties}
+            currencySymbol="₹"
+          />
         )}
 
         {/* TAB 2: DETAILED DSP PLATFORM BREAKDOWN */}
