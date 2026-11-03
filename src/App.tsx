@@ -11,6 +11,8 @@ import { ContactPage } from './pages/ContactPage';
 import { LegalPage } from './pages/LegalPage';
 import { LoginPage } from './pages/LoginPage';
 import { SignUpPage } from './pages/SignUpPage';
+import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
+import { VerifyOtpPage } from './pages/VerifyOtpPage';
 import { DashboardOverviewPage } from './pages/dashboard/DashboardOverviewPage';
 import { ReleasesPage } from './pages/dashboard/ReleasesPage';
 import {
@@ -31,8 +33,8 @@ import {
 } from './pages/dashboard/DashboardModules';
 
 const RouteRenderer: React.FC = () => {
-  const { path, navigate } = useRouter();
-  const { user, loading } = useAuth();
+  const { path } = useRouter();
+  const { user, token, loading } = useAuth();
 
   if (loading) {
     return (
@@ -42,9 +44,9 @@ const RouteRenderer: React.FC = () => {
     );
   }
 
-  // Protected Dashboard Routes
+  // Protected Dashboard Routes - Block direct URL bypass
   if (path.startsWith('/dashboard')) {
-    if (!user) {
+    if (!user || !token) {
       return <LoginPage />;
     }
 
@@ -67,6 +69,9 @@ const RouteRenderer: React.FC = () => {
 
   // Admin Routes
   if (path.startsWith('/admin')) {
+    if (!user || !token || user.role !== 'admin') {
+      return <LoginPage />;
+    }
     return <AdminDashboardPage />;
   }
 
@@ -77,8 +82,10 @@ const RouteRenderer: React.FC = () => {
   if (path === '/blogs') return <BlogsPage />;
   if (path === '/about') return <AboutPage />;
   if (path === '/contact') return <ContactPage />;
-  if (path === '/login' || path === '/forgot-password') return <LoginPage />;
+  if (path === '/login') return <LoginPage />;
   if (path === '/signup') return <SignUpPage />;
+  if (path === '/verify-otp') return <VerifyOtpPage />;
+  if (path === '/forgot-password') return <ForgotPasswordPage />;
 
   // Legal & Policy Routes
   if (

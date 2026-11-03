@@ -1,19 +1,22 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from '../context/RouterContext';
 import { useAuth } from '../context/AuthContext';
 import { PublicHeader } from '../components/layout/PublicHeader';
 import { PublicFooter } from '../components/layout/PublicFooter';
-import { Disc3, Lock, Mail, User as UserIcon, Globe, ArrowRight, CheckCircle2, AlertCircle, RefreshCw, KeyRound, ServerCrash } from 'lucide-react';
+import { Disc3, Lock, Mail, User as UserIcon, Globe, ArrowRight, CheckCircle2, AlertCircle, RefreshCw, KeyRound, ServerCrash, ShieldCheck, ArrowLeft } from 'lucide-react';
 import { BrandLogo } from '../components/common/BrandLogo';
+import { OtpInput } from '../components/auth/OtpInput';
 
 export const SignUpPage: React.FC = () => {
   const { navigate, queryParam } = useRouter();
   const { login, selectedPlanId, setSelectedPlanId } = useAuth();
 
   const planFromQuery = queryParam('plan');
+  const verifyEmailFromQuery = queryParam('verifyEmail');
+
   useEffect(() => {
     if (planFromQuery) setSelectedPlanId(planFromQuery);
-  }, [planFromQuery]);
+  }, [planFromQuery, setSelectedPlanId]);
 
   // Form State
   const [fullName, setFullName] = useState('');
@@ -25,20 +28,23 @@ export const SignUpPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // OTP Verification Step
+  // 6-Digit Email OTP Verification State
   const [otpStep, setOtpStep] = useState(false);
-  const [otpDigits, setOtpDigits] = useState(['', '', '', '']);
+  const [otpDigits, setOtpDigits] = useState(['', '', '', '', '', '']);
   const [otpLoading, setOtpLoading] = useState(false);
   const [otpError, setOtpError] = useState<string | null>(null);
-  const [smtpNotice, setSmtpNotice] = useState<string | null>(null);
-  const [cooldown, setCooldown] = useState(0);
+  const [cooldown, setCooldown] = useState(60);
+  const [expirySeconds, setExpirySeconds] = useState(300); // 5 minutes strictly
 
-  const inputRefs = [
-    useRef<HTMLInputElement>(null),
-    useRef<HTMLInputElement>(null),
-    useRef<HTMLInputElement>(null),
-    useRef<HTMLInputElement>(null)
-  ];
+  // If arriving from login with ?verifyEmail=...
+  useEffect(() => {
+    if (verifyEmailFromQuery) {
+      setEmail(verifyEmailFromQuery);
+      setOtpStep(true);
+      setCooldown(60);
+      setExpirySeconds(300);
+    }
+  }, [verifyEmailFromQuery]);
 
   // Cooldown countdown timer
   useEffect(() => {
@@ -51,17 +57,34 @@ export const SignUpPage: React.FC = () => {
     return () => clearInterval(timer);
   }, [cooldown]);
 
+  // 5-minute expiry countdown timer
+  useEffect(() => {
+    let timer: any;
+    if (otpStep && expirySeconds > 0) {
+      timer = setInterval(() => {
+        setExpirySeconds((s) => Math.max(0, s - 1));
+      }, 1000);
+    }
+    return () => clearInterval(timer);
+  }, [otpStep, expirySeconds]);
+
   const countries = [
     'India', 'United States', 'United Kingdom', 'Canada', 'Australia',
     'Germany', 'France', 'United Arab Emirates', 'Singapore', 'Nepal', 'Bangladesh', 'Other'
   ];
 
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+  };
+
   const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
-    if (!fullName.trim() || !email.trim() || !country || !password || !confirmPassword) {
-      setError('All fields are required.');
+    if (!fullName.trim() || !email.trim() || !password || !confirmPassword) {
+      setError('Full name, email address, and password are required.');
       return;
     }
 
@@ -87,7 +110,7 @@ export const SignUpPage: React.FC = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          fullName,
+          fullName: fullName.trim(),
           email: email.trim(),
           country,
           password,
@@ -100,71 +123,29 @@ export const SignUpPage: React.FC = () => {
       const data = await res.json();
       if (res.ok && data.success) {
         setOtpStep(true);
-        setSmtpNotice(null);
-        setCooldown(60);
+        setOtpDigits(['', '', '', '', '', '']);
+        setCooldown(data.cooldownSeconds || 60);
+        setExpirySeconds(data.expiresInSeconds || 300);
       } else {
-        if (data.missingConfig) {
-          setSmtpNotice(data.error);
-        } else {
-          setError(data.error || 'Registration failed.');
-        }
+        setError(data.error || 'Registration failed.');
       }
     } catch {
-      setError('Network communication failure. Please try again.');
+      setError('Network communication failure. Please check your connection and try again.');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const maskEmail = (val: string) => {
-    if (!val || !val.includes('@')) return val;
-    const [local, domain] = val.split('@');
-    if (local.length <= 2) return `${local[0] || ''}***@${domain}`;
-    return `${local.slice(0, 2)}***${local.slice(-1)}@${domain}`;
-  };
-
-  const handleDigitChange = (index: number, val: string) => {
-    if (val.length > 1) {
-      val = val.slice(-1);
-    }
-
-    const next = [...otpDigits];
-    next[index] = val;
-    setOtpDigits(next);
-
-    // Auto focus next input
-    if (val && index < 3) {
-      inputRefs[index + 1].current?.focus();
-    }
-  };
-
-  const handlePaste = (e: React.ClipboardEvent) => {
-    e.preventDefault();
-    const paste = e.clipboardData.getData('text').trim().replace(/\D/g, '').slice(0, 4);
-    if (paste) {
-      const chars = paste.split('');
-      const next = ['', '', '', ''];
-      chars.forEach((c, i) => { if (i < 4) next[i] = c; });
-      setOtpDigits(next);
-      if (chars.length === 4) {
-        inputRefs[3].current?.focus();
-      } else {
-        inputRefs[chars.length]?.current?.focus();
-      }
-    }
-  };
-
-  const handleDigitKeyDown = (index: number, e: React.KeyboardEvent) => {
-    if (e.key === 'Backspace' && !otpDigits[index] && index > 0) {
-      inputRefs[index - 1].current?.focus();
     }
   };
 
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     const code = otpDigits.join('');
-    if (code.length !== 4) {
-      setOtpError('Please enter the complete 4-digit code.');
+    if (code.length !== 6) {
+      setOtpError('Please enter the complete 6-digit verification code.');
+      return;
+    }
+
+    if (expirySeconds <= 0) {
+      setOtpError('This verification code has expired (5-minute limit). Please request a fresh code.');
       return;
     }
 
@@ -175,23 +156,23 @@ export const SignUpPage: React.FC = () => {
       const res = await fetch('/api/auth/verify-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim(), code })
+        body: JSON.stringify({ email: email.trim(), code, type: 'signup' })
       });
 
       const data = await res.json();
-      if (res.ok && data.success) {
+      if (res.ok && data.success && data.token && data.user) {
+        // Account verified and activated! Open session
         login(data.token, data.user);
-        // If plan was selected, route to checkout preserving plan
         if (selectedPlanId) {
           navigate(`/checkout?planId=${selectedPlanId}`);
         } else {
           navigate('/dashboard');
         }
       } else {
-        setOtpError(data.error || 'Invalid verification code.');
+        setOtpError(data.error || 'Invalid or expired verification code.');
       }
     } catch {
-      setOtpError('Verification failed due to a network error.');
+      setOtpError('Verification failed due to a network error. Please try again.');
     } finally {
       setOtpLoading(false);
     }
@@ -205,18 +186,15 @@ export const SignUpPage: React.FC = () => {
       const res = await fetch('/api/auth/resend-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim() })
+        body: JSON.stringify({ email: email.trim(), type: 'signup' })
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        setCooldown(60);
-        setSmtpNotice(null);
+        setCooldown(data.cooldownSeconds || 60);
+        setExpirySeconds(data.expiresInSeconds || 300);
+        setOtpDigits(['', '', '', '', '', '']);
       } else {
-        if (data.missingConfig) {
-          setSmtpNotice(data.error);
-        } else {
-          setOtpError(data.error || 'Failed to resend code.');
-        }
+        setOtpError(data.error || 'Failed to resend code.');
       }
     } catch {
       setOtpError('Failed to resend code.');
@@ -231,68 +209,51 @@ export const SignUpPage: React.FC = () => {
         <div className="w-full max-w-lg">
           <div className="p-7 sm:p-9 rounded-2xl bg-[#090e1a] border border-slate-800 shadow-2xl">
             {otpStep ? (
-              /* Step 2: 4-Digit Email OTP Verification */
+              /* STEP 2: 6-DIGIT EMAIL OTP VERIFICATION */
               <div className="space-y-6">
                 <div className="text-center">
-                  <div className="flex justify-center mb-3">
-                    <BrandLogo size="lg" variant="icon" />
+                  <div className="w-12 h-12 rounded-xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center mx-auto mb-3">
+                    <ShieldCheck className="w-6 h-6 text-cyan-400" />
                   </div>
                   <h1 className="text-2xl font-bold text-white font-display">
                     Verify Your Email Address
                   </h1>
                   <p className="text-xs text-slate-300 mt-2 leading-relaxed">
-                    We dispatched a secure 4-digit verification code to{' '}
-                    <strong className="text-white font-mono px-1 py-0.5 bg-slate-900 border border-slate-700 rounded">
-                      {maskEmail(email)}
-                    </strong>.
+                    A 6-digit activation code was dispatched to:
                   </p>
-                  <p className="text-[11px] text-slate-400 mt-1">
-                    Please check your inbox and spam folder. Code expires in 10 minutes.
+                  <div className="inline-block mt-1 px-3.5 py-1.5 bg-slate-900 border border-slate-700/80 rounded-lg text-xs font-mono font-semibold text-cyan-300">
+                    {email}
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-2 flex items-center justify-center gap-1.5">
+                    <span>Code expires in:</span>
+                    <strong className={`font-mono font-bold ${expirySeconds < 60 ? 'text-rose-400' : 'text-amber-400'}`}>
+                      {formatTime(expirySeconds)}
+                    </strong>
                   </p>
                 </div>
 
-                {/* SMTP Notice if unconfigured on server */}
-                {smtpNotice && (
-                  <div className="p-3.5 rounded-xl bg-amber-950/40 border border-amber-800/80 text-xs text-amber-200 space-y-1">
-                    <div className="font-semibold flex items-center gap-1.5 text-amber-300">
-                      <ServerCrash className="w-4 h-4 shrink-0" />
-                      <span>Email Delivery Configuration Required</span>
-                    </div>
-                    <p className="text-[11px] text-amber-200/90 leading-relaxed">
-                      {smtpNotice}
-                    </p>
-                  </div>
-                )}
-
                 {otpError && (
                   <div className="p-3 rounded-lg text-xs text-rose-300 bg-rose-950/40 border border-rose-800/80 flex items-center gap-2">
-                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
                     <span>{otpError}</span>
                   </div>
                 )}
 
                 <form onSubmit={handleVerifyOtp} className="space-y-6">
-                  {/* 4 Inputs with Paste Support */}
-                  <div className="flex justify-center gap-3 sm:gap-4" onPaste={handlePaste}>
-                    {otpDigits.map((digit, idx) => (
-                      <input
-                        key={idx}
-                        ref={inputRefs[idx]}
-                        type="text"
-                        inputMode="numeric"
-                        maxLength={1}
-                        value={digit}
-                        onChange={(e) => handleDigitChange(idx, e.target.value)}
-                        onKeyDown={(e) => handleDigitKeyDown(idx, e)}
-                        className="w-14 h-16 sm:w-16 sm:h-18 text-center text-2xl font-mono font-bold text-white bg-slate-900 border border-slate-700 rounded-xl focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 transition-all"
-                        placeholder="•"
-                      />
-                    ))}
+                  {/* 6-Digit OTP Inputs */}
+                  <div className="py-2">
+                    <OtpInput
+                      digits={otpDigits}
+                      onChange={setOtpDigits}
+                      disabled={otpLoading}
+                      autoFocus={true}
+                      hasError={Boolean(otpError)}
+                    />
                   </div>
 
                   <button
                     type="submit"
-                    disabled={otpLoading || otpDigits.join('').length !== 4}
+                    disabled={otpLoading || otpDigits.join('').length !== 6 || expirySeconds <= 0}
                     className="w-full py-3.5 rounded-xl text-xs sm:text-sm font-semibold text-white bg-blue-600 hover:bg-blue-500 transition-all shadow-lg shadow-blue-600/20 disabled:opacity-50 flex items-center justify-center gap-2"
                   >
                     {otpLoading ? (
@@ -308,13 +269,13 @@ export const SignUpPage: React.FC = () => {
                     )}
                   </button>
 
-                  <div className="flex items-center justify-between text-xs text-slate-400 pt-2 border-t border-slate-800">
+                  <div className="flex items-center justify-between text-xs text-slate-400 pt-3 border-t border-slate-800">
                     <button
                       type="button"
                       disabled={cooldown > 0}
                       onClick={handleResendOtp}
                       className={`flex items-center gap-1.5 transition-colors ${
-                        cooldown > 0 ? 'text-slate-600 cursor-not-allowed' : 'text-blue-400 hover:underline'
+                        cooldown > 0 ? 'text-slate-600 cursor-not-allowed' : 'text-blue-400 hover:text-blue-300 font-medium'
                       }`}
                     >
                       <RefreshCw className="w-3.5 h-3.5" />
@@ -324,15 +285,16 @@ export const SignUpPage: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setOtpStep(false)}
-                      className="text-slate-400 hover:text-white transition-colors"
+                      className="text-slate-400 hover:text-white transition-colors flex items-center gap-1"
                     >
-                      Change Email / Details
+                      <ArrowLeft className="w-3.5 h-3.5" />
+                      <span>Change Email / Details</span>
                     </button>
                   </div>
                 </form>
               </div>
             ) : (
-              /* Step 1: Initial Registration Form */
+              /* STEP 1: INITIAL REGISTRATION FORM */
               <div className="space-y-6">
                 <div className="text-center">
                   <div className="flex justify-center mb-3">
@@ -342,35 +304,21 @@ export const SignUpPage: React.FC = () => {
                     Create Artist Account
                   </h1>
                   <p className="text-xs text-slate-400 mt-1">
-                    Register with Rudraatma Music to distribute and manage your catalog
+                    Register with Rudraatma Music to distribute and monetize your catalog
                   </p>
                 </div>
 
-                {/* SMTP Notice if unconfigured on server */}
-                {smtpNotice && (
-                  <div className="p-3.5 rounded-xl bg-amber-950/40 border border-amber-800/80 text-xs text-amber-200 space-y-1">
-                    <div className="font-semibold flex items-center gap-1.5 text-amber-300">
-                      <ServerCrash className="w-4 h-4 shrink-0" />
-                      <span>SMTP Setup Required for Email Verification</span>
-                    </div>
-                    <p className="text-[11px] text-amber-200/90 leading-relaxed">
-                      {smtpNotice}
-                    </p>
-                  </div>
-                )}
-
                 {error && (
                   <div className="p-3 rounded-lg text-xs text-rose-300 bg-rose-950/40 border border-rose-800/80 flex items-center gap-2">
-                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
                     <span>{error}</span>
                   </div>
                 )}
 
                 <form onSubmit={handleRegisterSubmit} className="space-y-4">
-                  {/* Full Name */}
                   <div>
                     <label className="block text-xs font-medium text-slate-300 mb-1">
-                      Full Legal / Professional Name *
+                      Full Legal Name / Stage Name *
                     </label>
                     <div className="relative">
                       <UserIcon className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -379,13 +327,12 @@ export const SignUpPage: React.FC = () => {
                         value={fullName}
                         onChange={(e) => setFullName(e.target.value)}
                         required
-                        placeholder="e.g. Aarav Mehta"
+                        placeholder="Aarav Mehta"
                         className="w-full pl-10 pr-3.5 py-2.5 bg-slate-900 border border-slate-800 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
                       />
                     </div>
                   </div>
 
-                  {/* Email */}
                   <div>
                     <label className="block text-xs font-medium text-slate-300 mb-1">
                       Email Address *
@@ -397,13 +344,12 @@ export const SignUpPage: React.FC = () => {
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         required
-                        placeholder="artist@domain.com"
+                        placeholder="artist@rudraatmamusic.com"
                         className="w-full pl-10 pr-3.5 py-2.5 bg-slate-900 border border-slate-800 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
                       />
                     </div>
                   </div>
 
-                  {/* Country Selection */}
                   <div>
                     <label className="block text-xs font-medium text-slate-300 mb-1">
                       Country of Residence *
@@ -422,46 +368,52 @@ export const SignUpPage: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Password & Confirm */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs font-medium text-slate-300 mb-1">
-                        Password (Min 8 chars) *
+                        Password *
                       </label>
-                      <input
-                        type="password"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        required
-                        placeholder="••••••••"
-                        className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-800 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
-                      />
+                      <div className="relative">
+                        <Lock className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                        <input
+                          type="password"
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          required
+                          placeholder="Min 8 characters"
+                          className="w-full pl-10 pr-3.5 py-2.5 bg-slate-900 border border-slate-800 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                        />
+                      </div>
                     </div>
+
                     <div>
                       <label className="block text-xs font-medium text-slate-300 mb-1">
                         Confirm Password *
                       </label>
-                      <input
-                        type="password"
-                        value={confirmPassword}
-                        onChange={(e) => setConfirmPassword(e.target.value)}
-                        required
-                        placeholder="••••••••"
-                        className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-800 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
-                      />
+                      <div className="relative">
+                        <Lock className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                        <input
+                          type="password"
+                          value={confirmPassword}
+                          onChange={(e) => setConfirmPassword(e.target.value)}
+                          required
+                          placeholder="Re-enter password"
+                          className="w-full pl-10 pr-3.5 py-2.5 bg-slate-900 border border-slate-800 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                        />
+                      </div>
                     </div>
                   </div>
 
-                  {/* Terms & Conditions Checkbox */}
-                  <div className="pt-2">
+                  <div className="pt-1">
                     <label className="flex items-start gap-2.5 cursor-pointer text-xs text-slate-300">
                       <input
                         type="checkbox"
                         checked={termsAccepted}
                         onChange={(e) => setTermsAccepted(e.target.checked)}
-                        className="rounded border-slate-800 bg-slate-900 text-blue-600 focus:ring-blue-500 mt-0.5"
+                        required
+                        className="mt-0.5 rounded border-slate-800 bg-slate-900 text-blue-600 focus:ring-blue-500"
                       />
-                      <span>
+                      <span className="leading-relaxed">
                         I agree to the{' '}
                         <button
                           type="button"
@@ -477,8 +429,7 @@ export const SignUpPage: React.FC = () => {
                           className="text-blue-400 hover:underline"
                         >
                           Privacy Policy
-                        </button>
-                        .
+                        </button>.
                       </span>
                     </label>
                   </div>
@@ -486,20 +437,21 @@ export const SignUpPage: React.FC = () => {
                   <button
                     type="submit"
                     disabled={loading}
-                    className="w-full py-3.5 rounded-xl text-xs sm:text-sm font-semibold text-white bg-blue-600 hover:bg-blue-500 transition-all flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20 disabled:opacity-50 mt-4"
+                    className="w-full py-3.5 rounded-xl text-xs sm:text-sm font-semibold text-white bg-blue-600 hover:bg-blue-500 transition-all flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20 disabled:opacity-50 mt-2"
                   >
-                    <span>{loading ? 'Generating Verification Code...' : 'Create Account'}</span>
+                    <span>{loading ? 'Creating Account...' : 'Continue to Email Verification'}</span>
                     <ArrowRight className="w-4 h-4" />
                   </button>
                 </form>
 
-                <div className="pt-4 border-t border-slate-800 text-center text-xs text-slate-400">
-                  Already have an account?{' '}
+                {/* Login Link */}
+                <div className="text-center text-xs text-slate-400 pt-4 border-t border-slate-800">
+                  Already registered?{' '}
                   <button
                     onClick={() => navigate('/login')}
                     className="text-blue-400 hover:underline font-semibold"
                   >
-                    Log In
+                    Log In with 2FA
                   </button>
                 </div>
               </div>
