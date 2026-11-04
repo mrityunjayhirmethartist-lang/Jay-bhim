@@ -78,7 +78,12 @@ export const VerifyOtpPage: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email.trim(), code, type: typeParam })
       });
-      const data = await res.json();
+      let data: any = null;
+      try {
+        data = await res.json();
+      } catch {
+        throw new Error(`Server returned HTTP ${res.status}.`);
+      }
 
       if (res.ok && data.success && data.token && data.user) {
         login(data.token, data.user);
@@ -88,10 +93,10 @@ export const VerifyOtpPage: React.FC = () => {
           navigate('/dashboard');
         }
       } else {
-        setError(data.error || 'Invalid or expired verification code.');
+        setError(data?.error || 'Invalid or expired verification code.');
       }
-    } catch {
-      setError('Verification failed due to a network error. Please try again.');
+    } catch (err: any) {
+      setError(err?.message || 'Verification failed due to a network error. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -107,16 +112,22 @@ export const VerifyOtpPage: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email.trim(), type: typeParam })
       });
-      const data = await res.json();
+      let data: any = null;
+      try {
+        data = await res.json();
+      } catch {
+        throw new Error(`Server returned HTTP ${res.status}.`);
+      }
+
       if (res.ok && data.success) {
         setCooldown(data.cooldownSeconds || 60);
         setExpirySeconds(data.expiresInSeconds || 300);
         setOtpDigits(['', '', '', '', '', '']);
       } else {
-        setError(data.error || 'Failed to resend code.');
+        setError(data?.error || 'Failed to resend code.');
       }
-    } catch {
-      setError('Failed to resend code.');
+    } catch (err: any) {
+      setError(err?.message || 'Failed to resend code.');
     }
   };
 
@@ -152,6 +163,10 @@ export const VerifyOtpPage: React.FC = () => {
                   />
                 </div>
               )}
+              <div className="flex items-center justify-center gap-1.5 text-[11px] text-cyan-400 bg-cyan-950/30 border border-cyan-800/40 py-1 px-3 rounded-full mx-auto w-fit mt-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-cyan-400"></span>
+                <span>Official Sender: noreply@rudraatmamusic.com</span>
+              </div>
               <p className="text-[11px] text-slate-400 mt-2 flex items-center justify-center gap-1.5">
                 <span>Code expires in:</span>
                 <strong className={`font-mono font-bold ${expirySeconds < 60 ? 'text-rose-400' : 'text-amber-400'}`}>

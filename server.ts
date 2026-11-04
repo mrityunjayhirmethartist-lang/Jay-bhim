@@ -84,17 +84,40 @@ const artworkUpload = multer({
   }
 });
 
+// ======================== OFFICIAL HOSTING EMAIL CONFIGURATION ========================
+// Domain: rudraatmamusic.com
+// Official Sender: noreply@rudraatmamusic.com (Official transactional sender)
+// Inbound Support: support@rudraatmamusic.com
+export const OFFICIAL_DOMAIN = 'rudraatmamusic.com';
+export const OFFICIAL_SENDER_EMAIL = 'noreply@rudraatmamusic.com';
+export const OFFICIAL_SENDER_NAME = 'Rudraatma Music';
+export const OFFICIAL_SUPPORT_EMAIL = 'support@rudraatmamusic.com';
+export const OFFICIAL_DEFAULT_HOST = 'mail.rudraatmamusic.com';
+
 // Email delivery helper with professional Music Distribution Platform branding
 async function sendEmailOtp(
   toEmail: string,
   code: string,
   purpose: 'signup' | 'login' | 'reset' = 'signup'
-): Promise<{ success: boolean; missingConfig?: boolean; error?: string }> {
-  const host = process.env.SMTP_HOST || 'smtp.gmail.com';
+): Promise<{ success: boolean; delivered: boolean; missingConfig?: boolean; error?: string; sender: string }> {
+  let host = (process.env.SMTP_HOST || OFFICIAL_DEFAULT_HOST).trim();
+  if (host.includes('@')) {
+    if (host.toLowerCase().includes('gmail')) {
+      host = 'smtp.gmail.com';
+    } else {
+      host = OFFICIAL_DEFAULT_HOST;
+    }
+  }
+
   const port = Number(process.env.SMTP_PORT) || 465;
-  const user = process.env.SMTP_USER || process.env.GMAIL_USER;
-  const pass = process.env.SMTP_PASS || process.env.GMAIL_APP_PASSWORD;
-  const from = process.env.SMTP_FROM || `"Rudraatma Music" <${user || 'no-reply@rudraatmamusic.com'}>`;
+  // Port 465 is direct SSL (secure: true). Port 587 is STARTTLS (secure: false).
+  const isSecure = port === 465;
+  const user = process.env.SMTP_USER || OFFICIAL_SENDER_EMAIL;
+  const pass = process.env.SMTP_PASS;
+
+  // Visible sender must ALWAYS be the domain's official hosting email:
+  const from = `"${OFFICIAL_SENDER_NAME}" <${OFFICIAL_SENDER_EMAIL}>`;
+  const replyTo = process.env.SMTP_REPLY_TO || OFFICIAL_SUPPORT_EMAIL;
 
   const titles: Record<string, string> = {
     signup: 'Verify Your Artist Account Registration',
@@ -136,6 +159,9 @@ async function sendEmailOtp(
             <strong style="color: #f59e0b;">⏱️ Expiration:</strong> This code expires strictly in <strong style="color: #ffffff;">5 minutes</strong>.
           </p>
           <p style="font-size: 12px; color: #cbd5e1; margin: 6px 0;">
+            <strong style="color: #38bdf8;">📧 Official Sender:</strong> Sent from <strong style="color: #ffffff;">${OFFICIAL_SENDER_EMAIL}</strong> (${OFFICIAL_DOMAIN})
+          </p>
+          <p style="font-size: 12px; color: #cbd5e1; margin: 6px 0;">
             <strong style="color: #ef4444;">🔒 Security Notice:</strong> Never share this code with anyone. Rudraatma Music staff will never ask for your verification code.
           </p>
         </div>
@@ -143,42 +169,56 @@ async function sendEmailOtp(
 
       <div style="text-align: center; margin-top: 28px; font-size: 11px; color: #64748b; line-height: 1.5;">
         <p style="margin: 4px 0;">Dispatched to <span style="color: #94a3b8;">${toEmail}</span></p>
-        <p style="margin: 4px 0;">If you did not initiate this action, please secure your email account immediately.</p>
-        <p style="margin-top: 12px; color: #475569;">&copy; ${new Date().getFullYear()} Rudraatma Music Platform. All rights reserved.</p>
+        <p style="margin: 4px 0;">Official Communications &bull; Rudraatma Music Distribution &bull; <a href="mailto:${OFFICIAL_SUPPORT_EMAIL}" style="color: #38bdf8; text-decoration: none;">${OFFICIAL_SUPPORT_EMAIL}</a></p>
+        <p style="margin-top: 12px; color: #475569;">&copy; ${new Date().getFullYear()} Rudraatma Music. All rights reserved.</p>
       </div>
     </div>
   `;
 
-  if (user && pass) {
+  // If hosting email password is provided in environment variables, dispatch via live SMTP
+  if (pass && pass.trim().length > 0) {
     try {
       const transporter = nodemailer.createTransport({
         host,
         port,
-        secure: port === 465,
-        auth: { user, pass }
+        secure: isSecure,
+        auth: { user, pass },
+        connectionTimeout: 5000, // strict 5s connection timeout to prevent hanging
+        greetingTimeout: 5000,
+        socketTimeout: 6000
       });
 
-      await transporter.sendMail({
+      const sendPromise = transporter.sendMail({
         from,
         to: toEmail,
+        replyTo,
         subject: subjects[purpose] || `Your Rudraatma Music Code: ${code}`,
-        text: `Rudraatma Music - ${titles[purpose] || 'Verification'}\n\nYour 6-digit code is: ${code}\n\nThis verification code expires in 5 minutes.\nNever share this code with anyone.\n\nBest regards,\nRudraatma Music Distribution Team`,
+        text: `Rudraatma Music - ${titles[purpose] || 'Verification'}\n\nYour 6-digit code is: ${code}\n\nThis verification code expires in 5 minutes.\nOfficial sender: ${OFFICIAL_SENDER_EMAIL}\nNever share this code with anyone.\n\nBest regards,\nRudraatma Music Distribution Team\n${OFFICIAL_SUPPORT_EMAIL}`,
         html: htmlContent
       });
 
-      console.log(`[Rudraatma Auth] Sent ${purpose} 6-digit OTP to ${toEmail} via SMTP.`);
-      return { success: true };
+      const timeoutPromise = new Promise<{ timeout: true }>((_, reject) =>
+        setTimeout(() => reject(new Error(`SMTP connection timed out after 6 seconds connecting to ${host}:${port}`)), 6000)
+      );
+
+      await Promise.race([sendPromise, timeoutPromise]);
+
+      console.log(`[Rudraatma Music Hosting Email] Dispatched 6-digit ${purpose} OTP to ${toEmail} from ${from} via ${host}:${port}`);
+      return { success: true, delivered: true, sender: from };
     } catch (err: any) {
-      console.error(`[Rudraatma Auth] SMTP dispatch failure for ${toEmail}:`, err.message);
-      console.log(`[Rudraatma Auth Fallback Audit] 6-digit code for ${toEmail} (${purpose}): ${code} (expires in 5 min)`);
-      return { success: true, error: `SMTP error: ${err.message}` };
+      console.error(`[Rudraatma Music Hosting Email Error] SMTP dispatch failure to ${toEmail} via ${host}:${port}:`, err.message);
+      console.log(`[Rudraatma Music Auth Audit Log] Active 6-digit ${purpose} OTP for ${toEmail}: >>> ${code} <<< (Expires in 5 minutes)`);
+      return { success: true, delivered: false, error: `Hosting SMTP: ${err.message}`, sender: from };
     }
   }
 
-  // When SMTP is not configured in environment
-  console.log(`[Rudraatma Auth Dev Notice] SMTP credentials not set in environment.`);
-  console.log(`[Rudraatma Auth Security Audit] Generated 6-digit OTP for ${toEmail} (${purpose}): ${code} (Valid for 5 minutes)`);
-  return { success: true, missingConfig: true };
+  // Hosting email credentials not yet set in environment
+  console.log(`[Rudraatma Music Hosting Email Notice] Official hosting email sender: ${from}`);
+  console.log(`[Rudraatma Music Host Credentials Status] SMTP_PASS is missing in environment variables. To deliver live emails from ${OFFICIAL_SENDER_EMAIL}:`);
+  console.log(`  Set environment variables: SMTP_HOST=${host}, SMTP_PORT=${port}, SMTP_USER=${user}, SMTP_PASS=<password>`);
+  console.log(`[Rudraatma Music Auth Audit Log] Active 6-digit ${purpose} OTP for ${toEmail}: >>> ${code} <<< (Expires in 5 minutes)`);
+
+  return { success: true, delivered: false, missingConfig: true, sender: from };
 }
 
 function hashString(str: string): string {
@@ -969,13 +1009,16 @@ app.post('/api/auth/register', async (req, res) => {
 
   signupOtps.set(normalizedEmail, otpData);
 
-  // Dispatch real email via SMTP
-  await sendEmailOtp(normalizedEmail, otpCode, 'signup');
+  // Dispatch real email via official hosting SMTP
+  const emailResult = await sendEmailOtp(normalizedEmail, otpCode, 'signup');
 
   return res.json({
     success: true,
-    message: `A 6-digit verification code has been dispatched to ${normalizedEmail}.`,
+    message: `A 6-digit verification code has been dispatched to ${normalizedEmail} from ${OFFICIAL_SENDER_EMAIL}.`,
     email: normalizedEmail,
+    senderEmail: OFFICIAL_SENDER_EMAIL,
+    smtpDelivered: emailResult.delivered,
+    smtpConfigured: !emailResult.missingConfig,
     expiresInSeconds: 300,
     cooldownSeconds: 60
   });
@@ -1144,15 +1187,18 @@ app.post('/api/auth/login', async (req, res) => {
     purpose: 'login'
   });
 
-  // Dispatch 2FA Login OTP via email
-  await sendEmailOtp(normalizedEmail, loginCode, 'login');
+  // Dispatch 2FA Login OTP via official hosting SMTP
+  const emailResult = await sendEmailOtp(normalizedEmail, loginCode, 'login');
 
   // DO NOT return session token! Dashboard remains blocked until OTP is verified.
   return res.json({
     success: true,
     requiresOtp: true,
     email: normalizedEmail,
-    message: 'Password verified. A 6-digit login authorization code has been dispatched to your registered email address.',
+    senderEmail: OFFICIAL_SENDER_EMAIL,
+    message: `Password verified. A 6-digit login authorization code has been dispatched to your registered email from ${OFFICIAL_SENDER_EMAIL}.`,
+    smtpDelivered: emailResult.delivered,
+    smtpConfigured: !emailResult.missingConfig,
     expiresInSeconds: 300,
     cooldownSeconds: 60
   });
@@ -1264,11 +1310,15 @@ app.post('/api/auth/resend-otp', async (req, res) => {
     purpose: targetType
   });
 
-  await sendEmailOtp(normalizedEmail, newCode, targetType);
+  const emailResult = await sendEmailOtp(normalizedEmail, newCode, targetType);
 
   return res.json({
     success: true,
-    message: `A new 6-digit ${targetType === 'login' ? 'login' : 'verification'} code has been dispatched to your email address.`,
+    message: `A fresh 6-digit ${targetType === 'login' ? 'login' : 'verification'} code has been dispatched to ${normalizedEmail} from ${OFFICIAL_SENDER_EMAIL}.`,
+    email: normalizedEmail,
+    senderEmail: OFFICIAL_SENDER_EMAIL,
+    smtpDelivered: emailResult.delivered,
+    smtpConfigured: !emailResult.missingConfig,
     cooldownSeconds: 60,
     expiresInSeconds: 300
   });
@@ -1366,6 +1416,37 @@ app.post('/api/auth/reset-password', (req, res) => {
   return res.json({
     success: true,
     message: 'Your password has been successfully updated. You may now log in with your new password.'
+  });
+});
+
+// Check hosting SMTP status safely without exposing passwords
+app.get('/api/auth/smtp-status', (_req, res) => {
+  let host = (process.env.SMTP_HOST || OFFICIAL_DEFAULT_HOST).trim();
+  if (host.includes('@')) {
+    if (host.toLowerCase().includes('gmail')) {
+      host = 'smtp.gmail.com';
+    } else {
+      host = OFFICIAL_DEFAULT_HOST;
+    }
+  }
+
+  const port = Number(process.env.SMTP_PORT) || 465;
+  const user = process.env.SMTP_USER || OFFICIAL_SENDER_EMAIL;
+  const configured = Boolean(process.env.SMTP_PASS && process.env.SMTP_PASS.trim().length > 0);
+  const from = `"${OFFICIAL_SENDER_NAME}" <${OFFICIAL_SENDER_EMAIL}>`;
+
+  return res.json({
+    configured,
+    domain: OFFICIAL_DOMAIN,
+    senderEmail: OFFICIAL_SENDER_EMAIL,
+    senderDisplay: from,
+    smtpHost: host,
+    smtpPort: port,
+    smtpUser: user,
+    supportEmail: OFFICIAL_SUPPORT_EMAIL,
+    instructions: configured
+      ? 'Official domain hosting email is configured. Active sender is ' + OFFICIAL_SENDER_EMAIL
+      : 'Hosting SMTP password (SMTP_PASS) is required to deliver live emails. Please provide SMTP_PASS in environment variables.'
   });
 });
 

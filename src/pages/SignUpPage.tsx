@@ -120,17 +120,23 @@ export const SignUpPage: React.FC = () => {
         })
       });
 
-      const data = await res.json();
+      let data: any = null;
+      try {
+        data = await res.json();
+      } catch {
+        throw new Error(`Server returned HTTP ${res.status}. Please check server connectivity.`);
+      }
+
       if (res.ok && data.success) {
         setOtpStep(true);
         setOtpDigits(['', '', '', '', '', '']);
         setCooldown(data.cooldownSeconds || 60);
         setExpirySeconds(data.expiresInSeconds || 300);
       } else {
-        setError(data.error || 'Registration failed.');
+        setError(data?.error || 'Registration failed.');
       }
-    } catch {
-      setError('Network communication failure. Please check your connection and try again.');
+    } catch (err: any) {
+      setError(err?.message || 'Network communication failure. Please check your connection and try again.');
     } finally {
       setLoading(false);
     }
@@ -159,7 +165,13 @@ export const SignUpPage: React.FC = () => {
         body: JSON.stringify({ email: email.trim(), code, type: 'signup' })
       });
 
-      const data = await res.json();
+      let data: any = null;
+      try {
+        data = await res.json();
+      } catch {
+        throw new Error(`Server returned HTTP ${res.status}.`);
+      }
+
       if (res.ok && data.success && data.token && data.user) {
         // Account verified and activated! Open session
         login(data.token, data.user);
@@ -169,10 +181,10 @@ export const SignUpPage: React.FC = () => {
           navigate('/dashboard');
         }
       } else {
-        setOtpError(data.error || 'Invalid or expired verification code.');
+        setOtpError(data?.error || 'Invalid or expired verification code.');
       }
-    } catch {
-      setOtpError('Verification failed due to a network error. Please try again.');
+    } catch (err: any) {
+      setOtpError(err?.message || 'Verification failed due to a network error. Please try again.');
     } finally {
       setOtpLoading(false);
     }
@@ -223,6 +235,10 @@ export const SignUpPage: React.FC = () => {
                   </p>
                   <div className="inline-block mt-1 px-3.5 py-1.5 bg-slate-900 border border-slate-700/80 rounded-lg text-xs font-mono font-semibold text-cyan-300">
                     {email}
+                  </div>
+                  <div className="flex items-center justify-center gap-1.5 text-[11px] text-cyan-400 bg-cyan-950/30 border border-cyan-800/40 py-1 px-3 rounded-full mx-auto w-fit mt-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-cyan-400"></span>
+                    <span>Official Sender: noreply@rudraatmamusic.com</span>
                   </div>
                   <p className="text-[11px] text-slate-400 mt-2 flex items-center justify-center gap-1.5">
                     <span>Code expires in:</span>

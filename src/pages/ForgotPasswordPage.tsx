@@ -45,17 +45,22 @@ export const ForgotPasswordPage: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email.trim() })
       });
-      const data = await res.json();
+      let data: any = null;
+      try {
+        data = await res.json();
+      } catch {
+        throw new Error(`Server returned HTTP ${res.status}.`);
+      }
 
       if (res.ok && data.success) {
         setStep('verify');
         setCooldown(data.cooldownSeconds || 60);
         setOtpDigits(['', '', '', '', '', '']);
       } else {
-        setError(data.error || 'Failed to dispatch reset code.');
+        setError(data?.error || 'Failed to dispatch reset code.');
       }
-    } catch {
-      setError('Network communication failure. Please check your connection.');
+    } catch (err: any) {
+      setError(err?.message || 'Network communication failure. Please check your connection.');
     } finally {
       setLoading(false);
     }
@@ -93,15 +98,20 @@ export const ForgotPasswordPage: React.FC = () => {
           confirmPassword
         })
       });
-      const data = await res.json();
+      let data: any = null;
+      try {
+        data = await res.json();
+      } catch {
+        throw new Error(`Server returned HTTP ${res.status}.`);
+      }
 
       if (res.ok && data.success) {
         setResetSuccess(true);
       } else {
-        setError(data.error || 'Password reset failed. Invalid or expired code.');
+        setError(data?.error || 'Password reset failed. Invalid or expired code.');
       }
-    } catch {
-      setError('Network communication failure. Please try again.');
+    } catch (err: any) {
+      setError(err?.message || 'Network communication failure. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -117,14 +127,20 @@ export const ForgotPasswordPage: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email.trim() })
       });
-      const data = await res.json();
+      let data: any = null;
+      try {
+        data = await res.json();
+      } catch {
+        throw new Error(`Server returned HTTP ${res.status}.`);
+      }
+
       if (res.ok && data.success) {
         setCooldown(data.cooldownSeconds || 60);
       } else {
-        setError(data.error || 'Failed to resend code.');
+        setError(data?.error || 'Failed to resend code.');
       }
-    } catch {
-      setError('Failed to resend code.');
+    } catch (err: any) {
+      setError(err?.message || 'Failed to resend code.');
     }
   };
 
@@ -147,6 +163,12 @@ export const ForgotPasswordPage: React.FC = () => {
                   ? 'Enter your registered email to receive a secure 6-digit verification code'
                   : `Enter the 6-digit code dispatched to ${email}`}
               </p>
+              {step === 'verify' && (
+                <div className="flex items-center justify-center gap-1.5 text-[11px] text-cyan-400 bg-cyan-950/30 border border-cyan-800/40 py-1 px-3 rounded-full mx-auto w-fit mt-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-cyan-400"></span>
+                  <span>Official Sender: noreply@rudraatmamusic.com</span>
+                </div>
+              )}
             </div>
 
             {error && (

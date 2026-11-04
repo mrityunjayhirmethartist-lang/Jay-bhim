@@ -90,7 +90,12 @@ export const LoginPage: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email.trim(), password })
       });
-      const data = await res.json();
+      let data: any = null;
+      try {
+        data = await res.json();
+      } catch {
+        throw new Error(`Server returned status ${res.status}. Please check server connectivity.`);
+      }
 
       if (res.ok && data.success) {
         if (data.requiresOtp) {
@@ -107,15 +112,15 @@ export const LoginPage: React.FC = () => {
           navigate(target);
         }
       } else {
-        if (data.needsVerification) {
+        if (data && data.needsVerification) {
           // Account unverified - navigate to signup verification
           navigate(`/signup?verifyEmail=${encodeURIComponent(data.email || email)}`);
         } else {
-          setError(data.error || 'Invalid email or password.');
+          setError(data?.error || 'Invalid email or password.');
         }
       }
-    } catch {
-      setError('Network communication failure. Please check your connection and try again.');
+    } catch (err: any) {
+      setError(err?.message || 'Network communication failure. Please verify backend connection and try again.');
     } finally {
       setLoading(false);
     }
@@ -144,7 +149,12 @@ export const LoginPage: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email.trim(), code })
       });
-      const data = await res.json();
+      let data: any = null;
+      try {
+        data = await res.json();
+      } catch {
+        throw new Error(`Server returned HTTP ${res.status}.`);
+      }
 
       if (res.ok && data.success && data.token && data.user) {
         // Authenticated successfully! Grant access to dashboard
@@ -152,10 +162,10 @@ export const LoginPage: React.FC = () => {
         const target = redirectTarget.startsWith('/') ? redirectTarget : '/dashboard';
         navigate(target);
       } else {
-        setOtpError(data.error || 'Invalid or expired verification code.');
+        setOtpError(data?.error || 'Invalid or expired verification code.');
       }
-    } catch {
-      setOtpError('Verification failed due to a network communication error.');
+    } catch (err: any) {
+      setOtpError(err?.message || 'Verification failed due to a network communication error.');
     } finally {
       setOtpLoading(false);
     }
@@ -314,6 +324,10 @@ export const LoginPage: React.FC = () => {
                   </p>
                   <div className="inline-block mt-1 px-3 py-1 bg-slate-900 border border-slate-700/80 rounded-lg text-xs font-mono font-semibold text-cyan-300">
                     {email}
+                  </div>
+                  <div className="flex items-center justify-center gap-1.5 text-[11px] text-cyan-400 bg-cyan-950/30 border border-cyan-800/40 py-1 px-3 rounded-full mx-auto w-fit mt-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-cyan-400"></span>
+                    <span>Official Sender: noreply@rudraatmamusic.com</span>
                   </div>
                   <p className="text-[11px] text-slate-400 mt-2 flex items-center justify-center gap-1.5">
                     <span>Code expires in:</span>
