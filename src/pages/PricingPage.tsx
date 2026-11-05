@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from '../context/RouterContext';
 import { useAuth } from '../context/AuthContext';
 import { PublicHeader } from '../components/layout/PublicHeader';
@@ -8,16 +8,33 @@ import { CheckCircle2, ArrowRight, ShieldCheck, HelpCircle } from 'lucide-react'
 
 export const PricingPage: React.FC = () => {
   const { navigate } = useRouter();
-  const { setSelectedPlanId } = useAuth();
+  const { user, setSelectedPlanId } = useAuth();
+  const [plans, setPlans] = useState(PRICING_PLANS);
   const [activeTab, setActiveTab] = useState<'all' | 'one-time' | 'monthly' | 'annual'>('all');
 
-  const filteredPlans = PRICING_PLANS.filter(plan => {
+  // Load latest plans from backend (reflects any Super Admin edits/additions)
+  useEffect(() => {
+    fetch('/api/plans')
+      .then(res => res.json())
+      .then(d => {
+        if (d.plans && Array.isArray(d.plans) && d.plans.length > 0) {
+          setPlans(d.plans);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const filteredPlans = plans.filter(plan => {
     if (activeTab === 'all') return true;
     return plan.type === activeTab;
   });
 
   const handleGetStarted = (planId: string) => {
     setSelectedPlanId(planId);
+    if (!user) {
+      navigate(`/login?planId=${planId}&redirect=${encodeURIComponent(`/checkout?planId=${planId}`)}&notice=${encodeURIComponent('Please Login or Create an Account First to Continue.')}`);
+      return;
+    }
     navigate(`/checkout?planId=${planId}`);
   };
 

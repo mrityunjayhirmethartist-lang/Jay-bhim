@@ -375,7 +375,7 @@ export interface RazorpayOrderRecord {
 }
 
 export interface UserSubscriptionInfo {
-  status: 'active' | 'cancelled' | 'expired' | 'pending';
+  status: 'active' | 'cancelled' | 'expired' | 'pending' | 'revoked';
   planId: string;
   planName: string;
   billingFrequency: 'one-time' | 'monthly' | 'annual';
@@ -387,14 +387,17 @@ export interface UserSubscriptionInfo {
   amount: number;
   autoRenew: boolean;
   cancelledAt?: string;
+  revokedAt?: string;
+  revocationReason?: string;
+  paymentStatus?: string;
+  daysRemaining?: number;
 }
 
 const razorpayOrders: Map<string, RazorpayOrderRecord> = new Map();
 const processedWebhookEvents: Set<string> = new Set();
 const recentOrderAttempts: Map<string, number> = new Map();
 
-// Plan Catalog definition (server source of truth - exact prices specified by user)
-export const PLAN_CATALOG: Record<string, {
+export interface PlanDefinition {
   id: string;
   name: string;
   type: 'one-time' | 'monthly' | 'annual';
@@ -404,7 +407,13 @@ export const PLAN_CATALOG: Record<string, {
   allowance: string;
   description: string;
   isSubscription: boolean;
-}> = {
+  validityDays: number;
+  enabled: boolean;
+  features: string[];
+}
+
+// Plan Catalog definition (server source of truth - exact prices specified by user)
+export const PLAN_CATALOG: Record<string, PlanDefinition> = {
   'single-track': {
     id: 'single-track',
     name: 'Single Track',
@@ -414,7 +423,19 @@ export const PLAN_CATALOG: Record<string, {
     billingText: 'one-time payment',
     allowance: '1 single track submission',
     description: '1 audio track distribution with free ISRC & UPC barcode generation.',
-    isSubscription: false
+    isSubscription: false,
+    validityDays: 365,
+    enabled: true,
+    features: [
+      '1 audio track distribution (up to 10 min)',
+      'Free ISRC & UPC barcode generation',
+      'Lossless WAV / FLAC audio ingestion',
+      'Cover artwork technical verification',
+      'Release scheduling (14+ days in advance)',
+      'Standard artist royalty reporting',
+      'Centralized artist dashboard access',
+      'Email support assistance'
+    ]
   },
   'ep-album': {
     id: 'ep-album',
@@ -425,7 +446,19 @@ export const PLAN_CATALOG: Record<string, {
     billingText: 'one-time payment',
     allowance: '1 EP or full album submission (up to 15 tracks)',
     description: 'Up to 15 tracks per album included with custom ISRCs and album UPC barcode.',
-    isSubscription: false
+    isSubscription: false,
+    validityDays: 365,
+    enabled: true,
+    features: [
+      'Up to 15 tracks per album included',
+      'Sequential track ordering & disc numbering',
+      'Custom ISRC assigned for every track',
+      'Single album-level UPC barcode included',
+      'Full metadata management & writer credits',
+      'Explicit content declarations per track',
+      'Consolidated album reporting breakdown',
+      'Priority metadata verification check'
+    ]
   },
   'starter-monthly': {
     id: 'starter-monthly',
@@ -436,7 +469,18 @@ export const PLAN_CATALOG: Record<string, {
     billingText: '/month',
     allowance: '1 release submission per billing month',
     description: '1 release each billing cycle for steady solo creators.',
-    isSubscription: true
+    isSubscription: true,
+    validityDays: 30,
+    enabled: true,
+    features: [
+      '1 release submission each billing cycle',
+      '1 primary artist profile management',
+      'Free automated ISRC & UPC assignment',
+      'Audio & artwork quality validation',
+      'Centralized catalog management',
+      'Monthly digital royalty statements',
+      'Standard support ticketing (24–48h response)'
+    ]
   },
   'growth-monthly': {
     id: 'growth-monthly',
@@ -447,7 +491,18 @@ export const PLAN_CATALOG: Record<string, {
     billingText: '/month',
     allowance: '5 release submissions per billing month',
     description: '5 releases per month, up to 3 artist profiles, and record label creation.',
-    isSubscription: true
+    isSubscription: true,
+    validityDays: 30,
+    enabled: true,
+    features: [
+      '5 release submissions each billing cycle',
+      'Up to 3 artist profiles managed',
+      'Record label profile creation (My Labels)',
+      'Smart Links generator with pre-save landing page',
+      'Catalog export & track-level breakdown',
+      'Direct payout requests (Bank IMPS / UPI)',
+      'Priority ticket queue handling'
+    ]
   },
   'unlimited-monthly': {
     id: 'unlimited-monthly',
@@ -458,7 +513,18 @@ export const PLAN_CATALOG: Record<string, {
     billingText: '/month',
     allowance: 'Unlimited releases (fair use)',
     description: 'Unlimited releases, unlimited artist profiles, and priority verification queue.',
-    isSubscription: true
+    isSubscription: true,
+    validityDays: 30,
+    enabled: true,
+    features: [
+      'Unlimited release submissions (fair-use policy)',
+      'Unlimited managed artist profiles',
+      'Multi-label catalog management',
+      'Team member workspace invites (Label Manager / Viewer)',
+      'Fast-track metadata inspection queue',
+      'Automated smart links & custom vanity URLs',
+      'Dedicated artist relations desk'
+    ]
   },
   'starter-annual': {
     id: 'starter-annual',
@@ -469,7 +535,18 @@ export const PLAN_CATALOG: Record<string, {
     billingText: '/year',
     allowance: '1 release submission per month (12 / year)',
     description: 'Save with annual billing. ₹149 × 12 − ₹100 discount = ₹1,688/year.',
-    isSubscription: true
+    isSubscription: true,
+    validityDays: 365,
+    enabled: true,
+    features: [
+      '1 release per month for a full 12 months',
+      'Includes ₹100 direct annual savings',
+      '1 primary artist profile',
+      'Uninterrupted catalog preservation',
+      'ISRC & UPC barcodes included at no extra fee',
+      'Monthly royalty statements & CSV exports',
+      'Full year of locked pricing'
+    ]
   },
   'growth-annual': {
     id: 'growth-annual',
@@ -480,7 +557,18 @@ export const PLAN_CATALOG: Record<string, {
     billingText: '/year',
     allowance: '5 release submissions per month (60 / year)',
     description: 'Save with annual billing. ₹200 × 12 − ₹100 discount = ₹2,300/year.',
-    isSubscription: true
+    isSubscription: true,
+    validityDays: 365,
+    enabled: true,
+    features: [
+      'Up to 5 releases per month (60 / year)',
+      'Includes ₹100 direct annual savings',
+      'Up to 3 artist profiles and label records',
+      'Smart Links & release landing pages included',
+      'Catalog batch metadata management',
+      'Priority customer assistance',
+      'Consolidated annual financial ledger'
+    ]
   },
   'unlimited-annual': {
     id: 'unlimited-annual',
@@ -491,7 +579,18 @@ export const PLAN_CATALOG: Record<string, {
     billingText: '/year',
     allowance: 'Unlimited releases for 12 months (fair use)',
     description: 'Save with annual billing. ₹300 × 12 − ₹100 discount = ₹3,500/year.',
-    isSubscription: true
+    isSubscription: true,
+    validityDays: 365,
+    enabled: true,
+    features: [
+      'Unlimited release submissions all year long',
+      'Includes ₹100 direct annual savings',
+      'Unlimited artist profiles & label entities',
+      'Multi-user team management & permissions',
+      'Priority technical review queue',
+      'Custom pre-save landing pages & tracking links',
+      'Dedicated priority artist desk'
+    ]
   }
 };
 
@@ -909,6 +1008,39 @@ function getAuthenticatedUser(req: express.Request): StoredUser | null {
 function getUserDashboard(userId: string): UserDashboardData {
   if (!userDashboards.has(userId)) {
     const defaultData = generateInitialRoyaltiesForUser('Artist');
+    const isDemo = userId === demoUserId;
+    const initialPlanId = isDemo ? 'growth-monthly' : 'growth-monthly';
+    const plan = PLAN_CATALOG[initialPlanId] || PLAN_CATALOG['growth-monthly'];
+
+    const initialSubscription: UserSubscriptionInfo = isDemo
+      ? {
+          status: 'active',
+          planId: 'growth-monthly',
+          planName: 'Growth Monthly',
+          billingFrequency: 'monthly',
+          startedAt: '2026-02-01T00:00:00.000Z',
+          renewsAt: new Date(Date.now() + 25 * 86400000).toISOString().split('T')[0],
+          expiresAt: new Date(Date.now() + 25 * 86400000).toISOString(),
+          orderId: 'order_demo_1001',
+          paymentId: 'pay_demo_984120',
+          amount: 200,
+          autoRenew: true,
+          paymentStatus: 'Verified & Paid',
+          daysRemaining: 25
+        }
+      : {
+          status: 'pending',
+          planId: plan.id,
+          planName: plan.name,
+          billingFrequency: plan.type,
+          startedAt: new Date().toISOString(),
+          amount: plan.priceINR,
+          autoRenew: plan.isSubscription,
+          orderId: '',
+          paymentStatus: 'Pending Payment',
+          daysRemaining: 0
+        };
+
     userDashboards.set(userId, {
       labels: [],
       releases: [],
@@ -929,14 +1061,30 @@ function getUserDashboard(userId: string): UserDashboardData {
       ],
       balance: 520.00,
       lastPayout: 0.00,
-      planId: 'growth-monthly',
+      planId: initialPlanId,
+      subscription: initialSubscription,
       teamMembers: [],
       monthlyRoyalties: defaultData.monthlyRoyalties,
       dspBreakdown: defaultData.dspBreakdown,
       topTracks: defaultData.topTracks
     });
   }
-  return userDashboards.get(userId)!;
+
+  const dashboard = userDashboards.get(userId)!;
+
+  // Enforce automatic expiration check
+  if (dashboard.subscription && (dashboard.subscription.status === 'active' || dashboard.subscription.status === 'cancelled')) {
+    const exp = dashboard.subscription.expiresAt || dashboard.subscription.renewsAt;
+    if (exp) {
+      const expTime = new Date(exp).getTime();
+      if (expTime < Date.now()) {
+        dashboard.subscription.status = 'expired';
+      }
+      dashboard.subscription.daysRemaining = Math.max(0, Math.ceil((expTime - Date.now()) / (1000 * 3600 * 24)));
+    }
+  }
+
+  return dashboard;
 }
 
 // Find release across all users
@@ -1708,6 +1856,247 @@ app.get('/api/admin/users', requireAdmin, (req, res) => {
   return res.json({ users: list });
 });
 
+// Public Plans API
+app.get('/api/plans', (_req, res) => {
+  const enabledPlans = Object.values(PLAN_CATALOG).filter(p => p.enabled !== false);
+  return res.json({ plans: enabledPlans });
+});
+
+// Admin All Plans API (Enabled and Disabled)
+app.get('/api/admin/plans', requireAdmin, (_req, res) => {
+  const allPlans = Object.values(PLAN_CATALOG);
+  return res.json({ plans: allPlans });
+});
+
+// Admin Create or Edit Plan
+app.post('/api/admin/plans', requireAdmin, (req, res) => {
+  const user = getAuthenticatedUser(req)!;
+  const { id, name, type, priceINR, billingText, allowance, description, isSubscription, validityDays, enabled, features } = req.body;
+
+  if (!name || priceINR === undefined || !type) {
+    return res.status(400).json({ error: 'Plan name, type, and price are required.' });
+  }
+
+  const planId = (id || name.toLowerCase().replace(/[^a-z0-9]/g, '-')).trim();
+  const price = Number(priceINR);
+  if (isNaN(price) || price < 0) {
+    return res.status(400).json({ error: 'Valid price in INR is required.' });
+  }
+
+  const isExisting = Boolean(PLAN_CATALOG[planId]);
+  const plan: PlanDefinition = {
+    id: planId,
+    name: name.trim(),
+    type: (type === 'annual' ? 'annual' : type === 'monthly' ? 'monthly' : 'one-time'),
+    priceINR: price,
+    amountPaise: Math.round(price * 100),
+    billingText: billingText ? billingText.trim() : (type === 'monthly' ? '/month' : type === 'annual' ? '/year' : 'one-time payment'),
+    allowance: allowance ? allowance.trim() : (type === 'one-time' ? '1 release submission' : 'Standard allowance'),
+    description: description ? description.trim() : '',
+    isSubscription: isSubscription !== undefined ? Boolean(isSubscription) : (type !== 'one-time'),
+    validityDays: Number(validityDays) || (type === 'monthly' ? 30 : 365),
+    enabled: enabled !== undefined ? Boolean(enabled) : true,
+    features: Array.isArray(features) ? features : (features ? String(features).split('\n').filter(Boolean) : [])
+  };
+
+  PLAN_CATALOG[planId] = plan;
+
+  auditLogs.push({
+    id: 'aud_' + Date.now(),
+    actorEmail: user.email,
+    actorRole: user.role,
+    action: isExisting ? 'ADMIN_PLAN_UPDATED' : 'ADMIN_PLAN_CREATED',
+    entityType: 'Plan',
+    entityId: planId,
+    details: `${isExisting ? 'Updated' : 'Created'} plan "${plan.name}" at ₹${plan.priceINR} (${plan.type}, ${plan.validityDays} days validity). Status: ${plan.enabled ? 'Enabled' : 'Disabled'}.`,
+    timestamp: new Date().toISOString()
+  });
+
+  return res.json({ success: true, plan });
+});
+
+// Admin Toggle Plan Enabled/Disabled
+app.post('/api/admin/plans/:id/toggle', requireAdmin, (req, res) => {
+  const user = getAuthenticatedUser(req)!;
+  const planId = req.params.id;
+  const plan = PLAN_CATALOG[planId];
+  if (!plan) return res.status(404).json({ error: 'Plan not found.' });
+
+  plan.enabled = !plan.enabled;
+
+  auditLogs.push({
+    id: 'aud_' + Date.now(),
+    actorEmail: user.email,
+    actorRole: user.role,
+    action: plan.enabled ? 'ADMIN_PLAN_ENABLED' : 'ADMIN_PLAN_DISABLED',
+    entityType: 'Plan',
+    entityId: planId,
+    details: `Toggled plan "${plan.name}" to ${plan.enabled ? 'Enabled (Active in Catalog)' : 'Disabled (Hidden from Catalog)'}.`,
+    timestamp: new Date().toISOString()
+  });
+
+  return res.json({ success: true, plan });
+});
+
+// Admin Customers & Subscriptions List
+app.get('/api/admin/customers', requireAdmin, (_req, res) => {
+  const customers = Array.from(users.values()).map(u => {
+    const db = getUserDashboard(u.id);
+    const sub = db.subscription;
+    const isSubActive = sub && sub.status === 'active';
+    const isSubExpired = sub && sub.status === 'expired';
+    const isSubRevoked = sub && sub.status === 'revoked';
+
+    return {
+      id: u.id,
+      fullName: u.fullName,
+      email: u.email,
+      country: u.country,
+      role: u.role,
+      isActive: u.isActive,
+      createdAt: u.createdAt,
+      planId: db.planId || u.selectedPlanId || 'none',
+      planName: sub?.planName || PLAN_CATALOG[db.planId]?.name || 'No Active Plan',
+      planPrice: sub?.amount !== undefined ? sub.amount : (PLAN_CATALOG[db.planId]?.priceINR || 0),
+      billingFrequency: sub?.billingFrequency || PLAN_CATALOG[db.planId]?.type || 'monthly',
+      subscriptionStatus: isSubRevoked ? 'Revoked' : isSubExpired ? 'Expired' : isSubActive ? 'Active' : (sub?.status === 'pending' ? 'Pending' : 'No Plan'),
+      startedAt: sub?.startedAt,
+      expiresAt: sub?.expiresAt || sub?.renewsAt,
+      daysRemaining: sub?.daysRemaining !== undefined ? sub.daysRemaining : 0,
+      paymentId: sub?.paymentId,
+      orderId: sub?.orderId,
+      paymentStatus: sub?.paymentStatus || (isSubActive ? 'Verified & Paid' : 'Pending Payment'),
+      totalReleases: db.releases.length
+    };
+  });
+
+  return res.json({ customers });
+});
+
+// Admin Manually Grant Plan
+app.post('/api/admin/subscriptions/grant', requireAdmin, (req, res) => {
+  const adminUser = getAuthenticatedUser(req)!;
+  const { userEmail, planId, validityDays, reason } = req.body;
+
+  if (!userEmail || !planId) {
+    return res.status(400).json({ error: 'Target customer email and plan ID are required.' });
+  }
+
+  const targetEmail = userEmail.trim().toLowerCase();
+  const targetUser = users.get(targetEmail);
+  if (!targetUser) {
+    return res.status(404).json({ error: 'No registered customer found with email ' + targetEmail });
+  }
+
+  const plan = PLAN_CATALOG[planId];
+  if (!plan) {
+    return res.status(400).json({ error: 'Invalid plan selected from catalog.' });
+  }
+
+  const days = Number(validityDays) || plan.validityDays || (plan.type === 'monthly' ? 30 : 365);
+  const now = new Date();
+  const expiresAtDate = new Date(now.getTime() + days * 86400000).toISOString();
+  const renewsAtDate = expiresAtDate.split('T')[0];
+
+  const db = getUserDashboard(targetUser.id);
+  db.planId = plan.id;
+  targetUser.selectedPlanId = plan.id;
+
+  const grantRef = 'MANUAL_GRANT_' + Date.now().toString().slice(-6);
+  db.subscription = {
+    status: 'active',
+    planId: plan.id,
+    planName: plan.name,
+    billingFrequency: plan.type,
+    startedAt: now.toISOString(),
+    expiresAt: expiresAtDate,
+    renewsAt: renewsAtDate,
+    orderId: 'admin_grant_' + Date.now().toString().slice(-8),
+    paymentId: grantRef,
+    amount: plan.priceINR,
+    autoRenew: false,
+    paymentStatus: 'Manually Granted by Super Admin',
+    daysRemaining: days
+  };
+
+  // Add ledger credit transaction
+  db.transactions.unshift({
+    id: 'tx-grant-' + Date.now().toString().slice(-6),
+    type: 'Credit',
+    amount: plan.priceINR,
+    description: `Administrative Plan Grant: ${plan.name} (${days} days) - ${reason || 'Admin Authorized'}`,
+    status: 'Completed',
+    reference: grantRef,
+    date: now.toISOString().split('T')[0]
+  });
+
+  auditLogs.push({
+    id: 'aud_' + Date.now(),
+    actorEmail: adminUser.email,
+    actorRole: adminUser.role,
+    action: 'SUBSCRIPTION_MANUALLY_GRANTED',
+    entityType: 'UserSubscription',
+    entityId: targetUser.id,
+    details: `Super Admin (${adminUser.email}) manually granted "${plan.name}" (valid for ${days} days until ${renewsAtDate}) to customer ${targetUser.email}. Reason: ${reason || 'Administrative Grant'}.`,
+    timestamp: new Date().toISOString()
+  });
+
+  return res.json({
+    success: true,
+    message: `Successfully granted "${plan.name}" to ${targetUser.email} for ${days} days.`,
+    subscription: db.subscription
+  });
+});
+
+// Admin Manually Revoke Plan
+app.post('/api/admin/subscriptions/revoke', requireAdmin, (req, res) => {
+  const adminUser = getAuthenticatedUser(req)!;
+  const { userEmail, reason } = req.body;
+
+  if (!userEmail) {
+    return res.status(400).json({ error: 'Customer email is required.' });
+  }
+
+  const targetEmail = userEmail.trim().toLowerCase();
+  const targetUser = users.get(targetEmail);
+  if (!targetUser) {
+    return res.status(404).json({ error: 'No registered customer found with email ' + targetEmail });
+  }
+
+  const db = getUserDashboard(targetUser.id);
+  const prevPlan = db.subscription?.planName || 'Current Plan';
+  if (db.subscription) {
+    db.subscription.status = 'revoked';
+    db.subscription.revokedAt = new Date().toISOString();
+    db.subscription.revocationReason = reason || 'Revoked by Super Admin';
+    db.subscription.daysRemaining = 0;
+  }
+
+  auditLogs.push({
+    id: 'aud_' + Date.now(),
+    actorEmail: adminUser.email,
+    actorRole: adminUser.role,
+    action: 'SUBSCRIPTION_MANUALLY_REVOKED',
+    entityType: 'UserSubscription',
+    entityId: targetUser.id,
+    details: `Super Admin (${adminUser.email}) revoked subscription for "${prevPlan}" from customer ${targetUser.email}. Reason: ${reason || 'Administrative Revocation'}.`,
+    timestamp: new Date().toISOString()
+  });
+
+  return res.json({
+    success: true,
+    message: `Successfully revoked subscription for ${targetUser.email}.`,
+    subscription: db.subscription
+  });
+});
+
+// Admin Audit Logs API
+app.get('/api/admin/audit-logs', requireAdmin, (_req, res) => {
+  return res.json({
+    auditLogs: auditLogs.slice().reverse()
+  });
+});
+
 // ======================== RAZORPAY INTEGRATION & GATEWAY ========================
 
 async function createRazorpayOrderOnGateway(params: {
@@ -1816,6 +2205,9 @@ app.post('/api/razorpay/create-order', (req, res) => {
   const plan = PLAN_CATALOG[planId];
   if (!plan) {
     return res.status(400).json({ error: 'Invalid product or plan specified in catalogue.' });
+  }
+  if (plan.enabled === false) {
+    return res.status(400).json({ error: 'This plan is currently disabled and not available for new purchases.' });
   }
 
   // Prevent duplicate orders from repeated rapid clicks (within 3 seconds)
@@ -1945,23 +2337,25 @@ app.post('/api/razorpay/verify-payment', (req, res) => {
   const dashboard = getUserDashboard(user.id);
   dashboard.planId = plan.id;
 
-  const renewsAtDate = plan.type === 'monthly'
-    ? new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString().split('T')[0]
-    : plan.type === 'annual'
-    ? new Date(Date.now() + 365 * 24 * 3600 * 1000).toISOString().split('T')[0]
-    : undefined;
+  const now = new Date();
+  const validityDays = plan.validityDays || (plan.type === 'monthly' ? 30 : 365);
+  const expiresAtDate = new Date(now.getTime() + validityDays * 24 * 3600 * 1000).toISOString();
+  const renewsAtDate = expiresAtDate.split('T')[0];
 
   dashboard.subscription = {
     status: 'active',
     planId: plan.id,
     planName: plan.name,
     billingFrequency: plan.type,
-    startedAt: new Date().toISOString(),
+    startedAt: now.toISOString(),
+    expiresAt: expiresAtDate,
     renewsAt: renewsAtDate,
     orderId,
     paymentId,
     amount: plan.priceINR,
-    autoRenew: order.autoRenew
+    autoRenew: order.autoRenew,
+    paymentStatus: 'Verified & Paid',
+    daysRemaining: validityDays
   };
 
   // Add confirmed debit transaction to artist wallet ledger

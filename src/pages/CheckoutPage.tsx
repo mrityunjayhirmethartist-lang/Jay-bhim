@@ -73,6 +73,13 @@ export const CheckoutPage: React.FC = () => {
   const [testModalOpen, setTestModalOpen] = useState<boolean>(false);
   const [pendingSimOrder, setPendingSimOrder] = useState<any>(null);
 
+  // Redirect if not logged in
+  useEffect(() => {
+    if (!user) {
+      navigate(`/login?planId=${planIdFromQuery}&redirect=${encodeURIComponent(`/checkout?planId=${planIdFromQuery}`)}&notice=${encodeURIComponent('Please Login or Create an Account First to Continue.')}`);
+    }
+  }, [user, planIdFromQuery]);
+
   // Sync selected plan
   useEffect(() => {
     if (selectedPlan) {
@@ -439,17 +446,24 @@ export const CheckoutPage: React.FC = () => {
 
               <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
                 <button
+                  onClick={() => navigate('/dashboard/subscription')}
+                  className="w-full sm:w-auto px-6 py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold shadow-lg shadow-emerald-600/25 flex items-center justify-center gap-2 transition-all"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>View My Active Subscription</span>
+                </button>
+                <button
                   onClick={() => navigate('/dashboard')}
                   className="w-full sm:w-auto px-6 py-3.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-semibold shadow-lg shadow-blue-600/25 flex items-center justify-center gap-2 transition-all"
                 >
-                  <span>Proceed to Artist Dashboard</span>
+                  <span>Go to Artist Portal</span>
                   <ArrowRight className="w-4 h-4" />
                 </button>
                 <button
                   onClick={() => navigate('/dashboard/wallet-transactions')}
                   className="w-full sm:w-auto px-5 py-3.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-semibold border border-slate-700 transition-colors"
                 >
-                  View Wallet Transaction History
+                  Payment Ledger
                 </button>
               </div>
             </div>

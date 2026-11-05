@@ -38,12 +38,16 @@ import {
 
 export const HomePage: React.FC = () => {
   const { navigate } = useRouter();
-  const { setSelectedPlanId } = useAuth();
+  const { user, setSelectedPlanId } = useAuth();
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [activeFaq, setActiveFaq] = useState<string | null>(null);
 
   const handleSelectPlan = (planId: string) => {
     setSelectedPlanId(planId);
+    if (!user) {
+      navigate(`/login?planId=${planId}&redirect=${encodeURIComponent(`/checkout?planId=${planId}`)}&notice=${encodeURIComponent('Please Login or Create an Account First to Continue.')}`);
+      return;
+    }
     navigate(`/checkout?planId=${planId}`);
   };
 

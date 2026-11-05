@@ -9,9 +9,17 @@ import { OtpInput } from '../components/auth/OtpInput';
 
 export const LoginPage: React.FC = () => {
   const { navigate, queryParam } = useRouter();
-  const { login, selectedPlanId } = useAuth();
+  const { login, selectedPlanId, setSelectedPlanId } = useAuth();
 
-  const redirectTarget = queryParam('redirect') || (selectedPlanId ? `/checkout?planId=${selectedPlanId}` : '/dashboard');
+  const noticeParam = queryParam('notice');
+  const planIdParam = queryParam('planId') || selectedPlanId || undefined;
+  const redirectTarget = queryParam('redirect') || (planIdParam ? `/checkout?planId=${planIdParam}` : '/dashboard');
+
+  useEffect(() => {
+    if (queryParam('planId')) {
+      setSelectedPlanId(queryParam('planId'));
+    }
+  }, [queryParam]);
 
   // Step 1: Credentials State
   const [email, setEmail] = useState('');
@@ -416,6 +424,21 @@ export const LoginPage: React.FC = () => {
                   </p>
                 </div>
 
+                {/* Mandatory Authentication Notice */}
+                {noticeParam && (
+                  <div className="mb-5 p-3.5 rounded-xl bg-amber-950/50 border border-amber-500/60 flex items-start gap-3 text-amber-200 text-xs shadow-lg shadow-amber-950/30">
+                    <AlertCircle className="w-4 h-4 shrink-0 text-amber-400 mt-0.5" />
+                    <div>
+                      <p className="font-semibold text-amber-100">{noticeParam}</p>
+                      {planIdParam && (
+                        <p className="text-[11px] text-amber-300/80 mt-1">
+                          Selected Plan: <span className="font-mono text-white font-bold">{planIdParam}</span>. Complete login to continue straight to checkout.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 {/* Quick Test Demo Helper */}
                 <div className="mb-6 p-3 rounded-xl bg-slate-900 border border-slate-800 text-[11px] space-y-2">
                   <div className="text-slate-400 font-mono flex items-center justify-between">
@@ -530,7 +553,14 @@ export const LoginPage: React.FC = () => {
                 <div className="mt-6 text-center text-xs text-slate-400 pt-5 border-t border-slate-800">
                   New to Rudraatma Music?{' '}
                   <button
-                    onClick={() => navigate('/signup')}
+                    onClick={() => {
+                      const p = new URLSearchParams();
+                      if (planIdParam) p.set('planId', planIdParam);
+                      if (redirectTarget) p.set('redirect', redirectTarget);
+                      if (noticeParam) p.set('notice', noticeParam);
+                      const q = p.toString();
+                      navigate(q ? `/signup?${q}` : '/signup');
+                    }}
                     className="text-blue-400 hover:underline font-semibold"
                   >
                     Sign Up First

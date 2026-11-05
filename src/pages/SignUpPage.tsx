@@ -11,8 +11,10 @@ export const SignUpPage: React.FC = () => {
   const { navigate, queryParam } = useRouter();
   const { login, selectedPlanId, setSelectedPlanId } = useAuth();
 
-  const planFromQuery = queryParam('plan');
+  const planFromQuery = queryParam('planId') || queryParam('plan');
+  const noticeParam = queryParam('notice');
   const verifyEmailFromQuery = queryParam('verifyEmail');
+  const redirectTarget = queryParam('redirect') || (planFromQuery ? `/checkout?planId=${planFromQuery}` : (selectedPlanId ? `/checkout?planId=${selectedPlanId}` : '/dashboard'));
 
   useEffect(() => {
     if (planFromQuery) setSelectedPlanId(planFromQuery);
@@ -175,11 +177,8 @@ export const SignUpPage: React.FC = () => {
       if (res.ok && data.success && data.token && data.user) {
         // Account verified and activated! Open session
         login(data.token, data.user);
-        if (selectedPlanId) {
-          navigate(`/checkout?planId=${selectedPlanId}`);
-        } else {
-          navigate('/dashboard');
-        }
+        const target = redirectTarget.startsWith('/') ? redirectTarget : '/dashboard';
+        navigate(target);
       } else {
         setOtpError(data?.error || 'Invalid or expired verification code.');
       }
@@ -324,6 +323,21 @@ export const SignUpPage: React.FC = () => {
                   </p>
                 </div>
 
+                {/* Mandatory Authentication Notice */}
+                {noticeParam && (
+                  <div className="p-3.5 rounded-xl bg-amber-950/50 border border-amber-500/60 flex items-start gap-3 text-amber-200 text-xs shadow-lg shadow-amber-950/30">
+                    <AlertCircle className="w-4 h-4 shrink-0 text-amber-400 mt-0.5" />
+                    <div>
+                      <p className="font-semibold text-amber-100">{noticeParam}</p>
+                      {(planFromQuery || selectedPlanId) && (
+                        <p className="text-[11px] text-amber-300/80 mt-1">
+                          Plan Selected: <span className="font-mono text-white font-bold">{planFromQuery || selectedPlanId}</span>. Complete registration to continue straight to checkout.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 {error && (
                   <div className="p-3 rounded-lg text-xs text-rose-300 bg-rose-950/40 border border-rose-800/80 flex items-center gap-2">
                     <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
@@ -464,7 +478,15 @@ export const SignUpPage: React.FC = () => {
                 <div className="text-center text-xs text-slate-400 pt-4 border-t border-slate-800">
                   Already registered?{' '}
                   <button
-                    onClick={() => navigate('/login')}
+                    onClick={() => {
+                      const p = new URLSearchParams();
+                      const effectivePlan = planFromQuery || selectedPlanId;
+                      if (effectivePlan) p.set('planId', effectivePlan);
+                      if (redirectTarget) p.set('redirect', redirectTarget);
+                      if (noticeParam) p.set('notice', noticeParam);
+                      const q = p.toString();
+                      navigate(q ? `/login?${q}` : '/login');
+                    }}
                     className="text-blue-400 hover:underline font-semibold"
                   >
                     Log In with 2FA

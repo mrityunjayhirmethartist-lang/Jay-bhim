@@ -26,7 +26,18 @@ import {
   ExternalLink,
   ShieldCheck,
   ShieldAlert,
-  ArrowRight
+  ArrowRight,
+  Calendar,
+  Clock,
+  Sparkles,
+  RefreshCw,
+  Power,
+  Edit3,
+  History,
+  UserCheck,
+  Search,
+  Lock,
+  X
 } from 'lucide-react';
 
 // ======================== 1. MY LABELS PAGE ========================
@@ -565,74 +576,170 @@ export const SubscriptionPlanPage: React.FC = () => {
   };
 
   const currentPlan = PRICING_PLANS.find(p => p.id === activePlanId) || PRICING_PLANS[0];
+  const featuresList = subscription?.features && subscription.features.length > 0
+    ? subscription.features
+    : currentPlan.features;
+
+  const isPlanActive = subscription?.status === 'active';
+  const isPlanExpired = subscription?.status === 'expired';
+  const isPlanPending = subscription?.status === 'pending';
+  const isPlanRevoked = subscription?.status === 'revoked';
 
   return (
     <DashboardLayout title="Subscription Plan">
-      <div className="space-y-6">
+      <div className="space-y-8">
         <div>
-          <h1 className="text-2xl font-bold text-white font-display">Subscription & Product Plan</h1>
-          <p className="text-xs text-slate-400">View active subscription terms, renewal status, verified Razorpay payment records, and available catalog plans</p>
+          <h1 className="text-2xl font-bold text-white font-display">My Plan / Subscription</h1>
+          <p className="text-xs text-slate-400">Manage your digital music distribution entitlement, billing cycles, and platform allowances</p>
         </div>
 
-        {/* Active Subscription Status Banner */}
-        <div className="p-6 rounded-2xl bg-gradient-to-r from-blue-950/40 via-[#090e1a] to-[#090e1a] border border-blue-500/30">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+        {/* PRIMARY CARD: MY PLAN / SUBSCRIPTION DETAILS */}
+        <div className="p-7 rounded-3xl bg-[#090e1a] border border-blue-500/30 shadow-2xl relative overflow-hidden">
+          {/* Subtle Glow */}
+          <div className="absolute top-0 right-0 w-96 h-96 bg-blue-600/5 blur-3xl pointer-events-none rounded-full" />
+
+          {/* Header Row: Plan Name, Status, and Renew/Upgrade */}
+          <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-6 pb-6 border-b border-slate-800">
             <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-mono uppercase bg-emerald-950 text-emerald-400 px-2 py-0.5 rounded border border-emerald-800 font-semibold">
-                  {subscription?.status === 'active' ? (subscription?.autoRenew ? 'Active • Auto-Renewing' : 'Active • Renews Manually') : 'Active Plan'}
-                </span>
-                <span className="text-xs text-slate-400 font-mono">
-                  Verified via Razorpay
+              <div className="flex flex-wrap items-center gap-3">
+                {/* 3. Plan Status Badge */}
+                {isPlanActive ? (
+                  <span className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full text-xs font-bold bg-emerald-950/80 text-emerald-400 border border-emerald-500/50 shadow-sm shadow-emerald-950">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+                    <span>Active Subscription</span>
+                  </span>
+                ) : isPlanExpired ? (
+                  <span className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full text-xs font-bold bg-rose-950/80 text-rose-400 border border-rose-500/50">
+                    <AlertCircle className="w-3.5 h-3.5" />
+                    <span>Expired</span>
+                  </span>
+                ) : isPlanRevoked ? (
+                  <span className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full text-xs font-bold bg-rose-950/80 text-rose-400 border border-rose-500/50">
+                    <ShieldAlert className="w-3.5 h-3.5" />
+                    <span>Revoked by Admin</span>
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full text-xs font-bold bg-amber-950/80 text-amber-400 border border-amber-500/50">
+                    <Clock className="w-3.5 h-3.5" />
+                    <span>Pending Verification</span>
+                  </span>
+                )}
+
+                {/* 4. Payment Status Badge */}
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-medium bg-slate-900 border border-slate-700/80 text-cyan-300">
+                  <CreditCard className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>Payment: {subscription?.paymentStatus || 'Verified & Paid'}</span>
                 </span>
               </div>
-              <h2 className="text-2xl font-bold text-white font-display">
-                {currentPlan.name}
+
+              {/* 1. Current Plan Name */}
+              <h2 className="text-3xl font-bold text-white font-display pt-1">
+                {subscription?.planName || currentPlan.name}
               </h2>
+
               <p className="text-xs text-slate-300 max-w-xl">
                 {currentPlan.description}
               </p>
-              <div className="flex flex-wrap items-center gap-4 text-xs font-mono pt-1 text-slate-300">
-                <div>
-                  <span className="text-slate-400">Plan Rate: </span>
-                  <span className="font-bold text-white">₹{currentPlan.priceINR} {currentPlan.billingText}</span>
-                </div>
-                {subscription?.renewsAt && (
-                  <div>
-                    <span className="text-slate-400">Next Renewal: </span>
-                    <span className="text-blue-400 font-bold">{subscription.renewsAt}</span>
-                  </div>
-                )}
-                {subscription?.paymentId && (
-                  <div>
-                    <span className="text-slate-400">Payment ID: </span>
-                    <span className="text-emerald-400">{subscription.paymentId}</span>
-                  </div>
-                )}
-              </div>
             </div>
 
+            {/* Actions: Upgrade / Renew Plan Button */}
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+              <button
+                onClick={() => navigate('/pricing')}
+                className="px-5 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-semibold shadow-lg shadow-blue-600/25 flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-[0.98]"
+              >
+                <Sparkles className="w-4 h-4" />
+                <span>Upgrade / Renew Plan</span>
+              </button>
+
               {currentPlan.type !== 'one-time' && subscription?.autoRenew && (
                 <button
                   onClick={handleCancelAutoRenew}
                   disabled={cancelLoading}
-                  className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-rose-400 border border-rose-900/60 rounded-xl text-xs font-semibold transition-colors disabled:opacity-50"
+                  className="px-4 py-3 bg-slate-900 hover:bg-slate-800 text-rose-400 border border-rose-900/60 rounded-xl text-xs font-semibold transition-colors disabled:opacity-50"
                 >
                   {cancelLoading ? 'Cancelling...' : 'Cancel Auto-Renewal'}
                 </button>
               )}
+
               <button
                 onClick={() => navigate('/dashboard/wallet-transactions')}
-                className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-semibold border border-slate-700 transition-colors"
+                className="px-4 py-3 bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white rounded-xl text-xs font-semibold border border-slate-800 transition-colors"
               >
                 Payment Ledger
               </button>
             </div>
           </div>
 
+          {/* Key Metrics Grid (Price, Purchase Date, Expiry Date, Days Remaining, Transaction ID) */}
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 pt-6">
+            {/* 2. Plan Price */}
+            <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800/80">
+              <span className="text-[11px] font-mono uppercase tracking-wider text-slate-400">Plan Price</span>
+              <div className="text-xl font-bold font-mono text-white mt-1">
+                ₹{subscription?.planPrice || currentPlan.priceINR}
+                <span className="text-xs text-slate-400 font-normal ml-1">
+                  {currentPlan.billingText}
+                </span>
+              </div>
+            </div>
+
+            {/* 5. Purchase Date */}
+            <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800/80">
+              <span className="text-[11px] font-mono uppercase tracking-wider text-slate-400">Purchase Date</span>
+              <div className="text-sm font-semibold font-mono text-slate-200 mt-2 flex items-center gap-1.5">
+                <Calendar className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                <span>{subscription?.startedAt || 'Active Cycle'}</span>
+              </div>
+            </div>
+
+            {/* 6. Expiry Date */}
+            <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800/80">
+              <span className="text-[11px] font-mono uppercase tracking-wider text-slate-400">Expiry Date</span>
+              <div className="text-sm font-semibold font-mono text-slate-200 mt-2 flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                <span>{subscription?.expiresAt || (subscription?.renewsAt ? subscription.renewsAt : 'Never (Lifetime)')}</span>
+              </div>
+            </div>
+
+            {/* 7. Days Remaining */}
+            <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800/80">
+              <span className="text-[11px] font-mono uppercase tracking-wider text-slate-400">Days Remaining</span>
+              <div className="text-xl font-bold font-mono mt-1 flex items-baseline gap-1">
+                <span className={isPlanExpired ? 'text-rose-400' : 'text-emerald-400'}>
+                  {subscription?.daysRemaining ?? (isPlanExpired ? 0 : 30)}
+                </span>
+                <span className="text-xs text-slate-400 font-normal">days left</span>
+              </div>
+            </div>
+
+            {/* 8. Transaction ID */}
+            <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800/80 col-span-2 md:col-span-1">
+              <span className="text-[11px] font-mono uppercase tracking-wider text-slate-400">Transaction ID</span>
+              <div className="text-xs font-mono text-cyan-300 mt-2 truncate font-semibold" title={subscription?.transactionId || subscription?.paymentId || subscription?.orderId}>
+                {subscription?.transactionId || subscription?.paymentId || subscription?.orderId || 'Verified Record'}
+              </div>
+            </div>
+          </div>
+
+          {/* 9. Plan Features Checklist */}
+          <div className="mt-6 pt-6 border-t border-slate-800/80">
+            <h3 className="text-xs font-mono uppercase tracking-widest text-slate-400 mb-3 flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-blue-400" />
+              <span>Included Plan Entitlements & Features</span>
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+              {featuresList.map((feat: string, i: number) => (
+                <div key={i} className="flex items-start gap-2.5 p-2.5 rounded-xl bg-slate-900/40 border border-slate-800/50">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                  <span className="text-xs text-slate-200">{feat}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
           {cancelMessage && (
-            <div className="mt-4 p-3 bg-blue-950/40 border border-blue-800/60 rounded-lg text-xs text-blue-300">
+            <div className="mt-4 p-3 bg-blue-950/40 border border-blue-800/60 rounded-xl text-xs text-blue-300">
               {cancelMessage}
             </div>
           )}
@@ -640,25 +747,39 @@ export const SubscriptionPlanPage: React.FC = () => {
 
         {/* Catalog Grid for Plan Switching */}
         <div>
-          <h2 className="text-base font-bold text-white font-display mb-4">
-            Available Distribution Plans & Standalone Releases
-          </h2>
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-lg font-bold text-white font-display">
+                All Available Rudraatma Music Plans
+              </h2>
+              <p className="text-xs text-slate-400">Switch or renew directly into any one-time or recurring package</p>
+            </div>
+            <button
+              onClick={() => navigate('/pricing')}
+              className="text-xs font-semibold text-blue-400 hover:text-blue-300 flex items-center gap-1"
+            >
+              <span>View Full Matrix</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {PRICING_PLANS.map((p) => {
               const isCurrent = p.id === activePlanId;
               return (
                 <div
                   key={p.id}
-                  className={`p-5 rounded-2xl bg-[#090e1a] border flex flex-col justify-between ${
-                    isCurrent ? 'border-blue-500 shadow-lg shadow-blue-500/10' : 'border-slate-800'
+                  className={`p-5 rounded-2xl bg-[#090e1a] border flex flex-col justify-between transition-all ${
+                    isCurrent ? 'border-emerald-500/80 shadow-lg shadow-emerald-500/10' : 'border-slate-800 hover:border-slate-700'
                   }`}
                 >
                   <div>
                     <div className="flex justify-between items-center">
                       <span className="text-[11px] font-mono uppercase text-slate-400">{p.type}</span>
                       {isCurrent && (
-                        <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950 px-2 py-0.5 rounded border border-emerald-800">
-                          Active Plan
+                        <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950 px-2 py-0.5 rounded border border-emerald-800 flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                          <span>Active Plan</span>
                         </span>
                       )}
                     </div>
@@ -676,8 +797,8 @@ export const SubscriptionPlanPage: React.FC = () => {
 
                   <div className="mt-5 pt-3 border-t border-slate-800">
                     {isCurrent ? (
-                      <div className="py-2 text-center text-xs font-semibold text-emerald-400 bg-emerald-950/40 rounded-lg">
-                        Currently Selected
+                      <div className="py-2 text-center text-xs font-semibold text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 rounded-lg">
+                        Currently Active
                       </div>
                     ) : (
                       <button
@@ -1139,39 +1260,111 @@ export const AdminDashboardPage: React.FC = () => {
   const { token, user } = useAuth();
   const { navigate } = useRouter();
 
+  // Tab Navigation State
+  const [activeTab, setActiveTab] = useState<'customers' | 'plans' | 'releases' | 'payments' | 'audit'>('customers');
+
+  // Overview Metrics
   const [overview, setOverview] = useState<any>(null);
   const [allReleases, setAllReleases] = useState<any[]>([]);
-  const [allUsers, setAllUsers] = useState<any[]>([]);
+
+  // Subscriptions & Customers State
+  const [customers, setCustomers] = useState<any[]>([]);
+  const [customerFilter, setCustomerFilter] = useState<'all' | 'active' | 'expired' | 'pending' | 'revoked'>('all');
+  const [customerSearch, setCustomerSearch] = useState('');
+
+  // Plans Catalog State
+  const [adminPlans, setAdminPlans] = useState<any[]>([]);
+
+  // Payments State
   const [payments, setPayments] = useState<any[]>([]);
   const [paymentMetrics, setPaymentMetrics] = useState<any>(null);
   const [paymentFilter, setPaymentFilter] = useState<'all' | 'paid' | 'failed' | 'created'>('all');
   const [paymentSearch, setPaymentSearch] = useState('');
+
+  // Audit Logs State
+  const [auditLogs, setAuditLogs] = useState<any[]>([]);
+
+  // Review Modal State
   const [reviewModalOpen, setReviewModalOpen] = useState(false);
   const [selectedRelease, setSelectedRelease] = useState<any>(null);
   const [reviewAction, setReviewAction] = useState<'approve' | 'request_changes' | 'reject'>('approve');
   const [adminNotes, setAdminNotes] = useState('');
   const [adminReason, setAdminReason] = useState('');
-  const [actionSuccess, setActionSuccess] = useState<string | null>(null);
 
-  useEffect(() => {
+  // Grant Subscription Modal State
+  const [grantModalOpen, setGrantModalOpen] = useState(false);
+  const [selectedCustomerForGrant, setSelectedCustomerForGrant] = useState<any>(null);
+  const [grantPlanId, setGrantPlanId] = useState('growth-monthly');
+  const [grantValidityDays, setGrantValidityDays] = useState(30);
+  const [grantAdminNote, setGrantAdminNote] = useState('');
+  const [grantLoading, setGrantLoading] = useState(false);
+
+  // Revoke Subscription Modal State
+  const [revokeModalOpen, setRevokeModalOpen] = useState(false);
+  const [selectedCustomerForRevoke, setSelectedCustomerForRevoke] = useState<any>(null);
+  const [revokeReason, setRevokeReason] = useState('');
+  const [revokeLoading, setRevokeLoading] = useState(false);
+
+  // Edit / Create Plan Modal State
+  const [editPlanModalOpen, setEditPlanModalOpen] = useState(false);
+  const [planForm, setPlanForm] = useState({
+    id: '',
+    name: '',
+    type: 'monthly' as 'one-time' | 'monthly' | 'annual',
+    priceINR: 199,
+    billingText: '/month',
+    allowance: '',
+    description: '',
+    validityDays: 30,
+    features: '',
+    enabled: true
+  });
+  const [planSaveLoading, setPlanSaveLoading] = useState(false);
+
+  // Feedback Messages
+  const [actionSuccess, setActionSuccess] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const fetchAllData = () => {
     if (!token) return;
     fetch('/api/admin/overview', { headers: { Authorization: `Bearer ${token}` } })
       .then(res => res.json())
       .then(d => {
         setOverview(d.metrics);
-        setAllUsers(d.users || []);
-      });
+      })
+      .catch(() => {});
 
     fetch('/api/admin/releases', { headers: { Authorization: `Bearer ${token}` } })
       .then(res => res.json())
-      .then(d => setAllReleases(d.releases || []));
+      .then(d => setAllReleases(d.releases || []))
+      .catch(() => {});
 
     fetch('/api/admin/payments', { headers: { Authorization: `Bearer ${token}` } })
       .then(res => res.json())
       .then(d => {
         setPayments(d.payments || []);
         setPaymentMetrics(d.metrics || null);
-      });
+      })
+      .catch(() => {});
+
+    fetch('/api/admin/customers', { headers: { Authorization: `Bearer ${token}` } })
+      .then(res => res.json())
+      .then(d => setCustomers(d.customers || []))
+      .catch(() => {});
+
+    fetch('/api/admin/plans', { headers: { Authorization: `Bearer ${token}` } })
+      .then(res => res.json())
+      .then(d => setAdminPlans(d.plans || []))
+      .catch(() => {});
+
+    fetch('/api/admin/audit-logs', { headers: { Authorization: `Bearer ${token}` } })
+      .then(res => res.json())
+      .then(d => setAuditLogs(d.logs || []))
+      .catch(() => {});
+  };
+
+  useEffect(() => {
+    fetchAllData();
   }, [token]);
 
   if (user?.role !== 'admin') {
@@ -1194,6 +1387,161 @@ export const AdminDashboardPage: React.FC = () => {
     );
   }
 
+  // Handlers
+  const handleTogglePlan = async (planId: string) => {
+    try {
+      const res = await fetch(`/api/admin/plans/${planId}/toggle`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setActionSuccess(data.message);
+        fetchAllData();
+        setTimeout(() => setActionSuccess(null), 3000);
+      } else {
+        setActionError(data.error || 'Failed to toggle plan status.');
+      }
+    } catch {
+      setActionError('Network error toggling plan status.');
+    }
+  };
+
+  const handleOpenEditPlan = (plan?: any) => {
+    if (plan) {
+      setPlanForm({
+        id: plan.id,
+        name: plan.name,
+        type: plan.type,
+        priceINR: plan.priceINR,
+        billingText: plan.billingText,
+        allowance: plan.allowance,
+        description: plan.description,
+        validityDays: plan.validityDays || 30,
+        features: Array.isArray(plan.features) ? plan.features.join('\n') : '',
+        enabled: plan.enabled !== false
+      });
+    } else {
+      setPlanForm({
+        id: `plan-custom-${Date.now().toString().slice(-4)}`,
+        name: 'New Custom Tier',
+        type: 'monthly',
+        priceINR: 199,
+        billingText: '/month',
+        allowance: '5 Master Releases / month',
+        description: 'Custom distribution package configured by administrator.',
+        validityDays: 30,
+        features: 'All Standard Features\nFree ISRC & Barcodes\nDedicated Support',
+        enabled: true
+      });
+    }
+    setEditPlanModalOpen(true);
+  };
+
+  const handleSavePlanSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPlanSaveLoading(true);
+    setActionError(null);
+    try {
+      const feats = planForm.features.split('\n').map(s => s.trim()).filter(Boolean);
+      const res = await fetch('/api/admin/plans', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          id: planForm.id.trim(),
+          name: planForm.name.trim(),
+          type: planForm.type,
+          priceINR: Number(planForm.priceINR),
+          billingText: planForm.billingText.trim(),
+          allowance: planForm.allowance.trim(),
+          description: planForm.description.trim(),
+          validityDays: Number(planForm.validityDays) || 30,
+          features: feats,
+          enabled: planForm.enabled
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setActionSuccess(data.message);
+        setEditPlanModalOpen(false);
+        fetchAllData();
+        setTimeout(() => setActionSuccess(null), 3000);
+      } else {
+        setActionError(data.error || 'Failed to save plan.');
+      }
+    } catch {
+      setActionError('Network communication error while saving plan.');
+    } finally {
+      setPlanSaveLoading(false);
+    }
+  };
+
+  const handleGrantSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedCustomerForGrant) return;
+    setGrantLoading(true);
+    setActionError(null);
+    try {
+      const res = await fetch('/api/admin/subscriptions/grant', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          userId: selectedCustomerForGrant.userId,
+          planId: grantPlanId,
+          customValidityDays: Number(grantValidityDays),
+          adminNote: grantAdminNote
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setActionSuccess(data.message);
+        setGrantModalOpen(false);
+        setSelectedCustomerForGrant(null);
+        setGrantAdminNote('');
+        fetchAllData();
+        setTimeout(() => setActionSuccess(null), 3000);
+      } else {
+        setActionError(data.error || 'Failed to grant plan.');
+      }
+    } catch {
+      setActionError('Network error while granting plan.');
+    } finally {
+      setGrantLoading(false);
+    }
+  };
+
+  const handleRevokeSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedCustomerForRevoke) return;
+    setRevokeLoading(true);
+    setActionError(null);
+    try {
+      const res = await fetch('/api/admin/subscriptions/revoke', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          userId: selectedCustomerForRevoke.userId,
+          reason: revokeReason
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setActionSuccess(data.message);
+        setRevokeModalOpen(false);
+        setSelectedCustomerForRevoke(null);
+        setRevokeReason('');
+        fetchAllData();
+        setTimeout(() => setActionSuccess(null), 3000);
+      } else {
+        setActionError(data.error || 'Failed to revoke plan.');
+      }
+    } catch {
+      setActionError('Network error while revoking plan.');
+    } finally {
+      setRevokeLoading(false);
+    }
+  };
+
   const handleReviewSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedRelease) return;
@@ -1211,7 +1559,6 @@ export const AdminDashboardPage: React.FC = () => {
     const data = await res.json();
     if (res.ok && data.success) {
       setActionSuccess(data.message);
-      // update list
       setAllReleases(prev => prev.map(r => r.id === selectedRelease.id ? data.release : r));
       setTimeout(() => {
         setReviewModalOpen(false);
