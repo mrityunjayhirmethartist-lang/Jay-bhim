@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from '../../context/RouterContext';
 import { useAuth } from '../../context/AuthContext';
 import { DashboardLayout } from '../../components/dashboard/DashboardLayout';
-import { LabelItem, ArtistProfile, SupportTicket, SmartLink, OtherRequest, TransactionItem } from '../../types';
+import { LabelItem, ArtistProfile, SupportTicket, SmartLink, SmartLinkStores, Release, OtherRequest, TransactionItem } from '../../types';
 import { PRICING_PLANS } from '../../data/pricingData';
 import {
   Tag,
@@ -37,7 +37,21 @@ import {
   UserCheck,
   Search,
   Lock,
-  X
+  X,
+  Music,
+  Play,
+  Pause,
+  Trash2,
+  Globe,
+  Radio,
+  Eye,
+  Check,
+  Smartphone,
+  Link as LinkIcon,
+  Link2,
+  Sliders,
+  Info,
+  CheckCheck
 } from 'lucide-react';
 
 // ======================== 1. MY LABELS PAGE ========================
@@ -1069,87 +1083,1045 @@ export const ManageArtistsPage: React.FC = () => {
 
 // ======================== 12. SMART LINKS ========================
 export const SmartLinksPage: React.FC = () => {
+  const { navigate } = useRouter();
   const { token, user } = useAuth();
-  const [links, setLinks] = useState<SmartLink[]>([]);
-  const [title, setTitle] = useState('');
-  const [slug, setSlug] = useState('');
 
-  useEffect(() => {
+  const [links, setLinks] = useState<SmartLink[]>([]);
+  const [releases, setReleases] = useState<Release[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [toast, setToast] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showBuilder, setShowBuilder] = useState(true);
+
+  // Form State
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [selectedReleaseId, setSelectedReleaseId] = useState('');
+  const [title, setTitle] = useState('');
+  const [artist, setArtist] = useState(user?.fullName || '');
+  const [slug, setSlug] = useState('');
+  const [genre, setGenre] = useState('Contemporary Fusion');
+  const [releaseDate, setReleaseDate] = useState(new Date().toISOString().split('T')[0]);
+  const [coverUrl, setCoverUrl] = useState('https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600&auto=format&fit=crop&q=80');
+  const [previewAudioUrl, setPreviewAudioUrl] = useState('https://actions.google.com/sounds/v1/ambient/rain_heavy.ogg');
+  const [description, setDescription] = useState('Official release distributed by Rudraatma Music. Stream or save on your favorite music platform below.');
+  const [stores, setStores] = useState<SmartLinkStores>({
+    spotify: 'https://open.spotify.com/album/37i9dQZF1DXcBWIGoYBM5M',
+    apple: 'https://music.apple.com/in/album/midnight-ragas/1594839201',
+    youtube: 'https://music.youtube.com/playlist?list=OLAK5uy_mN37a',
+    amazon: 'https://music.amazon.in/albums/B09X123456',
+    jiosaavn: 'https://www.jiosaavn.com/album/midnight-ragas/abc123xyz',
+    wynk: 'https://wynk.in/music/album/midnight-ragas/sr_12345',
+    gaana: 'https://gaana.com/album/midnight-ragas-session',
+    tidal: 'https://tidal.com/browse/album/184920481'
+  });
+
+  // Simulated audio preview in live phone
+  const [previewPlaying, setPreviewPlaying] = useState(false);
+
+  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
+    setToast({ type, message });
+    setTimeout(() => {
+      setToast(null);
+    }, 3500);
+  };
+
+  const fetchDashboardData = () => {
     if (!token) return;
+    setLoading(true);
     fetch('/api/dashboard/data', { headers: { Authorization: `Bearer ${token}` } })
       .then(res => res.json())
-      .then(d => setLinks(d.smartLinks || []));
+      .then(d => {
+        if (d.smartLinks) setLinks(d.smartLinks);
+        if (d.releases) setReleases(d.releases);
+      })
+      .catch(() => showToast('Failed to load smart links data', 'error'))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    fetchDashboardData();
   }, [token]);
 
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!title || !slug) return;
-    const res = await fetch('/api/dashboard/smart-links', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ title, slug, artist: user?.fullName })
-    });
-    const d = await res.json();
-    if (d.success) {
-      setLinks(prev => [d.smartLink, ...prev]);
-      setTitle('');
-      setSlug('');
+  // When user selects an existing release from catalogue
+  const handleSelectRelease = (relId: string) => {
+    setSelectedReleaseId(relId);
+    if (!relId) return;
+
+    const rel = releases.find(r => r.id === relId);
+    if (rel) {
+      setTitle(rel.title);
+      setArtist(rel.artist || user?.fullName || 'Rudraatma Artist');
+      setGenre(rel.genre || rel.primaryGenre || 'Indian Fusion / Master');
+      setCoverUrl(rel.coverUrl || rel.artworkUrl || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600&auto=format&fit=crop&q=80');
+      const cleanSlug = rel.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+      setSlug(cleanSlug);
+      setDescription(`Listen to "${rel.title}" by ${rel.artist}. Distributed globally by Rudraatma Music on all major streaming services.`);
+      if (rel.releaseDate) setReleaseDate(rel.releaseDate);
+      if (rel.tracks && rel.tracks[0]?.audioFileUrl) {
+        setPreviewAudioUrl(rel.tracks[0].audioFileUrl);
+      }
+      showToast(`Auto-filled metadata for "${rel.title}"`, 'info');
     }
   };
 
+  // Helper to populate sample demo URLs across stores
+  const handleFillDemoUrls = () => {
+    const safeSlug = slug || 'new-master';
+    setStores({
+      spotify: `https://open.spotify.com/album/${safeSlug}-track`,
+      apple: `https://music.apple.com/in/album/${safeSlug}/1609823`,
+      youtube: `https://music.youtube.com/playlist?list=${safeSlug}`,
+      amazon: `https://music.amazon.in/albums/${safeSlug}`,
+      jiosaavn: `https://www.jiosaavn.com/album/${safeSlug}/saavn901`,
+      wynk: `https://wynk.in/music/album/${safeSlug}/wnk_4401`,
+      gaana: `https://gaana.com/album/${safeSlug}-special`,
+      tidal: `https://tidal.com/browse/album/${safeSlug}-master`,
+      instagram: `https://instagram.com/reels/audio/${safeSlug}`
+    });
+    showToast('Populated streaming store URLs with demo tracks', 'info');
+  };
+
+  // Preset cover artworks
+  const PRESET_COVERS = [
+    { label: 'Neon Stage', url: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600&auto=format&fit=crop&q=80' },
+    { label: 'Acoustic Guitar', url: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80' },
+    { label: 'Sound Studio', url: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=600&auto=format&fit=crop&q=80' },
+    { label: 'Classical Violin', url: 'https://images.unsplash.com/photo-1465847899084-d164df4dedc6?w=600&auto=format&fit=crop&q=80' }
+  ];
+
+  // Store definitions with distinct colors and badges
+  const STORE_ITEMS = [
+    { key: 'spotify', name: 'Spotify', color: 'emerald', border: 'border-emerald-500/40', badge: 'bg-emerald-500/20 text-emerald-400', placeholder: 'https://open.spotify.com/track/...' },
+    { key: 'apple', name: 'Apple Music', color: 'rose', border: 'border-rose-500/40', badge: 'bg-rose-500/20 text-rose-400', placeholder: 'https://music.apple.com/...' },
+    { key: 'youtube', name: 'YouTube Music', color: 'red', border: 'border-red-500/40', badge: 'bg-red-500/20 text-red-400', placeholder: 'https://music.youtube.com/watch?v=...' },
+    { key: 'amazon', name: 'Amazon Music', color: 'amber', border: 'border-amber-500/40', badge: 'bg-amber-500/20 text-amber-400', placeholder: 'https://music.amazon.in/...' },
+    { key: 'jiosaavn', name: 'JioSaavn', color: 'teal', border: 'border-teal-500/40', badge: 'bg-teal-500/20 text-teal-400', placeholder: 'https://www.jiosaavn.com/song/...' },
+    { key: 'wynk', name: 'Wynk Music', color: 'blue', border: 'border-blue-500/40', badge: 'bg-blue-500/20 text-blue-400', placeholder: 'https://wynk.in/music/song/...' },
+    { key: 'gaana', name: 'Gaana', color: 'orange', border: 'border-orange-500/40', badge: 'bg-orange-500/20 text-orange-400', placeholder: 'https://gaana.com/song/...' },
+    { key: 'tidal', name: 'Tidal', color: 'cyan', border: 'border-cyan-500/40', badge: 'bg-cyan-500/20 text-cyan-400', placeholder: 'https://tidal.com/browse/track/...' },
+    { key: 'instagram', name: 'Instagram Audio', color: 'fuchsia', border: 'border-fuchsia-500/40', badge: 'bg-fuchsia-500/20 text-fuchsia-400', placeholder: 'https://instagram.com/reels/audio/...' }
+  ] as const;
+
+  const countActiveStores = (storeMap: SmartLinkStores) => {
+    return Object.values(storeMap).filter(val => typeof val === 'string' && val.trim().length > 0).length;
+  };
+
+  const handleCopyLink = (slugToCopy: string, id: string) => {
+    const fullUrl = `${window.location.origin}/link/${slugToCopy}`;
+    navigator.clipboard.writeText(fullUrl).then(() => {
+      setCopiedId(id);
+      showToast(`Copied ${fullUrl} to clipboard!`, 'success');
+      setTimeout(() => setCopiedId(null), 3000);
+    }).catch(() => {
+      showToast('Could not copy to clipboard automatically', 'error');
+    });
+  };
+
+  const handleEdit = (link: SmartLink) => {
+    setEditingId(link.id);
+    setTitle(link.title);
+    setArtist(link.artist);
+    setSlug(link.slug);
+    setGenre(link.genre || 'Contemporary Master');
+    setReleaseDate(link.releaseDate || new Date().toISOString().split('T')[0]);
+    setCoverUrl(link.coverUrl || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600&auto=format&fit=crop&q=80');
+    setPreviewAudioUrl(link.previewAudioUrl || '');
+    setDescription(link.description || '');
+    setStores(link.stores || {});
+    setShowBuilder(true);
+    window.scrollTo({ top: 180, behavior: 'smooth' });
+    showToast(`Loaded "${link.title}" into the generator`, 'info');
+  };
+
+  const handleResetForm = () => {
+    setEditingId(null);
+    setSelectedReleaseId('');
+    setTitle('');
+    setArtist(user?.fullName || '');
+    setSlug('');
+    setGenre('Contemporary Fusion');
+    setCoverUrl('https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600&auto=format&fit=crop&q=80');
+    setPreviewAudioUrl('');
+    setDescription('Official release distributed by Rudraatma Music. Stream on your favorite platform.');
+    setStores({
+      spotify: '',
+      apple: '',
+      youtube: '',
+      amazon: '',
+      jiosaavn: '',
+      wynk: '',
+      gaana: '',
+      tidal: ''
+    });
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!title.trim()) {
+      showToast('Please enter a release title', 'error');
+      return;
+    }
+    if (!slug.trim()) {
+      showToast('Please specify a custom link slug', 'error');
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const cleanSlug = slug.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-');
+      const payload = {
+        id: editingId || undefined,
+        title: title.trim(),
+        artist: artist.trim() || user?.fullName || 'Rudraatma Artist',
+        slug: cleanSlug,
+        genre: genre.trim(),
+        releaseDate,
+        coverUrl: coverUrl.trim(),
+        previewAudioUrl: previewAudioUrl.trim(),
+        description: description.trim(),
+        stores
+      };
+
+      const endpoint = editingId ? `/api/dashboard/smart-links/${editingId}` : '/api/dashboard/smart-links';
+      const method = editingId ? 'PUT' : 'POST';
+
+      const res = await fetch(endpoint, {
+        method,
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        showToast(editingId ? 'Smart link updated successfully!' : 'Smart link created successfully!', 'success');
+        fetchDashboardData();
+        handleResetForm();
+      } else {
+        showToast(data.error || 'Failed to save smart link', 'error');
+      }
+    } catch {
+      showToast('Network error while saving smart link', 'error');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (id: string, linkTitle: string) => {
+    if (!confirm(`Are you sure you want to delete the smart link for "${linkTitle}"?`)) return;
+
+    try {
+      const res = await fetch(`/api/dashboard/smart-links/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        showToast(`Smart link for "${linkTitle}" deleted`, 'info');
+        setLinks(prev => prev.filter(l => l.id !== id));
+        if (editingId === id) handleResetForm();
+      } else {
+        showToast(data.error || 'Could not delete link', 'error');
+      }
+    } catch {
+      showToast('Failed to delete smart link', 'error');
+    }
+  };
+
+  // Filter links for display
+  const filteredLinks = links.filter(l => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase();
+    return l.title.toLowerCase().includes(q) || l.artist.toLowerCase().includes(q) || l.slug.toLowerCase().includes(q);
+  });
+
+  const totalClicks = links.reduce((sum, l) => sum + (l.clicks || 0), 0);
+  const activeStoresInForm = countActiveStores(stores);
+
   return (
     <DashboardLayout title="Smart Links">
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold text-white font-display">Smart Landing Pages</h1>
-          <p className="text-xs text-slate-400">Shareable pre-save and streaming landing pages connecting Spotify, Apple Music, and YouTube</p>
-        </div>
-
-        <div className="p-5 rounded-2xl bg-[#090e1a] border border-slate-800">
-          <form onSubmit={handleCreate} className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Release Title"
-              className="px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-xs text-white"
-            />
-            <input
-              type="text"
-              value={slug}
-              onChange={(e) => setSlug(e.target.value)}
-              placeholder="custom-link-slug"
-              className="px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-xs text-white"
-            />
-            <button
-              type="submit"
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-semibold"
-            >
-              Generate Smart Link
+      <div className="space-y-8 max-w-7xl mx-auto pb-16">
+        {/* TOAST NOTIFICATION BANNER */}
+        {toast && (
+          <div
+            className={`fixed top-4 right-4 z-50 flex items-center gap-3 px-5 py-3 rounded-2xl shadow-2xl border text-sm backdrop-blur-xl animate-in fade-in slide-in-from-top-3 ${
+              toast.type === 'success'
+                ? 'bg-emerald-950/90 border-emerald-500/50 text-emerald-300'
+                : toast.type === 'error'
+                ? 'bg-rose-950/90 border-rose-500/50 text-rose-300'
+                : 'bg-blue-950/90 border-blue-500/50 text-blue-300'
+            }`}
+          >
+            {toast.type === 'success' && <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />}
+            {toast.type === 'error' && <AlertCircle className="w-5 h-5 text-rose-400 shrink-0" />}
+            {toast.type === 'info' && <Sparkles className="w-5 h-5 text-blue-400 shrink-0" />}
+            <span className="font-medium">{toast.message}</span>
+            <button onClick={() => setToast(null)} className="ml-2 text-slate-400 hover:text-white">
+              <X className="w-4 h-4" />
             </button>
-          </form>
+          </div>
+        )}
+
+        {/* PAGE HEADER */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono uppercase tracking-wider bg-blue-500/10 text-blue-400 border border-blue-500/30">
+                Direct-to-Fan Marketing
+              </span>
+              <span className="flex items-center gap-1 text-[11px] font-mono text-emerald-400">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                Live Link Engine
+              </span>
+            </div>
+            <h1 className="text-3xl font-extrabold text-white font-display tracking-tight">
+              Smart Landing Pages & Link Generator
+            </h1>
+            <p className="text-xs text-slate-400 mt-1 max-w-2xl leading-relaxed">
+              Create high-converting, single landing pages for your music across Spotify, Apple Music, YouTube Music, Amazon, JioSaavn, Wynk, Gaana, and Tidal.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => {
+                setShowBuilder(true);
+                handleResetForm();
+              }}
+              className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-semibold flex items-center gap-2 shadow-lg shadow-blue-600/20 transition-all"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Create New Smart Link</span>
+            </button>
+          </div>
         </div>
 
-        <div className="space-y-3">
-          {links.map((sml) => (
-            <div key={sml.id} className="p-5 rounded-2xl bg-[#090e1a] border border-slate-800 flex items-center justify-between">
-              <div>
-                <h3 className="font-bold text-white text-sm">{sml.title}</h3>
-                <div className="text-xs text-slate-400 font-mono mt-0.5">
-                  https://rudraatmamusic.com/link/{sml.slug}
+        {/* METRICS OVERVIEW */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="p-5 rounded-2xl bg-[#090e1a] border border-slate-800/80">
+            <div className="flex items-center justify-between text-slate-400 text-xs mb-2">
+              <span>Total Smart Links</span>
+              <Globe className="w-4 h-4 text-blue-400" />
+            </div>
+            <div className="text-2xl font-bold text-white font-display">{links.length}</div>
+            <div className="text-[11px] text-slate-500 mt-1">Unified landing hubs</div>
+          </div>
+
+          <div className="p-5 rounded-2xl bg-[#090e1a] border border-slate-800/80">
+            <div className="flex items-center justify-between text-slate-400 text-xs mb-2">
+              <span>Total Clicks Tracked</span>
+              <Eye className="w-4 h-4 text-emerald-400" />
+            </div>
+            <div className="text-2xl font-bold text-emerald-400 font-display">
+              {totalClicks.toLocaleString()}
+            </div>
+            <div className="text-[11px] text-slate-500 mt-1">Fan conversions & plays</div>
+          </div>
+
+          <div className="p-5 rounded-2xl bg-[#090e1a] border border-slate-800/80">
+            <div className="flex items-center justify-between text-slate-400 text-xs mb-2">
+              <span>Supported DSPs</span>
+              <Radio className="w-4 h-4 text-purple-400" />
+            </div>
+            <div className="text-2xl font-bold text-white font-display">9 Platforms</div>
+            <div className="text-[11px] text-slate-500 mt-1">India & Global streaming</div>
+          </div>
+
+          <div className="p-5 rounded-2xl bg-[#090e1a] border border-slate-800/80">
+            <div className="flex items-center justify-between text-slate-400 text-xs mb-2">
+              <span>Smart Link Domain</span>
+              <Link2 className="w-4 h-4 text-cyan-400" />
+            </div>
+            <div className="text-xs font-mono font-bold text-cyan-300 truncate">rudraatmamusic.com/link</div>
+            <div className="text-[11px] text-emerald-400 mt-1">SSL Encrypted & Ultra Fast</div>
+          </div>
+        </div>
+
+        {/* GENERATOR / BUILDER WORKSPACE */}
+        {showBuilder && (
+          <div className="p-6 lg:p-8 rounded-3xl bg-[#090e1a] border border-blue-500/30 shadow-2xl relative overflow-hidden">
+            {/* Ambient background glow */}
+            <div className="absolute top-0 right-0 w-96 h-96 bg-blue-600/5 blur-3xl pointer-events-none rounded-full" />
+            <div className="absolute bottom-0 left-0 w-80 h-80 bg-purple-600/5 blur-3xl pointer-events-none rounded-full" />
+
+            <div className="flex items-center justify-between pb-6 mb-6 border-b border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-blue-600/20 border border-blue-500/40 flex items-center justify-center text-blue-400">
+                  <Sliders className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-white font-display">
+                    {editingId ? 'Edit Smart Landing Page' : 'Smart Link Studio & URL Builder'}
+                  </h2>
+                  <p className="text-xs text-slate-400">
+                    Input your DSP track URLs and preview your direct-to-fan landing page in real-time.
+                  </p>
                 </div>
               </div>
-              <div className="flex items-center gap-4 text-xs font-mono">
-                <span className="text-blue-400">{sml.clicks} Clicks</span>
+
+              {editingId && (
                 <button
-                  onClick={() => alert(`Copied https://rudraatmamusic.com/link/${sml.slug} to clipboard!`)}
-                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-lg font-sans"
+                  type="button"
+                  onClick={handleResetForm}
+                  className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs flex items-center gap-1.5"
                 >
-                  Copy Link
+                  <X className="w-3.5 h-3.5" />
+                  <span>Cancel Editing</span>
                 </button>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+              {/* LEFT COLUMN: BUILDER FORM (7 COLS) */}
+              <div className="lg:col-span-7 space-y-6">
+                <form onSubmit={handleSubmit} className="space-y-6">
+                  {/* AUTO-FILL FROM RELEASES */}
+                  {releases.length > 0 && !editingId && (
+                    <div className="p-4 rounded-2xl bg-blue-950/20 border border-blue-500/20 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-semibold text-blue-300 flex items-center gap-2">
+                          <Sparkles className="w-3.5 h-3.5 text-blue-400" />
+                          <span>Quick Auto-fill from My Catalog:</span>
+                        </label>
+                        <span className="text-[11px] text-slate-400">Select to load metadata</span>
+                      </div>
+                      <select
+                        value={selectedReleaseId}
+                        onChange={(e) => handleSelectRelease(e.target.value)}
+                        className="w-full px-3 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
+                      >
+                        <option value="">-- Choose one of your releases --</option>
+                        {releases.map(rel => (
+                          <option key={rel.id} value={rel.id}>
+                            {rel.title} • {rel.artist} ({rel.type})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  {/* SECTION 1: RELEASE ESSENTIALS */}
+                  <div className="space-y-4">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 font-mono">
+                      1. Release Essentials
+                    </h3>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-medium text-slate-300">
+                          Release Title <span className="text-rose-400">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={title}
+                          onChange={(e) => {
+                            setTitle(e.target.value);
+                            if (!editingId && !slug) {
+                              setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''));
+                            }
+                          }}
+                          placeholder="e.g. Midnight Ragas"
+                          className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-800 focus:border-blue-500 rounded-xl text-xs text-white placeholder-slate-500 transition-colors"
+                        />
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-medium text-slate-300">
+                          Primary Artist <span className="text-rose-400">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={artist}
+                          onChange={(e) => setArtist(e.target.value)}
+                          placeholder="e.g. Aarav Mehta"
+                          className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-800 focus:border-blue-500 rounded-xl text-xs text-white placeholder-slate-500 transition-colors"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-medium text-slate-300 flex items-center justify-between">
+                          <span>Custom URL Slug <span className="text-rose-400">*</span></span>
+                          <span className="text-[10px] font-mono text-cyan-400">Unique Link</span>
+                        </label>
+                        <div className="relative">
+                          <input
+                            type="text"
+                            required
+                            value={slug}
+                            onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-'))}
+                            placeholder="midnight-ragas"
+                            className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-800 focus:border-blue-500 rounded-xl text-xs text-cyan-300 font-mono placeholder-slate-500 transition-colors"
+                          />
+                        </div>
+                        <div className="text-[10px] text-slate-500 font-mono flex items-center gap-1">
+                          <LinkIcon className="w-3 h-3 text-slate-400" />
+                          <span>Link: https://rudraatmamusic.com/link/{slug || 'your-slug'}</span>
+                        </div>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-medium text-slate-300">Genre / Style</label>
+                        <input
+                          type="text"
+                          value={genre}
+                          onChange={(e) => setGenre(e.target.value)}
+                          placeholder="e.g. Contemporary Classical / Indian Fusion"
+                          className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-800 focus:border-blue-500 rounded-xl text-xs text-white placeholder-slate-500 transition-colors"
+                        />
+                      </div>
+                    </div>
+
+                    {/* COVER ARTWORK URL & PRESETS */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-medium text-slate-300">
+                          Cover Artwork Image URL
+                        </label>
+                        <span className="text-[11px] text-slate-400">High-res 3000x3000px recommended</span>
+                      </div>
+                      <div className="flex gap-3">
+                        <input
+                          type="url"
+                          value={coverUrl}
+                          onChange={(e) => setCoverUrl(e.target.value)}
+                          placeholder="https://images.unsplash.com/..."
+                          className="flex-1 px-3.5 py-2 bg-slate-900 border border-slate-800 focus:border-blue-500 rounded-xl text-xs text-white placeholder-slate-500 transition-colors"
+                        />
+                        {coverUrl && (
+                          <div className="w-9 h-9 rounded-lg overflow-hidden border border-slate-700 shrink-0">
+                            <img src={coverUrl} alt="Cover preview" className="w-full h-full object-cover" />
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Cover Presets */}
+                      <div className="flex flex-wrap items-center gap-2 pt-1">
+                        <span className="text-[11px] text-slate-500">Quick Presets:</span>
+                        {PRESET_COVERS.map(preset => (
+                          <button
+                            key={preset.label}
+                            type="button"
+                            onClick={() => {
+                              setCoverUrl(preset.url);
+                              showToast(`Loaded "${preset.label}" cover artwork`, 'info');
+                            }}
+                            className="px-2.5 py-1 rounded-md text-[11px] bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors"
+                          >
+                            {preset.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* 30-SEC AUDIO PREVIEW & NOTE */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-medium text-slate-300 flex items-center justify-between">
+                          <span>Audio Snippet Preview (MP3/OGG URL)</span>
+                          <span className="text-[10px] text-slate-500">Optional</span>
+                        </label>
+                        <input
+                          type="url"
+                          value={previewAudioUrl}
+                          onChange={(e) => setPreviewAudioUrl(e.target.value)}
+                          placeholder="https://.../preview.mp3"
+                          className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-800 focus:border-blue-500 rounded-xl text-xs text-white placeholder-slate-500 transition-colors"
+                        />
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-medium text-slate-300">Release Date</label>
+                        <input
+                          type="date"
+                          value={releaseDate}
+                          onChange={(e) => setReleaseDate(e.target.value)}
+                          className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-800 focus:border-blue-500 rounded-xl text-xs text-white transition-colors"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-medium text-slate-300">
+                        Description / Liner Note for Fans
+                      </label>
+                      <textarea
+                        rows={2}
+                        value={description}
+                        onChange={(e) => setDescription(e.target.value)}
+                        placeholder="Stream the brand new master release on your favorite platform..."
+                        className="w-full px-3.5 py-2 bg-slate-900 border border-slate-800 focus:border-blue-500 rounded-xl text-xs text-white placeholder-slate-500 transition-colors resize-none"
+                      />
+                    </div>
+                  </div>
+
+                  {/* SECTION 2: STREAMING DSP STORE URLS */}
+                  <div className="space-y-4 pt-2">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div>
+                        <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 font-mono flex items-center gap-2">
+                          <span>2. Streaming Platforms & Store URLs</span>
+                          <span className="px-2 py-0.5 rounded-full text-[10px] bg-blue-500/20 text-blue-400 font-sans normal-case">
+                            {activeStoresInForm} Connected
+                          </span>
+                        </h3>
+                        <p className="text-[11px] text-slate-500 mt-0.5">
+                          Paste the exact link for each store where your release is available.
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={handleFillDemoUrls}
+                        className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-cyan-300 hover:text-cyan-200 rounded-xl text-[11px] font-medium flex items-center gap-1.5 self-start sm:self-auto transition-colors"
+                      >
+                        <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+                        <span>Auto-Fill Demo DSP Links</span>
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                      {STORE_ITEMS.map((store) => (
+                        <div key={store.key} className="space-y-1.5">
+                          <label className="text-xs font-medium text-slate-300 flex items-center justify-between">
+                            <span className="flex items-center gap-1.5">
+                              <span className={`w-2 h-2 rounded-full ${stores[store.key] ? 'bg-emerald-400' : 'bg-slate-600'}`} />
+                              <span>{store.name}</span>
+                            </span>
+                            {stores[store.key] ? (
+                              <span className="text-[10px] font-mono text-emerald-400 flex items-center gap-1">
+                                <Check className="w-3 h-3" />
+                                <span>Active</span>
+                              </span>
+                            ) : (
+                              <span className="text-[10px] font-mono text-slate-500">Not configured</span>
+                            )}
+                          </label>
+
+                          <div className="relative">
+                            <input
+                              type="url"
+                              value={stores[store.key] || ''}
+                              onChange={(e) => setStores(prev => ({ ...prev, [store.key]: e.target.value }))}
+                              placeholder={store.placeholder}
+                              className={`w-full px-3 py-2 bg-slate-900 border ${
+                                stores[store.key] ? store.border : 'border-slate-800'
+                              } focus:border-blue-500 rounded-xl text-xs text-white placeholder-slate-600 transition-colors`}
+                            />
+                            {stores[store.key] && (
+                              <button
+                                type="button"
+                                onClick={() => setStores(prev => ({ ...prev, [store.key]: '' }))}
+                                className="absolute right-2 top-2.5 text-slate-500 hover:text-slate-300"
+                                title="Clear URL"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* FORM ACTIONS */}
+                  <div className="flex flex-wrap items-center gap-4 pt-4 border-t border-slate-800">
+                    <button
+                      type="submit"
+                      disabled={submitting}
+                      className="px-6 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-bold flex items-center gap-2 shadow-lg shadow-blue-600/30 disabled:opacity-50 transition-all"
+                    >
+                      {submitting ? (
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <CheckCircle2 className="w-4 h-4" />
+                      )}
+                      <span>
+                        {editingId ? 'Save Smart Link Changes' : 'Generate & Publish Smart Link'}
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleResetForm}
+                      className="px-4 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-colors"
+                    >
+                      Reset Form
+                    </button>
+
+                    <div className="ml-auto text-xs text-slate-400 font-mono">
+                      Stores configured: <strong className="text-blue-400">{activeStoresInForm} / 9</strong>
+                    </div>
+                  </div>
+                </form>
+              </div>
+
+              {/* RIGHT COLUMN: REAL-TIME INTERACTIVE PHONE / CARD LIVE PREVIEW (5 COLS) */}
+              <div className="lg:col-span-5 lg:sticky lg:top-6">
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-400 font-mono flex items-center gap-1.5">
+                      <Smartphone className="w-4 h-4 text-blue-400" />
+                      <span>Live Fan Page Preview</span>
+                    </span>
+                    <span className="text-[11px] font-mono text-emerald-400 flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                      Real-time
+                    </span>
+                  </div>
+
+                  {/* PHONE FRAME CONTAINER */}
+                  <div className="w-full max-w-sm mx-auto rounded-[36px] bg-[#05070e] border-4 border-slate-800 p-4 shadow-2xl relative overflow-hidden">
+                    {/* Ambient glow from album cover */}
+                    {coverUrl && (
+                      <div
+                        className="absolute inset-0 opacity-20 blur-2xl scale-125 pointer-events-none"
+                        style={{
+                          backgroundImage: `url(${coverUrl})`,
+                          backgroundSize: 'cover',
+                          backgroundPosition: 'center'
+                        }}
+                      />
+                    )}
+
+                    {/* Top Device Notch */}
+                    <div className="w-28 h-4 bg-slate-800 rounded-full mx-auto mb-4 relative z-10 flex items-center justify-center">
+                      <div className="w-2 h-2 rounded-full bg-slate-900" />
+                    </div>
+
+                    {/* Inside Phone Content */}
+                    <div className="relative z-10 space-y-4 max-h-[580px] overflow-y-auto pr-1">
+                      {/* Rudraatma Logo pill */}
+                      <div className="flex justify-center">
+                        <span className="px-3 py-1 rounded-full text-[10px] font-mono tracking-widest uppercase bg-black/60 border border-slate-700/80 text-blue-400">
+                          RUDRAATMA MUSIC
+                        </span>
+                      </div>
+
+                      {/* Artwork */}
+                      <div className="relative mx-auto w-48 h-48 rounded-2xl overflow-hidden shadow-2xl border border-slate-700/50 group">
+                        <img
+                          src={coverUrl || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600&auto=format&fit=crop&q=80'}
+                          alt={title || 'Album Cover'}
+                          className="w-full h-full object-cover"
+                        />
+                        {previewAudioUrl && (
+                          <button
+                            type="button"
+                            onClick={() => setPreviewPlaying(!previewPlaying)}
+                            className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-90 hover:opacity-100 transition-opacity"
+                          >
+                            <div className="w-12 h-12 rounded-full bg-blue-600/90 text-white flex items-center justify-center shadow-lg transform hover:scale-110 transition-transform">
+                              {previewPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 ml-0.5" />}
+                            </div>
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Release Titles */}
+                      <div className="text-center px-2">
+                        <div className="inline-block px-2.5 py-0.5 rounded-full text-[9px] font-mono uppercase tracking-wider bg-blue-500/10 text-blue-400 border border-blue-500/30 mb-1">
+                          {genre || 'Master Track'}
+                        </div>
+                        <h4 className="text-base font-bold text-white font-display truncate">
+                          {title || 'Release Title'}
+                        </h4>
+                        <p className="text-xs text-slate-400 truncate">
+                          {artist || 'Artist Name'}
+                        </p>
+                      </div>
+
+                      {/* Audio simulation state badge */}
+                      {previewPlaying && (
+                        <div className="p-2 rounded-xl bg-blue-950/80 border border-blue-500/50 flex items-center justify-between text-[11px] text-blue-300">
+                          <span className="flex items-center gap-1.5 font-mono">
+                            <span className="w-2 h-2 rounded-full bg-blue-400 animate-ping" />
+                            Playing audio snippet
+                          </span>
+                          <span className="font-mono text-[10px] text-slate-400">0:18 / 0:30</span>
+                        </div>
+                      )}
+
+                      {/* Platforms List in Preview */}
+                      <div className="space-y-2 pt-1">
+                        <div className="text-[10px] font-mono text-slate-400 uppercase tracking-wider text-center">
+                          Choose Music Service
+                        </div>
+
+                        {STORE_ITEMS.map(store => {
+                          const hasUrl = !!stores[store.key];
+                          if (!hasUrl && activeStoresInForm > 0) return null;
+
+                          return (
+                            <div
+                              key={store.key}
+                              className={`p-2.5 rounded-xl border flex items-center justify-between transition-all ${
+                                hasUrl
+                                  ? 'bg-slate-900/90 border-slate-700/80 text-white hover:border-slate-500'
+                                  : 'bg-slate-950/40 border-slate-800/40 text-slate-600'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2">
+                                <span className="font-semibold text-xs">{store.name}</span>
+                              </div>
+                              <span
+                                className={`px-2.5 py-1 rounded-lg text-[10px] font-bold ${
+                                  hasUrl
+                                    ? 'bg-blue-600 text-white'
+                                    : 'bg-slate-800 text-slate-500'
+                                }`}
+                              >
+                                {store.key === 'youtube' ? 'Watch' : store.key === 'instagram' ? 'Use Audio' : 'Play'}
+                              </span>
+                            </div>
+                          );
+                        })}
+
+                        {activeStoresInForm === 0 && (
+                          <div className="p-4 rounded-xl border border-dashed border-slate-800 text-center text-xs text-slate-500">
+                            Enter store URLs above to see platform buttons here
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Share & Preview link triggers */}
+                      <div className="pt-2 pb-1 flex flex-col gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (slug) {
+                              navigate(`/link/${slug}`);
+                            } else {
+                              showToast('Please specify a slug first', 'error');
+                            }
+                          }}
+                          className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5 text-blue-400" />
+                          <span>Open Public Landing Page</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
-          ))}
+          </div>
+        )}
+
+        {/* SECTION 3: MANAGE EXISTING SMART LINKS */}
+        <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h2 className="text-xl font-bold text-white font-display flex items-center gap-2">
+                <span>Active Smart Landing Pages</span>
+                <span className="px-2.5 py-0.5 rounded-full text-xs font-mono bg-blue-500/20 text-blue-400">
+                  {links.length}
+                </span>
+              </h2>
+              <p className="text-xs text-slate-400">
+                Share these single links on your Instagram Bio, YouTube descriptions, WhatsApp, and marketing campaigns.
+              </p>
+            </div>
+
+            {/* Search filter */}
+            <div className="relative w-full sm:w-64">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search by title, artist, or slug..."
+                className="w-full pl-9 pr-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3 top-2.5 text-slate-400 hover:text-white"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {loading ? (
+            <div className="p-12 text-center text-xs font-mono text-slate-500 bg-[#090e1a] rounded-2xl border border-slate-800">
+              Loading your smart landing pages...
+            </div>
+          ) : filteredLinks.length === 0 ? (
+            <div className="p-12 text-center rounded-2xl bg-[#090e1a] border border-slate-800 space-y-3">
+              <div className="w-12 h-12 rounded-2xl bg-blue-600/10 border border-blue-500/30 flex items-center justify-center text-blue-400 mx-auto">
+                <Globe className="w-6 h-6" />
+              </div>
+              <h3 className="text-sm font-bold text-white">No Smart Links Found</h3>
+              <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                {searchQuery
+                  ? `No links matched your search "${searchQuery}".`
+                  : 'You have not created any smart links yet. Use the studio generator above to create your first one!'}
+              </p>
+              {!showBuilder && (
+                <button
+                  onClick={() => setShowBuilder(true)}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-semibold"
+                >
+                  Open Smart Link Builder
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {filteredLinks.map((sml) => {
+                const storeCount = countActiveStores(sml.stores || {});
+                const isCopied = copiedId === sml.id;
+
+                return (
+                  <div
+                    key={sml.id}
+                    className="p-5 rounded-2xl bg-[#090e1a] border border-slate-800/80 hover:border-slate-700 transition-all flex flex-col justify-between group"
+                  >
+                    <div>
+                      {/* Top Header Row */}
+                      <div className="flex items-start gap-4">
+                        <div className="w-16 h-16 rounded-xl overflow-hidden border border-slate-700 shrink-0 bg-slate-900 shadow-lg">
+                          <img
+                            src={sml.coverUrl || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600&auto=format&fit=crop&q=80'}
+                            alt={sml.title}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          />
+                        </div>
+
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-blue-500/10 text-blue-400 border border-blue-500/30">
+                              {sml.genre || 'Independent Master'}
+                            </span>
+                            <div className="flex items-center gap-1.5 text-xs font-mono text-emerald-400 font-bold">
+                              <Eye className="w-3.5 h-3.5" />
+                              <span>{sml.clicks} Clicks</span>
+                            </div>
+                          </div>
+
+                          <h3 className="font-bold text-white text-base truncate mt-1">
+                            {sml.title}
+                          </h3>
+                          <p className="text-xs text-slate-400 truncate">
+                            {sml.artist}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Public URL Box */}
+                      <div className="mt-4 p-2.5 rounded-xl bg-slate-900/90 border border-slate-800 flex items-center justify-between gap-2 font-mono text-xs">
+                        <div className="truncate text-cyan-300">
+                          https://rudraatmamusic.com/link/<span className="font-bold text-white">{sml.slug}</span>
+                        </div>
+                        <button
+                          onClick={() => handleCopyLink(sml.slug, sml.id)}
+                          className={`px-2.5 py-1 rounded-lg text-[11px] font-sans font-semibold flex items-center gap-1 shrink-0 transition-colors ${
+                            isCopied
+                              ? 'bg-emerald-600 text-white'
+                              : 'bg-slate-800 hover:bg-slate-700 text-slate-200'
+                          }`}
+                        >
+                          {isCopied ? (
+                            <>
+                              <CheckCheck className="w-3.5 h-3.5 text-white" />
+                              <span>Copied!</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-3.5 h-3.5 text-slate-400" />
+                              <span>Copy</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+
+                      {/* Connected Store Badges */}
+                      <div className="mt-3 flex flex-wrap items-center gap-1.5">
+                        <span className="text-[10px] font-mono text-slate-500 mr-1">
+                          {storeCount} Stores:
+                        </span>
+                        {sml.stores?.spotify && (
+                          <span className="px-2 py-0.5 rounded-md text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                            Spotify
+                          </span>
+                        )}
+                        {sml.stores?.apple && (
+                          <span className="px-2 py-0.5 rounded-md text-[10px] bg-rose-500/10 text-rose-400 border border-rose-500/30">
+                            Apple Music
+                          </span>
+                        )}
+                        {sml.stores?.youtube && (
+                          <span className="px-2 py-0.5 rounded-md text-[10px] bg-red-500/10 text-red-400 border border-red-500/30">
+                            YouTube
+                          </span>
+                        )}
+                        {sml.stores?.jiosaavn && (
+                          <span className="px-2 py-0.5 rounded-md text-[10px] bg-teal-500/10 text-teal-400 border border-teal-500/30">
+                            JioSaavn
+                          </span>
+                        )}
+                        {sml.stores?.wynk && (
+                          <span className="px-2 py-0.5 rounded-md text-[10px] bg-blue-500/10 text-blue-400 border border-blue-500/30">
+                            Wynk
+                          </span>
+                        )}
+                        {sml.stores?.gaana && (
+                          <span className="px-2 py-0.5 rounded-md text-[10px] bg-orange-500/10 text-orange-400 border border-orange-500/30">
+                            Gaana
+                          </span>
+                        )}
+                        {sml.stores?.amazon && (
+                          <span className="px-2 py-0.5 rounded-md text-[10px] bg-amber-500/10 text-amber-400 border border-amber-500/30">
+                            Amazon
+                          </span>
+                        )}
+                        {sml.stores?.tidal && (
+                          <span className="px-2 py-0.5 rounded-md text-[10px] bg-cyan-500/10 text-cyan-400 border border-cyan-500/30">
+                            Tidal
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Bottom Action Bar */}
+                    <div className="mt-5 pt-3.5 border-t border-slate-800 flex items-center justify-between text-xs">
+                      <button
+                        onClick={() => navigate(`/link/${sml.slug}`)}
+                        className="text-blue-400 hover:text-blue-300 font-semibold flex items-center gap-1.5 transition-colors"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                        <span>Visit Landing Page</span>
+                      </button>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleEdit(sml)}
+                          className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center gap-1 transition-colors"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                          <span>Edit</span>
+                        </button>
+                        <button
+                          onClick={() => handleDelete(sml.id, sml.title)}
+                          className="px-2.5 py-1 rounded-lg bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 border border-rose-800/40 flex items-center gap-1 transition-colors"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>Delete</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
     </DashboardLayout>
@@ -1691,7 +2663,7 @@ export const AdminDashboardPage: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60 text-slate-300">
-              {allUsers.map((u) => (
+              {customers.map((u: any) => (
                 <tr key={u.id}>
                   <td className="py-3 font-semibold text-white">{u.fullName}</td>
                   <td className="py-3 font-mono text-slate-400">{u.email}</td>

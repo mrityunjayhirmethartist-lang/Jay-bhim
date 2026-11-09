@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from '../../context/RouterContext';
 import { useAuth } from '../../context/AuthContext';
+import { useTheme } from '../../context/ThemeContext';
 import { ArtistNotificationPopup } from './ArtistNotificationPopup';
 import { BrandLogo } from '../common/BrandLogo';
 import {
@@ -27,7 +28,10 @@ import {
   LogOut,
   Settings,
   ShieldAlert,
-  Home
+  Home,
+  Sun,
+  Moon,
+  HardDrive
 } from 'lucide-react';
 
 interface DashboardLayoutProps {
@@ -38,6 +42,7 @@ interface DashboardLayoutProps {
 export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, title }) => {
   const { path, navigate } = useRouter();
   const { user, logout, notifications, markNotificationRead } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const [collapsed, setCollapsed] = useState<boolean>(false);
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState<boolean>(false);
   const [userMenuOpen, setUserMenuOpen] = useState<boolean>(false);
@@ -84,6 +89,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, titl
     { label: 'YouTube', href: '/dashboard/youtube', icon: Youtube },
     { label: 'Manage Artists', href: '/dashboard/artists', icon: Mic2 },
     { label: 'Smart Links', href: '/dashboard/smart-links', icon: Share2 },
+    { label: 'Google Drive', href: '/dashboard/drive', icon: HardDrive },
     { label: 'Other Requests', href: '/dashboard/other-requests', icon: FileEdit }
   ];
 
@@ -100,7 +106,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, titl
   const unreadNotifsCount = notifications.filter(n => !n.read_at).length;
 
   return (
-    <div className="min-h-screen bg-[#070b14] text-slate-100 flex flex-col font-sans">
+    <div className="min-h-screen bg-[#070b14] text-slate-100 flex flex-col font-sans dashboard-root transition-colors duration-200">
       {/* 48-Hour Active Decision Popup */}
       <ArtistNotificationPopup />
 
@@ -134,14 +140,35 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, titl
           </div>
         </div>
 
-        {/* Right actions: Public Site Link, Notifications, User Menu */}
-        <div className="flex items-center gap-3">
+        {/* Right actions: Public Site Link, Theme Toggle, Admin Desk, Notifications, User Menu */}
+        <div className="flex items-center gap-2.5 sm:gap-3">
           <button
             onClick={() => navigate('/')}
             className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 text-xs text-slate-300 hover:text-white bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-lg transition-colors"
           >
             <Home className="w-3.5 h-3.5 text-blue-400" />
             <span>Public Site</span>
+          </button>
+
+          {/* User-Accessible Theme Toggle (Dark / Light) */}
+          <button
+            type="button"
+            onClick={toggleTheme}
+            className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs text-slate-300 hover:text-white bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm"
+            title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+            aria-label={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+          >
+            {theme === 'dark' ? (
+              <>
+                <Sun className="w-3.5 h-3.5 text-amber-400 animate-in spin-in-180 duration-300" />
+                <span className="hidden md:inline font-medium">Light</span>
+              </>
+            ) : (
+              <>
+                <Moon className="w-3.5 h-3.5 text-blue-500 animate-in spin-in-180 duration-300" />
+                <span className="hidden md:inline font-medium">Dark</span>
+              </>
+            )}
           </button>
 
           {user?.role === 'admin' && (
@@ -276,6 +303,19 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, titl
                     <Settings className="w-4 h-4 text-slate-400" />
                     <span>Account Settings</span>
                   </button>
+
+                  <button
+                    onClick={toggleTheme}
+                    className="w-full flex items-center justify-between px-3 py-2 text-xs text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg text-left"
+                  >
+                    <div className="flex items-center gap-2">
+                      {theme === 'dark' ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-blue-400" />}
+                      <span>Theme Mode</span>
+                    </div>
+                    <span className="text-[11px] font-mono capitalize px-2 py-0.5 rounded bg-slate-900 text-blue-400 border border-slate-800">
+                      {theme}
+                    </span>
+                  </button>
                 </div>
 
                 <div className="pt-1 border-t border-slate-800">
@@ -394,7 +434,20 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, titl
                 </nav>
               </div>
 
-              <div className="pt-3 border-t border-slate-800">
+              <div className="pt-3 border-t border-slate-800 space-y-2">
+                <button
+                  onClick={toggleTheme}
+                  className="w-full flex items-center justify-between px-3 py-2 text-xs text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg text-left"
+                >
+                  <div className="flex items-center gap-2">
+                    {theme === 'dark' ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-blue-400" />}
+                    <span>Theme</span>
+                  </div>
+                  <span className="text-[11px] font-mono capitalize text-blue-400 font-semibold">
+                    {theme === 'dark' ? 'Switch to Light' : 'Switch to Dark'}
+                  </span>
+                </button>
+
                 <button
                   onClick={handleLogout}
                   className="w-full flex items-center gap-2 px-3 py-2 text-xs text-rose-400 hover:bg-rose-950/30 rounded-lg text-left"

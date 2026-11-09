@@ -1,6 +1,7 @@
 import React from 'react';
 import { RouterProvider, useRouter } from './context/RouterContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { ThemeProvider } from './context/ThemeContext';
 import { HomePage } from './pages/HomePage';
 import { ServicesPage } from './pages/ServicesPage';
 import { PricingPage } from './pages/PricingPage';
@@ -31,6 +32,8 @@ import {
   OtherRequestsPage,
   AdminDashboardPage
 } from './pages/dashboard/DashboardModules';
+import { SmartLandingPage } from './pages/SmartLandingPage';
+import { GoogleDrivePage } from './pages/dashboard/GoogleDrivePage';
 
 const RouteRenderer: React.FC = () => {
   const { path } = useRouter();
@@ -63,6 +66,7 @@ const RouteRenderer: React.FC = () => {
     if (path === '/dashboard/youtube') return <YouTubePage />;
     if (path === '/dashboard/artists') return <ManageArtistsPage />;
     if (path === '/dashboard/smart-links') return <SmartLinksPage />;
+    if (path === '/dashboard/drive') return <GoogleDrivePage />;
     if (path === '/dashboard/other-requests') return <OtherRequestsPage />;
     return <DashboardOverviewPage />;
   }
@@ -73,6 +77,12 @@ const RouteRenderer: React.FC = () => {
       return <LoginPage />;
     }
     return <AdminDashboardPage />;
+  }
+
+  // Public Smart Link Landing Pages (/link/:slug)
+  if (path.startsWith('/link/')) {
+    const slug = path.replace(/^\/link\//, '').split('?')[0].split('/')[0];
+    return <SmartLandingPage slug={slug} />;
   }
 
   // Public Routes
@@ -104,10 +114,12 @@ const RouteRenderer: React.FC = () => {
 
 export default function App() {
   return (
-    <RouterProvider>
-      <AuthProvider>
-        <RouteRenderer />
-      </AuthProvider>
-    </RouterProvider>
+    <ThemeProvider>
+      <RouterProvider>
+        <AuthProvider>
+          <RouteRenderer />
+        </AuthProvider>
+      </RouterProvider>
+    </ThemeProvider>
   );
 }

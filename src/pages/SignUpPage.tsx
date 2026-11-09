@@ -3,7 +3,7 @@ import { useRouter } from '../context/RouterContext';
 import { useAuth } from '../context/AuthContext';
 import { PublicHeader } from '../components/layout/PublicHeader';
 import { PublicFooter } from '../components/layout/PublicFooter';
-import { Disc3, Lock, Mail, User as UserIcon, Globe, ArrowRight, CheckCircle2, AlertCircle, RefreshCw, KeyRound, ServerCrash, ShieldCheck, ArrowLeft } from 'lucide-react';
+import { Disc3, Lock, Mail, User as UserIcon, Globe, ArrowRight, CheckCircle2, AlertCircle, RefreshCw, KeyRound, ServerCrash, ShieldCheck, ArrowLeft, Edit3, Check, X } from 'lucide-react';
 import { BrandLogo } from '../components/common/BrandLogo';
 import { OtpInput } from '../components/auth/OtpInput';
 
@@ -38,10 +38,21 @@ export const SignUpPage: React.FC = () => {
   const [cooldown, setCooldown] = useState(60);
   const [expirySeconds, setExpirySeconds] = useState(300); // 5 minutes strictly
 
+  // Change Email State during OTP verification
+  const [isChangingEmail, setIsChangingEmail] = useState(false);
+  const [newEmailInput, setNewEmailInput] = useState('');
+  const [changeLoading, setChangeLoading] = useState(false);
+  const [changeError, setChangeError] = useState<string | null>(null);
+
   // If arriving from login with ?verifyEmail=...
   useEffect(() => {
     if (verifyEmailFromQuery) {
       setEmail(verifyEmailFromQuery);
+      try {
+        sessionStorage.setItem('pending_verification_email', verifyEmailFromQuery);
+      } catch {
+        // Ignore
+      }
       setOtpStep(true);
       setCooldown(60);
       setExpirySeconds(300);
@@ -130,6 +141,11 @@ export const SignUpPage: React.FC = () => {
       }
 
       if (res.ok && data.success) {
+        try {
+          sessionStorage.setItem('pending_verification_email', email.trim());
+        } catch {
+          // Ignore
+        }
         setOtpStep(true);
         setOtpDigits(['', '', '', '', '', '']);
         setCooldown(data.cooldownSeconds || 60);
@@ -175,6 +191,11 @@ export const SignUpPage: React.FC = () => {
       }
 
       if (res.ok && data.success && data.token && data.user) {
+        try {
+          sessionStorage.removeItem('pending_verification_email');
+        } catch {
+          // Ignore
+        }
         // Account verified and activated! Open session
         login(data.token, data.user);
         const target = redirectTarget.startsWith('/') ? redirectTarget : '/dashboard';
@@ -186,6 +207,54 @@ export const SignUpPage: React.FC = () => {
       setOtpError(err?.message || 'Verification failed due to a network error. Please try again.');
     } finally {
       setOtpLoading(false);
+    }
+  };
+
+  const handleChangeEmailSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanNewEmail = newEmailInput.trim().toLowerCase();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(cleanNewEmail)) {
+      setChangeError('Please enter a valid email address.');
+      return;
+    }
+
+    if (cleanNewEmail === email.trim().toLowerCase()) {
+      setChangeError('The new email address is identical to the current one.');
+      return;
+    }
+
+    setChangeLoading(true);
+    setChangeError(null);
+
+    try {
+      const res = await fetch('/api/auth/change-registration-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ oldEmail: email.trim(), newEmail: cleanNewEmail })
+      });
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        setEmail(cleanNewEmail);
+        try {
+          sessionStorage.setItem('pending_verification_email', cleanNewEmail);
+        } catch {
+          // Ignore
+        }
+        setIsChangingEmail(false);
+        setNewEmailInput('');
+        setCooldown(data.cooldownSeconds || 60);
+        setExpirySeconds(data.expiresInSeconds || 300);
+        setOtpDigits(['', '', '', '', '', '']);
+        setOtpError(null);
+      } else {
+        setChangeError(data.error || 'Failed to update email address.');
+      }
+    } catch {
+      setChangeError('Network communication error while updating email.');
+    } finally {
+      setChangeLoading(false);
     }
   };
 
@@ -232,14 +301,102 @@ export const SignUpPage: React.FC = () => {
                   <p className="text-xs text-slate-300 mt-2 leading-relaxed">
                     A 6-digit activation code was dispatched to:
                   </p>
-                  <div className="inline-block mt-1 px-3.5 py-1.5 bg-slate-900 border border-slate-700/80 rounded-lg text-xs font-mono font-semibold text-cyan-300">
-                    {email}
+                  <div className="mt-2 flex flex-col items-center gap-1.5">
+                    <div className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-slate-900 border border-slate-700/80 rounded-lg text-xs font-mono font-semibold text-cyan-300 shadow-inner">
+                      <Mail className="w-3.5 h-3.5 text-cyan-400" />
+                      <span>{email}</span>
+                      {!isChangingEmail && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsChangingEmail(true);
+                            setNewEmailInput(email);
+                            setChangeError(null);
+                          }}
+                          className="ml-2 text-blue-400 hover:text-blue-300 underline font-sans text-[11px] font-normal"
+                          title="Change or correct your email address"
+                        >
+                          Change
+                        </button>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex items-center justify-center gap-1.5 text-[11px] text-cyan-400 bg-cyan-950/30 border border-cyan-800/40 py-1 px-3 rounded-full mx-auto w-fit mt-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-cyan-400"></span>
-                    <span>Official Sender: noreply@rudraatmamusic.com</span>
+
+                  {/* Change Email Inline Card */}
+                  {isChangingEmail && (
+                    <form onSubmit={handleChangeEmailSubmit} className="mt-4 p-4 rounded-xl bg-slate-900/90 border border-blue-500/30 text-left space-y-3 animate-in fade-in duration-200">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-semibold text-white flex items-center gap-1.5">
+                          <Edit3 className="w-3.5 h-3.5 text-blue-400" />
+                          <span>Update Verification Email</span>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setIsChangingEmail(false)}
+                          className="text-slate-400 hover:text-white"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                      <p className="text-[11px] text-slate-400 leading-tight">
+                        Mistyped your email? Enter your correct email address below to receive a fresh 6-digit code.
+                      </p>
+                      <input
+                        type="email"
+                        required
+                        value={newEmailInput}
+                        onChange={(e) => setNewEmailInput(e.target.value)}
+                        placeholder="Enter your correct email address"
+                        className="w-full px-3 py-2 bg-[#070b14] border border-slate-700 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                      />
+                      {changeError && (
+                        <div className="text-[11px] text-rose-400 flex items-center gap-1">
+                          <AlertCircle className="w-3 h-3 shrink-0" />
+                          <span>{changeError}</span>
+                        </div>
+                      )}
+                      <div className="flex items-center gap-2 pt-1">
+                        <button
+                          type="submit"
+                          disabled={changeLoading || !newEmailInput.trim()}
+                          className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-semibold disabled:opacity-50 flex items-center gap-1.5 shadow"
+                        >
+                          {changeLoading ? (
+                            <>
+                              <RefreshCw className="w-3 h-3 animate-spin" />
+                              <span>Updating...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Check className="w-3.5 h-3.5" />
+                              <span>Update & Send OTP</span>
+                            </>
+                          )}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setIsChangingEmail(false)}
+                          className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </form>
+                  )}
+
+                  {/* Verified Sender & Official Company Reply-To Badge */}
+                  <div className="flex flex-col sm:flex-row items-center justify-center gap-2 text-[11px] text-cyan-400 bg-cyan-950/30 border border-cyan-800/40 py-1.5 px-3 rounded-xl mx-auto w-fit mt-3">
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-cyan-400"></span>
+                      <span>Sender: noreply@rudraatmamusic.com</span>
+                    </span>
+                    <span className="hidden sm:inline text-slate-500">|</span>
+                    <span className="text-slate-300">
+                      Reply-To: <strong className="text-white font-mono">rudraatmamusic@gmail.com</strong>
+                    </span>
                   </div>
-                  <p className="text-[11px] text-slate-400 mt-2 flex items-center justify-center gap-1.5">
+
+                  <p className="text-[11px] text-slate-400 mt-2.5 flex items-center justify-center gap-1.5">
                     <span>Code expires in:</span>
                     <strong className={`font-mono font-bold ${expirySeconds < 60 ? 'text-rose-400' : 'text-amber-400'}`}>
                       {formatTime(expirySeconds)}

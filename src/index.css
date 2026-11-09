@@ -11,6 +11,12 @@
     font-family: var(--font-body);
     background-color: #070b14;
     color: #f1f5f9;
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+
+  html[data-theme="light"] body {
+    background-color: #f8fafc;
+    color: #0f172a;
   }
 
   h1, h2, h3, h4, h5, h6 {
@@ -33,4 +39,110 @@
   ::-webkit-scrollbar-thumb:hover {
     background: #334155;
   }
+
+  html[data-theme="light"] ::-webkit-scrollbar-track {
+    background: #f1f5f9;
+  }
+  html[data-theme="light"] ::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+  }
+  html[data-theme="light"] ::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+  }
 }
+
+/* Light Mode Dashboard Overrides */
+html[data-theme="light"] .dashboard-root {
+  background-color: #f8fafc !important;
+  color: #0f172a !important;
+}
+
+html[data-theme="light"] .dashboard-root header {
+  background-color: rgba(255, 255, 255, 0.95) !important;
+  border-color: #e2e8f0 !important;
+}
+
+html[data-theme="light"] .dashboard-root aside {
+  background-color: #ffffff !important;
+  border-color: #e2e8f0 !important;
+}
+
+html[data-theme="light"] .dashboard-root aside nav button {
+  color: #475569 !important;
+}
+
+html[data-theme="light"] .dashboard-root aside nav button:hover {
+  background-color: #f1f5f9 !important;
+  color: #0f172a !important;
+}
+
+html[data-theme="light"] .dashboard-root aside nav button.active-nav-item,
+html[data-theme="light"] .dashboard-root aside nav button[class*="bg-blue-600/15"] {
+  background-color: #eff6ff !important;
+  color: #1d4ed8 !important;
+  border-color: #bfdbfe !important;
+}
+
+html[data-theme="light"] .dashboard-root .bg-\[\#090e1a\],
+html[data-theme="light"] .dashboard-root .bg-\[\#080d1a\],
+html[data-theme="light"] .dashboard-root .bg-\[\#0b1120\],
+html[data-theme="light"] .dashboard-root .bg-\[\#070b14\],
+html[data-theme="light"] .dashboard-root .bg-slate-900,
+html[data-theme="light"] .dashboard-root .bg-slate-950 {
+  background-color: #ffffff !important;
+}
+
+html[data-theme="light"] .dashboard-root .border-slate-800,
+html[data-theme="light"] .dashboard-root .border-slate-800\/80,
+html[data-theme="light"] .dashboard-root .border-slate-800\/90,
+html[data-theme="light"] .dashboard-root .border-slate-700 {
+  border-color: #e2e8f0 !important;
+}
+
+html[data-theme="light"] .dashboard-root .text-white {
+  color: #0f172a !important;
+}
+
+html[data-theme="light"] .dashboard-root .text-slate-100,
+html[data-theme="light"] .dashboard-root .text-slate-200 {
+  color: #1e293b !important;
+}
+
+html[data-theme="light"] .dashboard-root .text-slate-300 {
+  color: #334155 !important;
+}
+
+html[data-theme="light"] .dashboard-root .text-slate-400 {
+  color: #64748b !important;
+}
+
+html[data-theme="light"] .dashboard-root input,
+html[data-theme="light"] .dashboard-root select,
+html[data-theme="light"] .dashboard-root textarea {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+}
+
+html[data-theme="light"] .dashboard-root input::placeholder,
+html[data-theme="light"] .dashboard-root textarea::placeholder {
+  color: #94a3b8 !important;
+}
+
+html[data-theme="light"] .dashboard-root table thead tr {
+  border-color: #e2e8f0 !important;
+  background-color: #f8fafc !important;
+}
+
+html[data-theme="light"] .dashboard-root table thead th {
+  color: #64748b !important;
+}
+
+html[data-theme="light"] .dashboard-root table tbody tr {
+  border-color: #f1f5f9 !important;
+}
+
+html[data-theme="light"] .dashboard-root table tbody tr:hover {
+  background-color: #f8fafc !important;
+}
+

@@ -27,7 +27,8 @@ import {
   Clock,
   CheckCircle2,
   Filter,
-  Sparkles
+  Sparkles,
+  HardDrive
 } from 'lucide-react';
 
 export const DashboardOverviewPage: React.FC = () => {
@@ -215,6 +216,33 @@ export const DashboardOverviewPage: React.FC = () => {
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>
+        </div>
+
+        {/* GOOGLE DRIVE CLOUD STORAGE BANNER */}
+        <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-blue-950/40 via-[#0b1329] to-[#090e1a] border border-blue-900/40 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5">
+            <div className="w-10 h-10 rounded-xl bg-blue-600/20 text-blue-400 flex items-center justify-center shrink-0 border border-blue-500/30">
+              <HardDrive className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="text-sm font-bold text-white flex items-center gap-2">
+                <span>Google Drive Master Vault</span>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/30 text-blue-400">
+                  Google Workspace
+                </span>
+              </div>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Securely store, organize and stream uncompressed WAV audio masters, 3000×3000 artwork, lyric sheets, and legal contracts in your Drive.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => navigate('/dashboard/drive')}
+            className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-semibold whitespace-nowrap transition-colors shrink-0 shadow-sm"
+          >
+            <span>Open Google Drive</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
         </div>
 
         {/* LATEST RELEASES SECTION */}

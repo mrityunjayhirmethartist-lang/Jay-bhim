@@ -330,14 +330,33 @@ export const LoginPage: React.FC = () => {
                   <p className="text-xs text-slate-300 mt-2 leading-relaxed">
                     A 6-digit authorization code was dispatched to:
                   </p>
-                  <div className="inline-block mt-1 px-3 py-1 bg-slate-900 border border-slate-700/80 rounded-lg text-xs font-mono font-semibold text-cyan-300">
-                    {email}
+                  <div className="mt-2 inline-flex items-center gap-2 px-3.5 py-1.5 bg-slate-900 border border-slate-700/80 rounded-lg text-xs font-mono font-semibold text-cyan-300 shadow-inner">
+                    <Mail className="w-3.5 h-3.5 text-cyan-400" />
+                    <span>{email}</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRequiresOtp(false);
+                        setOtpError(null);
+                        setOtpDigits(['', '', '', '', '', '']);
+                      }}
+                      className="ml-2 text-blue-400 hover:text-blue-300 underline font-sans text-[11px] font-normal"
+                      title="Return to enter a different email address"
+                    >
+                      Change
+                    </button>
                   </div>
-                  <div className="flex items-center justify-center gap-1.5 text-[11px] text-cyan-400 bg-cyan-950/30 border border-cyan-800/40 py-1 px-3 rounded-full mx-auto w-fit mt-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-cyan-400"></span>
-                    <span>Official Sender: noreply@rudraatmamusic.com</span>
+                  <div className="flex flex-col sm:flex-row items-center justify-center gap-2 text-[11px] text-cyan-400 bg-cyan-950/30 border border-cyan-800/40 py-1.5 px-3 rounded-xl mx-auto w-fit mt-3">
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-cyan-400"></span>
+                      <span>Sender: noreply@rudraatmamusic.com</span>
+                    </span>
+                    <span className="hidden sm:inline text-slate-500">|</span>
+                    <span className="text-slate-300">
+                      Reply-To: <strong className="text-white font-mono">rudraatmamusic@gmail.com</strong>
+                    </span>
                   </div>
-                  <p className="text-[11px] text-slate-400 mt-2 flex items-center justify-center gap-1.5">
+                  <p className="text-[11px] text-slate-400 mt-2.5 flex items-center justify-center gap-1.5">
                     <span>Code expires in:</span>
                     <strong className={`font-mono font-bold ${expirySeconds < 60 ? 'text-rose-400' : 'text-amber-400'}`}>
                       {formatTime(expirySeconds)}

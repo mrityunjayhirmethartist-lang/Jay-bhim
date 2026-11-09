@@ -87,9 +87,11 @@ const artworkUpload = multer({
 // ======================== OFFICIAL HOSTING EMAIL CONFIGURATION ========================
 // Domain: rudraatmamusic.com
 // Official Sender: noreply@rudraatmamusic.com (Official transactional sender)
+// Official Company Email (Reply-To): rudraatmamusic@gmail.com
 // Inbound Support: support@rudraatmamusic.com
 export const OFFICIAL_DOMAIN = 'rudraatmamusic.com';
 export const OFFICIAL_SENDER_EMAIL = 'noreply@rudraatmamusic.com';
+export const OFFICIAL_COMPANY_EMAIL = 'rudraatmamusic@gmail.com';
 export const OFFICIAL_SENDER_NAME = 'Rudraatma Music';
 export const OFFICIAL_SUPPORT_EMAIL = 'support@rudraatmamusic.com';
 export const OFFICIAL_DEFAULT_HOST = 'mail.rudraatmamusic.com';
@@ -116,8 +118,9 @@ async function sendEmailOtp(
   const pass = process.env.SMTP_PASS;
 
   // Visible sender must ALWAYS be the domain's official hosting email:
-  const from = `"${OFFICIAL_SENDER_NAME}" <${OFFICIAL_SENDER_EMAIL}>`;
-  const replyTo = process.env.SMTP_REPLY_TO || OFFICIAL_SUPPORT_EMAIL;
+  const from = `"${OFFICIAL_SENDER_NAME}" <${process.env.SMTP_FROM || OFFICIAL_SENDER_EMAIL}>`;
+  // Reply-To must ALWAYS be the official company email rudraatmamusic@gmail.com:
+  const replyTo = process.env.SMTP_REPLY_TO || OFFICIAL_COMPANY_EMAIL;
 
   const titles: Record<string, string> = {
     signup: 'Verify Your Artist Account Registration',
@@ -169,7 +172,8 @@ async function sendEmailOtp(
 
       <div style="text-align: center; margin-top: 28px; font-size: 11px; color: #64748b; line-height: 1.5;">
         <p style="margin: 4px 0;">Dispatched to <span style="color: #94a3b8;">${toEmail}</span></p>
-        <p style="margin: 4px 0;">Official Communications &bull; Rudraatma Music Distribution &bull; <a href="mailto:${OFFICIAL_SUPPORT_EMAIL}" style="color: #38bdf8; text-decoration: none;">${OFFICIAL_SUPPORT_EMAIL}</a></p>
+        <p style="margin: 4px 0;">Official Company Contact &bull; <a href="mailto:${OFFICIAL_COMPANY_EMAIL}" style="color: #38bdf8; text-decoration: none;">${OFFICIAL_COMPANY_EMAIL}</a></p>
+        <p style="margin: 4px 0;">Support Desk &bull; <a href="mailto:${OFFICIAL_SUPPORT_EMAIL}" style="color: #38bdf8; text-decoration: none;">${OFFICIAL_SUPPORT_EMAIL}</a></p>
         <p style="margin-top: 12px; color: #475569;">&copy; ${new Date().getFullYear()} Rudraatma Music. All rights reserved.</p>
       </div>
     </div>
@@ -193,7 +197,7 @@ async function sendEmailOtp(
         to: toEmail,
         replyTo,
         subject: subjects[purpose] || `Your Rudraatma Music Code: ${code}`,
-        text: `Rudraatma Music - ${titles[purpose] || 'Verification'}\n\nYour 6-digit code is: ${code}\n\nThis verification code expires in 5 minutes.\nOfficial sender: ${OFFICIAL_SENDER_EMAIL}\nNever share this code with anyone.\n\nBest regards,\nRudraatma Music Distribution Team\n${OFFICIAL_SUPPORT_EMAIL}`,
+        text: `Rudraatma Music - ${titles[purpose] || 'Verification'}\n\nYour 6-digit code is: ${code}\n\nThis verification code expires in 5 minutes.\nOfficial sender: ${OFFICIAL_SENDER_EMAIL}\nReply-To / Company Email: ${OFFICIAL_COMPANY_EMAIL}\nNever share this code with anyone.\n\nBest regards,\nRudraatma Music Distribution Team\n${OFFICIAL_COMPANY_EMAIL}`,
         html: htmlContent
       });
 
@@ -661,7 +665,20 @@ interface UserDashboardData {
   releases: StoredRelease[];
   artists: Array<{ id: string; name: string; primaryGenre: string; spotifyId?: string; appleMusicId?: string; releasesCount: number }>;
   tickets: Array<{ id: string; subject: string; category: string; priority: 'Low' | 'Medium' | 'High'; status: 'Open' | 'Pending' | 'Resolved'; updatedAt: string; messages: Array<{ sender: string; text: string; time: string }> }>;
-  smartLinks: Array<{ id: string; title: string; artist: string; slug: string; clicks: number; stores: { spotify?: string; apple?: string; youtube?: string; amazon?: string } }>;
+  smartLinks: Array<{
+    id: string;
+    title: string;
+    artist: string;
+    slug: string;
+    clicks: number;
+    coverUrl?: string;
+    previewAudioUrl?: string;
+    releaseDate?: string;
+    description?: string;
+    genre?: string;
+    createdAt?: string;
+    stores: Record<string, string>;
+  }>;
   requests: Array<{ id: string; type: 'Metadata Correction' | 'Takedown' | 'Artist Name Update' | 'Other'; details: string; status: 'Under Review' | 'Completed' | 'Pending'; date: string }>;
   transactions: Array<{ id: string; type: 'Credit' | 'Debit' | 'Payout' | 'Refund'; amount: number; description: string; status: 'Completed' | 'Processing'; reference: string; date: string }>;
   balance: number;
@@ -758,10 +775,38 @@ userDashboards.set(demoUserId, {
       artist: 'Aarav Mehta',
       slug: 'midnight-ragas',
       clicks: 342,
+      coverUrl: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600&auto=format&fit=crop&q=80',
+      genre: 'Contemporary Fusion',
+      releaseDate: '2026-03-01',
+      description: 'The hypnotic studio single blending Indian classical sitar ragas with modern ambient sub-bass. Out now worldwide on all major platforms.',
+      createdAt: '2026-03-01',
       stores: {
-        spotify: 'https://open.spotify.com',
-        apple: 'https://music.apple.com',
-        youtube: 'https://music.youtube.com'
+        spotify: 'https://open.spotify.com/track/4cOdK2wGLETKBW3PvgPWqT',
+        apple: 'https://music.apple.com/in/album/midnight-ragas/173928190',
+        youtube: 'https://music.youtube.com/watch?v=dQw4w9WgXcQ',
+        amazon: 'https://music.amazon.in/albums/B09XYZ888',
+        jiosaavn: 'https://www.jiosaavn.com/song/midnight-ragas/X12345',
+        wynk: 'https://wynk.in/music/song/midnight-ragas/sr_123',
+        gaana: 'https://gaana.com/song/midnight-ragas'
+      }
+    },
+    {
+      id: 'sml-502',
+      title: 'Urban Monsoon EP',
+      artist: 'Aarav Mehta ft. Neha',
+      slug: 'urban-monsoon',
+      clicks: 189,
+      coverUrl: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80',
+      genre: 'Contemporary Indian',
+      releaseDate: '2026-04-20',
+      description: 'Four evocative acoustic soundscapes capturing the rain-washed streets of Mumbai and Delhi.',
+      createdAt: '2026-03-20',
+      stores: {
+        spotify: 'https://open.spotify.com/album/37i9dQZF1DX4WYpdgoIcn6',
+        apple: 'https://music.apple.com/in/album/urban-monsoon-ep/184920192',
+        youtube: 'https://music.youtube.com/playlist?list=OLAK5uy_k',
+        amazon: 'https://music.amazon.in/albums/B09ABC777',
+        jiosaavn: 'https://www.jiosaavn.com/album/urban-monsoon-ep/Y98765'
       }
     }
   ],
@@ -1168,7 +1213,8 @@ app.post('/api/auth/register', async (req, res) => {
     smtpDelivered: emailResult.delivered,
     smtpConfigured: !emailResult.missingConfig,
     expiresInSeconds: 300,
-    cooldownSeconds: 60
+    cooldownSeconds: 60,
+    ...(process.env.NODE_ENV !== 'production' ? { devOtpCode: otpCode } : {})
   });
 });
 
@@ -1181,8 +1227,8 @@ app.post('/api/auth/verify-otp', (req, res) => {
 
   const normalizedEmail = email.trim().toLowerCase();
 
-  // If client routed a login OTP to this generic endpoint, delegate to login OTP handler
-  if (type === 'login' || loginOtps.has(normalizedEmail)) {
+  // If client specifically routed a login OTP to this generic endpoint, delegate to login OTP handler
+  if (type === 'login' || (!signupOtps.has(normalizedEmail) && loginOtps.has(normalizedEmail))) {
     return verifyLoginOtpInternal(req, res, normalizedEmail, code);
   }
 
@@ -1238,6 +1284,83 @@ app.post('/api/auth/verify-otp', (req, res) => {
       role: user.role,
       selectedPlanId: user.selectedPlanId
     }
+  });
+});
+
+// Change Registration Email before account activation
+app.post('/api/auth/change-registration-email', async (req, res) => {
+  const { oldEmail, newEmail } = req.body;
+  if (!oldEmail || !newEmail) {
+    return res.status(400).json({ error: 'Both current email and new email are required.' });
+  }
+
+  const normalizedOld = oldEmail.trim().toLowerCase();
+  const normalizedNew = newEmail.trim().toLowerCase();
+
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(normalizedNew)) {
+    return res.status(400).json({ error: 'Please enter a valid new email address.' });
+  }
+
+  if (normalizedOld === normalizedNew) {
+    return res.status(400).json({ error: 'The new email address is identical to the current one.' });
+  }
+
+  // Check if new email already belongs to an active user
+  const existingActive = users.get(normalizedNew);
+  if (existingActive && existingActive.isActive) {
+    return res.status(409).json({ error: 'An active account with this email already exists. Please log in.' });
+  }
+
+  // Find the unverified user record
+  const oldUser = users.get(normalizedOld);
+  if (!oldUser) {
+    return res.status(404).json({ error: 'No pending registration found for the specified email.' });
+  }
+
+  if (oldUser.isActive) {
+    return res.status(400).json({ error: 'This account is already activated. Please log in.' });
+  }
+
+  // Migrate user record to new email
+  users.delete(normalizedOld);
+  signupOtps.delete(normalizedOld);
+
+  const updatedUser: StoredUser = {
+    ...oldUser,
+    email: normalizedNew
+  };
+  users.set(normalizedNew, updatedUser);
+
+  // Generate fresh 6-digit OTP
+  const freshCode = crypto.randomInt(100000, 1000000).toString();
+  const codeHash = hashString(freshCode);
+  const expiresAt = Date.now() + 5 * 60 * 1000; // 5 minutes
+
+  signupOtps.set(normalizedNew, {
+    email: normalizedNew,
+    codeHash,
+    expiresAt,
+    attempts: 0,
+    lastSentAt: Date.now(),
+    purpose: 'signup'
+  });
+
+  const emailResult = await sendEmailOtp(normalizedNew, freshCode, 'signup');
+
+  console.log(`[Rudraatma Music Email Change] Migrated registration from ${normalizedOld} to ${normalizedNew}. New OTP code: ${freshCode}`);
+
+  return res.json({
+    success: true,
+    email: normalizedNew,
+    message: `Email address updated. A fresh 6-digit verification code has been dispatched to ${normalizedNew} from ${OFFICIAL_SENDER_EMAIL}.`,
+    senderEmail: OFFICIAL_SENDER_EMAIL,
+    replyTo: OFFICIAL_COMPANY_EMAIL,
+    smtpDelivered: emailResult.delivered,
+    smtpConfigured: !emailResult.missingConfig,
+    cooldownSeconds: 60,
+    expiresInSeconds: 300,
+    ...(process.env.NODE_ENV !== 'production' ? { devOtpCode: freshCode } : {})
   });
 });
 
@@ -1348,7 +1471,8 @@ app.post('/api/auth/login', async (req, res) => {
     smtpDelivered: emailResult.delivered,
     smtpConfigured: !emailResult.missingConfig,
     expiresInSeconds: 300,
-    cooldownSeconds: 60
+    cooldownSeconds: 60,
+    ...(process.env.NODE_ENV !== 'production' ? { devOtpCode: loginCode } : {})
   });
 });
 
@@ -1468,7 +1592,8 @@ app.post('/api/auth/resend-otp', async (req, res) => {
     smtpDelivered: emailResult.delivered,
     smtpConfigured: !emailResult.missingConfig,
     cooldownSeconds: 60,
-    expiresInSeconds: 300
+    expiresInSeconds: 300,
+    ...(process.env.NODE_ENV !== 'production' ? { devOtpCode: newCode } : {})
   });
 });
 
@@ -2909,26 +3034,166 @@ app.post('/api/dashboard/support', (req, res) => {
   return res.json({ success: true, ticket: newTicket });
 });
 
-// Smart Link
+// Smart Links API Suite
+app.get('/api/dashboard/smart-links', (req, res) => {
+  const user = getAuthenticatedUser(req);
+  if (!user) return res.status(401).json({ error: 'Unauthorized.' });
+
+  const dashboard = getUserDashboard(user.id);
+  return res.json({ success: true, smartLinks: dashboard.smartLinks || [] });
+});
+
 app.post('/api/dashboard/smart-links', (req, res) => {
   const user = getAuthenticatedUser(req);
   if (!user) return res.status(401).json({ error: 'Unauthorized.' });
 
-  const { title, artist, slug, stores } = req.body;
+  const { id, title, artist, slug, stores, coverUrl, previewAudioUrl, releaseDate, description, genre } = req.body;
   if (!title || !slug) return res.status(400).json({ error: 'Release title and link slug are required.' });
 
   const dashboard = getUserDashboard(user.id);
+  const cleanSlug = slug.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-');
+
+  // If editing an existing link
+  if (id) {
+    const existingIndex = dashboard.smartLinks.findIndex(l => l.id === id);
+    if (existingIndex !== -1) {
+      dashboard.smartLinks[existingIndex] = {
+        ...dashboard.smartLinks[existingIndex],
+        title: title.trim(),
+        artist: artist?.trim() || user.fullName,
+        slug: cleanSlug,
+        stores: stores || {},
+        coverUrl: coverUrl || dashboard.smartLinks[existingIndex].coverUrl,
+        previewAudioUrl: previewAudioUrl || dashboard.smartLinks[existingIndex].previewAudioUrl,
+        releaseDate: releaseDate || dashboard.smartLinks[existingIndex].releaseDate,
+        description: description || dashboard.smartLinks[existingIndex].description,
+        genre: genre || dashboard.smartLinks[existingIndex].genre
+      };
+      return res.json({ success: true, smartLink: dashboard.smartLinks[existingIndex], message: 'Smart Link updated successfully!' });
+    }
+  }
+
+  // Check slug duplication within user's links
+  const existingWithSlug = dashboard.smartLinks.find(l => l.slug === cleanSlug);
+  const finalSlug = existingWithSlug ? `${cleanSlug}-${Math.floor(100 + Math.random() * 900)}` : cleanSlug;
+
   const newLink = {
-    id: 'sml-' + (dashboard.smartLinks.length + 601),
+    id: 'sml-' + (dashboard.smartLinks.length + 601) + '-' + Date.now().toString().slice(-4),
     title: title.trim(),
     artist: artist?.trim() || user.fullName,
-    slug: slug.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-'),
+    slug: finalSlug,
     clicks: 0,
+    coverUrl: coverUrl || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600&auto=format&fit=crop&q=80',
+    previewAudioUrl: previewAudioUrl || '',
+    releaseDate: releaseDate || new Date().toISOString().split('T')[0],
+    description: description || 'Official release distributed by Rudraatma Music. Stream on your favorite digital platform below.',
+    genre: genre || 'Independent Master',
+    createdAt: new Date().toISOString().split('T')[0],
     stores: stores || {}
   };
 
   dashboard.smartLinks.unshift(newLink);
-  return res.json({ success: true, smartLink: newLink });
+  return res.json({ success: true, smartLink: newLink, message: 'Smart Link generated successfully!' });
+});
+
+app.put('/api/dashboard/smart-links/:id', (req, res) => {
+  const user = getAuthenticatedUser(req);
+  if (!user) return res.status(401).json({ error: 'Unauthorized.' });
+
+  const { id } = req.params;
+  const { title, artist, slug, stores, coverUrl, previewAudioUrl, releaseDate, description, genre } = req.body;
+
+  const dashboard = getUserDashboard(user.id);
+  const index = dashboard.smartLinks.findIndex(l => l.id === id);
+  if (index === -1) return res.status(404).json({ error: 'Smart link not found.' });
+
+  const cleanSlug = slug ? slug.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-') : dashboard.smartLinks[index].slug;
+
+  dashboard.smartLinks[index] = {
+    ...dashboard.smartLinks[index],
+    title: title?.trim() || dashboard.smartLinks[index].title,
+    artist: artist?.trim() || dashboard.smartLinks[index].artist,
+    slug: cleanSlug,
+    stores: stores || dashboard.smartLinks[index].stores,
+    coverUrl: coverUrl !== undefined ? coverUrl : dashboard.smartLinks[index].coverUrl,
+    previewAudioUrl: previewAudioUrl !== undefined ? previewAudioUrl : dashboard.smartLinks[index].previewAudioUrl,
+    releaseDate: releaseDate !== undefined ? releaseDate : dashboard.smartLinks[index].releaseDate,
+    description: description !== undefined ? description : dashboard.smartLinks[index].description,
+    genre: genre !== undefined ? genre : dashboard.smartLinks[index].genre
+  };
+
+  return res.json({ success: true, smartLink: dashboard.smartLinks[index], message: 'Smart link updated successfully.' });
+});
+
+app.delete('/api/dashboard/smart-links/:id', (req, res) => {
+  const user = getAuthenticatedUser(req);
+  if (!user) return res.status(401).json({ error: 'Unauthorized.' });
+
+  const { id } = req.params;
+  const dashboard = getUserDashboard(user.id);
+  const index = dashboard.smartLinks.findIndex(l => l.id === id);
+  if (index === -1) return res.status(404).json({ error: 'Smart link not found.' });
+
+  dashboard.smartLinks.splice(index, 1);
+  return res.json({ success: true, message: 'Smart link removed successfully.' });
+});
+
+// Public Smart Link Landing Page Resolver
+app.get('/api/public/smart-link/:slug', (req, res) => {
+  const slug = req.params.slug.trim().toLowerCase();
+
+  // Search across all user dashboards
+  for (const dashboard of userDashboards.values()) {
+    const found = dashboard.smartLinks.find(l => l.slug.toLowerCase() === slug);
+    if (found) {
+      return res.json({ success: true, smartLink: found });
+    }
+  }
+
+  // Fallback demo matching
+  if (slug === 'midnight-ragas' || slug === 'demo') {
+    return res.json({
+      success: true,
+      smartLink: {
+        id: 'sml-501',
+        title: 'Midnight Ragas in Blue',
+        artist: 'Aarav Mehta',
+        slug: 'midnight-ragas',
+        clicks: 342,
+        coverUrl: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600&auto=format&fit=crop&q=80',
+        genre: 'Contemporary Fusion',
+        releaseDate: '2026-03-01',
+        description: 'The hypnotic studio single blending Indian classical sitar ragas with modern ambient sub-bass. Out now worldwide on all major platforms.',
+        stores: {
+          spotify: 'https://open.spotify.com/track/4cOdK2wGLETKBW3PvgPWqT',
+          apple: 'https://music.apple.com/in/album/midnight-ragas/173928190',
+          youtube: 'https://music.youtube.com/watch?v=dQw4w9WgXcQ',
+          amazon: 'https://music.amazon.in/albums/B09XYZ888',
+          jiosaavn: 'https://www.jiosaavn.com/song/midnight-ragas/X12345',
+          wynk: 'https://wynk.in/music/song/midnight-ragas/sr_123',
+          gaana: 'https://gaana.com/song/midnight-ragas'
+        }
+      }
+    });
+  }
+
+  return res.status(404).json({ error: 'Release landing page not found.' });
+});
+
+// Public Click Tracker
+app.post('/api/public/smart-link/:slug/click', (req, res) => {
+  const slug = req.params.slug.trim().toLowerCase();
+  const { platform } = req.body;
+
+  for (const dashboard of userDashboards.values()) {
+    const found = dashboard.smartLinks.find(l => l.slug.toLowerCase() === slug);
+    if (found) {
+      found.clicks = (found.clicks || 0) + 1;
+      return res.json({ success: true, clicks: found.clicks, platform });
+    }
+  }
+
+  return res.json({ success: true, clicks: 1 });
 });
 
 // Other Request
@@ -3192,6 +3457,427 @@ app.post('/api/feedback', (req, res) => {
     success: true,
     message: 'Thank you for your feedback! The Rudraatma Music team directly reviews all suggestions to enhance our artist tools.'
   });
+});
+
+// ======================== OFFICIAL GOOGLE DRIVE INTEGRATION ========================
+// Per user requirements:
+// 1. Connect Google Drive using Google OAuth 2.0.
+// 2. Allow users to upload and download files.
+// 3. Display their Drive files and folders.
+// 4. Allow users to create folders, rename files and delete files with confirmation.
+// 5. Support music audio files, cover artwork, images, PDFs and documents.
+// 6. Add file search and filtering.
+// 7. Show upload progress and storage information where available.
+// 8. Keep each user's files private.
+// 9. Store tokens securely on the backend.
+// 10. Add a Google Drive section in the user dashboard.
+
+interface UserDriveConnection {
+  userId: string;
+  accessToken: string;
+  email?: string;
+  displayName?: string;
+  photoUrl?: string;
+  connectedAt: number;
+}
+
+const userDriveConnections = new Map<string, UserDriveConnection>();
+
+// Memory storage for Drive uploads (supports up to 100MB per file: stems, WAV masters, artworks, docs)
+const driveUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 100 * 1024 * 1024 }
+});
+
+// Check Drive connection status
+app.get('/api/drive/status', (req, res) => {
+  const user = getAuthenticatedUser(req);
+  if (!user) return res.status(401).json({ error: 'Unauthorized.' });
+
+  const conn = userDriveConnections.get(user.id);
+  if (!conn) {
+    return res.json({ connected: false });
+  }
+
+  return res.json({
+    connected: true,
+    driveUser: {
+      email: conn.email || '',
+      displayName: conn.displayName || 'Google Drive User',
+      photoUrl: conn.photoUrl || '',
+      connectedAt: conn.connectedAt
+    }
+  });
+});
+
+// Store user Drive OAuth credentials securely on backend
+app.post('/api/drive/connect', (req, res) => {
+  const user = getAuthenticatedUser(req);
+  if (!user) return res.status(401).json({ error: 'Unauthorized. Please login.' });
+
+  const { accessToken, email, displayName, photoUrl } = req.body;
+  if (!accessToken) {
+    return res.status(400).json({ error: 'OAuth access token is required.' });
+  }
+
+  userDriveConnections.set(user.id, {
+    userId: user.id,
+    accessToken,
+    email: email || '',
+    displayName: displayName || user.fullName,
+    photoUrl: photoUrl || '',
+    connectedAt: Date.now()
+  });
+
+  return res.json({
+    success: true,
+    message: 'Google Drive connected and securely linked to your artist session.'
+  });
+});
+
+// Disconnect Drive
+app.post('/api/drive/disconnect', (req, res) => {
+  const user = getAuthenticatedUser(req);
+  if (!user) return res.status(401).json({ error: 'Unauthorized.' });
+
+  userDriveConnections.delete(user.id);
+  return res.json({ success: true, message: 'Google Drive disconnected.' });
+});
+
+// Get storage quota & Drive about profile
+app.get('/api/drive/about', async (req, res) => {
+  const user = getAuthenticatedUser(req);
+  if (!user) return res.status(401).json({ error: 'Unauthorized.' });
+
+  const conn = userDriveConnections.get(user.id);
+  if (!conn) {
+    return res.status(400).json({ error: 'Google Drive is not connected for this account.' });
+  }
+
+  try {
+    const driveRes = await fetch('https://www.googleapis.com/drive/v3/about?fields=user,storageQuota', {
+      headers: { Authorization: `Bearer ${conn.accessToken}` }
+    });
+
+    if (!driveRes.ok) {
+      if (driveRes.status === 401) {
+        userDriveConnections.delete(user.id);
+        return res.status(401).json({ error: 'Google Drive authorization expired. Please reconnect.', code: 'TOKEN_EXPIRED' });
+      }
+      const errText = await driveRes.text();
+      return res.status(driveRes.status).json({ error: 'Drive API error', details: errText });
+    }
+
+    const data = await driveRes.json();
+    return res.json(data);
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || 'Failed to query Google Drive storage quota.' });
+  }
+});
+
+// List files & folders
+app.get('/api/drive/files', async (req, res) => {
+  const user = getAuthenticatedUser(req);
+  if (!user) return res.status(401).json({ error: 'Unauthorized.' });
+
+  const conn = userDriveConnections.get(user.id);
+  if (!conn) {
+    return res.status(400).json({ error: 'Google Drive is not connected for this account.' });
+  }
+
+  const { folderId, search, category, pageToken } = req.query as {
+    folderId?: string;
+    search?: string;
+    category?: string;
+    pageToken?: string;
+  };
+
+  try {
+    const queryParts: string[] = ['trashed = false'];
+
+    if (search && search.trim()) {
+      const sanitized = search.replace(/'/g, "\\'");
+      queryParts.push(`name contains '${sanitized}'`);
+    } else if (folderId && folderId !== 'root') {
+      queryParts.push(`'${folderId}' in parents`);
+    } else {
+      queryParts.push(`'root' in parents`);
+    }
+
+    if (category === 'audio') {
+      queryParts.push(`(mimeType contains 'audio/' or name contains '.wav' or name contains '.mp3' or name contains '.flac' or name contains '.aiff' or name contains '.m4a')`);
+    } else if (category === 'images') {
+      queryParts.push(`(mimeType contains 'image/' or name contains '.jpg' or name contains '.png' or name contains '.jpeg' or name contains '.webp')`);
+    } else if (category === 'documents') {
+      queryParts.push(`(mimeType contains 'pdf' or mimeType contains 'document' or mimeType contains 'sheet' or mimeType contains 'text' or name contains '.pdf' or name contains '.doc')`);
+    } else if (category === 'folders') {
+      queryParts.push(`mimeType = 'application/vnd.google-apps.folder'`);
+    }
+
+    const q = queryParts.join(' and ');
+    const params = new URLSearchParams({
+      q,
+      fields: 'nextPageToken,files(id,name,mimeType,size,modifiedTime,createdTime,iconLink,thumbnailLink,webViewLink,webContentLink,parents)',
+      orderBy: 'folder,modifiedTime desc',
+      pageSize: '50'
+    });
+    if (pageToken) params.append('pageToken', pageToken);
+
+    const driveRes = await fetch(`https://www.googleapis.com/drive/v3/files?${params.toString()}`, {
+      headers: { Authorization: `Bearer ${conn.accessToken}` }
+    });
+
+    if (!driveRes.ok) {
+      if (driveRes.status === 401) {
+        userDriveConnections.delete(user.id);
+        return res.status(401).json({ error: 'Google Drive authorization expired. Please reconnect.', code: 'TOKEN_EXPIRED' });
+      }
+      const errText = await driveRes.text();
+      return res.status(driveRes.status).json({ error: 'Drive API error', details: errText });
+    }
+
+    const data = await driveRes.json();
+    return res.json({
+      files: data.files || [],
+      nextPageToken: data.nextPageToken
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || 'Failed to list Google Drive files.' });
+  }
+});
+
+// Create Folder
+app.post('/api/drive/folders', async (req, res) => {
+  const user = getAuthenticatedUser(req);
+  if (!user) return res.status(401).json({ error: 'Unauthorized.' });
+
+  const conn = userDriveConnections.get(user.id);
+  if (!conn) return res.status(400).json({ error: 'Google Drive is not connected.' });
+
+  const { name, parentId } = req.body;
+  if (!name || !name.trim()) return res.status(400).json({ error: 'Folder name is required.' });
+
+  try {
+    const body: Record<string, any> = {
+      name: name.trim(),
+      mimeType: 'application/vnd.google-apps.folder'
+    };
+    if (parentId && parentId !== 'root') {
+      body.parents = [parentId];
+    }
+
+    const driveRes = await fetch('https://www.googleapis.com/drive/v3/files?fields=id,name,mimeType,modifiedTime,parents', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${conn.accessToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body)
+    });
+
+    if (!driveRes.ok) {
+      const errText = await driveRes.text();
+      return res.status(driveRes.status).json({ error: 'Failed to create folder on Drive', details: errText });
+    }
+
+    const newFolder = await driveRes.json();
+    return res.json(newFolder);
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || 'Error creating folder.' });
+  }
+});
+
+// Rename File or Folder
+app.patch('/api/drive/files/:fileId', async (req, res) => {
+  const user = getAuthenticatedUser(req);
+  if (!user) return res.status(401).json({ error: 'Unauthorized.' });
+
+  const conn = userDriveConnections.get(user.id);
+  if (!conn) return res.status(400).json({ error: 'Google Drive is not connected.' });
+
+  const { fileId } = req.params;
+  const { name } = req.body;
+  if (!name || !name.trim()) return res.status(400).json({ error: 'New name is required.' });
+
+  try {
+    const driveRes = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?fields=id,name,mimeType,modifiedTime,size`, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${conn.accessToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ name: name.trim() })
+    });
+
+    if (!driveRes.ok) {
+      const errText = await driveRes.text();
+      return res.status(driveRes.status).json({ error: 'Failed to rename Drive item', details: errText });
+    }
+
+    const updated = await driveRes.json();
+    return res.json(updated);
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || 'Error renaming item.' });
+  }
+});
+
+// Delete File or Folder (Permanently removes from user's Drive)
+app.delete('/api/drive/files/:fileId', async (req, res) => {
+  const user = getAuthenticatedUser(req);
+  if (!user) return res.status(401).json({ error: 'Unauthorized.' });
+
+  const conn = userDriveConnections.get(user.id);
+  if (!conn) return res.status(400).json({ error: 'Google Drive is not connected.' });
+
+  const { fileId } = req.params;
+
+  try {
+    const driveRes = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${conn.accessToken}` }
+    });
+
+    if (!driveRes.ok) {
+      const errText = await driveRes.text();
+      return res.status(driveRes.status).json({ error: 'Failed to delete file from Drive', details: errText });
+    }
+
+    return res.json({ success: true, message: 'Item deleted successfully from Google Drive.' });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || 'Error deleting item from Drive.' });
+  }
+});
+
+// Upload File (Supports audio, artwork, images, PDFs, docs up to 100MB)
+app.post('/api/drive/upload', driveUpload.single('file'), async (req, res) => {
+  const user = getAuthenticatedUser(req);
+  if (!user) return res.status(401).json({ error: 'Unauthorized.' });
+
+  const conn = userDriveConnections.get(user.id);
+  if (!conn) return res.status(400).json({ error: 'Google Drive is not connected.' });
+
+  const file = req.file;
+  if (!file) return res.status(400).json({ error: 'No file was provided for upload.' });
+
+  const parentId = req.body.parentId;
+
+  try {
+    const boundary = '-------314159265358979323846';
+    const delimiter = `\r\n--${boundary}\r\n`;
+    const closeDelimiter = `\r\n--${boundary}--`;
+
+    const metadata: Record<string, any> = {
+      name: file.originalname,
+      mimeType: file.mimetype || 'application/octet-stream'
+    };
+    if (parentId && parentId !== 'root') {
+      metadata.parents = [parentId];
+    }
+
+    const multipartRequestBody = Buffer.concat([
+      Buffer.from(
+        delimiter +
+          'Content-Type: application/json; charset=UTF-8\r\n\r\n' +
+          JSON.stringify(metadata) +
+          delimiter +
+          `Content-Type: ${file.mimetype || 'application/octet-stream'}\r\n\r\n`
+      ),
+      file.buffer,
+      Buffer.from(closeDelimiter)
+    ]);
+
+    const driveRes = await fetch(
+      'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,mimeType,size,modifiedTime,iconLink,thumbnailLink,webViewLink',
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${conn.accessToken}`,
+          'Content-Type': `multipart/related; boundary=${boundary}`,
+          'Content-Length': String(multipartRequestBody.length)
+        },
+        body: multipartRequestBody
+      }
+    );
+
+    if (!driveRes.ok) {
+      const errText = await driveRes.text();
+      return res.status(driveRes.status).json({ error: 'Google Drive upload failed', details: errText });
+    }
+
+    const uploaded = await driveRes.json();
+    return res.json(uploaded);
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || 'Error uploading file to Drive.' });
+  }
+});
+
+// Download File from Drive
+app.get('/api/drive/files/:fileId/download', async (req, res) => {
+  const user = getAuthenticatedUser(req);
+  if (!user) return res.status(401).json({ error: 'Unauthorized.' });
+
+  const conn = userDriveConnections.get(user.id);
+  if (!conn) return res.status(400).json({ error: 'Google Drive is not connected.' });
+
+  const { fileId } = req.params;
+
+  try {
+    // 1. Get metadata for proper filename and mimeType
+    const metaRes = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?fields=id,name,mimeType,size`, {
+      headers: { Authorization: `Bearer ${conn.accessToken}` }
+    });
+    if (!metaRes.ok) return res.status(metaRes.status).json({ error: 'File metadata not found' });
+    const fileMeta = await metaRes.json();
+
+    // 2. Fetch binary stream
+    const mediaRes = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+      headers: { Authorization: `Bearer ${conn.accessToken}` }
+    });
+    if (!mediaRes.ok) return res.status(mediaRes.status).json({ error: 'Unable to download file content from Drive.' });
+
+    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(fileMeta.name)}"`);
+    res.setHeader('Content-Type', fileMeta.mimeType || 'application/octet-stream');
+    if (fileMeta.size) {
+      res.setHeader('Content-Length', fileMeta.size);
+    }
+
+    const arrayBuffer = await mediaRes.arrayBuffer();
+    return res.send(Buffer.from(arrayBuffer));
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || 'Error downloading file.' });
+  }
+});
+
+// Stream File (e.g. for audio preview playback)
+app.get('/api/drive/files/:fileId/stream', async (req, res) => {
+  const user = getAuthenticatedUser(req);
+  if (!user) return res.status(401).json({ error: 'Unauthorized.' });
+
+  const conn = userDriveConnections.get(user.id);
+  if (!conn) return res.status(400).json({ error: 'Google Drive is not connected.' });
+
+  const { fileId } = req.params;
+
+  try {
+    const metaRes = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?fields=id,name,mimeType,size`, {
+      headers: { Authorization: `Bearer ${conn.accessToken}` }
+    });
+    if (!metaRes.ok) return res.status(metaRes.status).json({ error: 'File metadata not found' });
+    const fileMeta = await metaRes.json();
+
+    const mediaRes = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+      headers: { Authorization: `Bearer ${conn.accessToken}` }
+    });
+    if (!mediaRes.ok) return res.status(mediaRes.status).json({ error: 'Unable to stream file' });
+
+    res.setHeader('Content-Type', fileMeta.mimeType || 'audio/mpeg');
+    if (fileMeta.size) res.setHeader('Content-Length', fileMeta.size);
+
+    const arrayBuffer = await mediaRes.arrayBuffer();
+    return res.send(Buffer.from(arrayBuffer));
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || 'Error streaming file.' });
+  }
 });
 
 // ======================== STATIC & VITE INTEGRATION ========================

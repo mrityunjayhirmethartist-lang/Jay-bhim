@@ -64,6 +64,8 @@ export interface Release {
   releaseDate: string;
   tracks: ReleaseTrack[];
   artworkUrl?: string;
+  coverUrl?: string;
+  genre?: string;
   copyrightOwner: string;
   copyrightYear: number;
   recordingOwner: string;
@@ -104,19 +106,32 @@ export interface SupportTicket {
   messages: Array<{ sender: string; text: string; time: string }>;
 }
 
+export interface SmartLinkStores {
+  spotify?: string;
+  apple?: string;
+  youtube?: string;
+  amazon?: string;
+  jiosaavn?: string;
+  wynk?: string;
+  gaana?: string;
+  tidal?: string;
+  deezer?: string;
+  instagram?: string;
+}
+
 export interface SmartLink {
   id: string;
   title: string;
   artist: string;
   slug: string;
   clicks: number;
-  stores: {
-    spotify?: string;
-    apple?: string;
-    youtube?: string;
-    amazon?: string;
-    jiosaavn?: string;
-  };
+  coverUrl?: string;
+  previewAudioUrl?: string;
+  releaseDate?: string;
+  description?: string;
+  genre?: string;
+  createdAt?: string;
+  stores: SmartLinkStores;
 }
 
 export interface OtherRequest {
