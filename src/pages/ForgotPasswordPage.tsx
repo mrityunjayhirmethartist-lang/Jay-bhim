@@ -5,6 +5,7 @@ import { PublicFooter } from '../components/layout/PublicFooter';
 import { KeyRound, Mail, Lock, ArrowRight, ArrowLeft, CheckCircle2, AlertCircle, RefreshCw, ShieldCheck } from 'lucide-react';
 import { BrandLogo } from '../components/common/BrandLogo';
 import { OtpInput } from '../components/auth/OtpInput';
+import { apiUrl } from '../utils/api';
 
 export const ForgotPasswordPage: React.FC = () => {
   const { navigate, queryParam } = useRouter();
@@ -40,7 +41,7 @@ export const ForgotPasswordPage: React.FC = () => {
     setError(null);
 
     try {
-      const res = await fetch('/api/auth/forgot-password', {
+      const res = await fetch(apiUrl('/api/auth/forgot-password'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email.trim() })
@@ -88,7 +89,7 @@ export const ForgotPasswordPage: React.FC = () => {
     setError(null);
 
     try {
-      const res = await fetch('/api/auth/reset-password', {
+      const res = await fetch(apiUrl('/api/auth/reset-password'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -122,7 +123,7 @@ export const ForgotPasswordPage: React.FC = () => {
     setError(null);
 
     try {
-      const res = await fetch('/api/auth/forgot-password', {
+      const res = await fetch(apiUrl('/api/auth/forgot-password'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email.trim() })

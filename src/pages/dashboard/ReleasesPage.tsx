@@ -3,6 +3,8 @@ import { useRouter } from '../../context/RouterContext';
 import { useAuth } from '../../context/AuthContext';
 import { DashboardLayout } from '../../components/dashboard/DashboardLayout';
 import { Release, ReleaseTrack } from '../../types';
+import { apiUrl } from '../../utils/api';
+import { ReleaseAiTracker } from '../../components/dashboard/ReleaseAiTracker';
 import {
   inspectAudioFile,
   inspectImageFile,
@@ -95,6 +97,11 @@ export const ReleasesPage: React.FC = () => {
   const [composer, setComposer] = useState('');
   const [lyricist, setLyricist] = useState('');
   const [producer, setProducer] = useState('');
+  const [musicDirector, setMusicDirector] = useState('');
+  const [isrcCode, setIsrcCode] = useState('');
+  const [upcCode, setUpcCode] = useState('');
+  const [lyrics, setLyrics] = useState('');
+  const [lyricsFileUrl, setLyricsFileUrl] = useState('');
 
   // Rights & Label
   const [labelName, setLabelName] = useState('Independent / Self-Released');
@@ -104,9 +111,18 @@ export const ReleasesPage: React.FC = () => {
   const [territories, setTerritories] = useState('Worldwide');
   const [rightsConfirmed, setRightsConfirmed] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
+  const [usesSamples, setUsesSamples] = useState(false);
+  const [sampleLicenseConfirmed, setSampleLicenseConfirmed] = useState(false);
+  const [isRemix, setIsRemix] = useState(false);
+  const [remixPermissionConfirmed, setRemixPermissionConfirmed] = useState(false);
+  const [isCoverSong, setIsCoverSong] = useState(false);
+  const [coverLicenseConfirmed, setCoverLicenseConfirmed] = useState(false);
+  const [hasCollaborators, setHasCollaborators] = useState(false);
+  const [collaborationConfirmed, setCollaborationConfirmed] = useState(false);
 
   // Submission / Draft states
   const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [savingDraft, setSavingDraft] = useState(false);
   const [submissionSuccess, setSubmissionSuccess] = useState<{ id: string; status: string } | null>(null);
   const [previewModalOpen, setPreviewModalOpen] = useState(false);
@@ -119,7 +135,7 @@ export const ReleasesPage: React.FC = () => {
     const fetchReleases = async () => {
       if (!token) return;
       try {
-        const res = await fetch('/api/dashboard/data', {
+        const res = await fetch(apiUrl('/api/dashboard/data'), {
           headers: { Authorization: `Bearer ${token}` }
         });
         if (res.ok) {
@@ -177,7 +193,7 @@ export const ReleasesPage: React.FC = () => {
       const formData = new FormData();
       formData.append('audioFile', file);
 
-      const res = await fetch('/api/dashboard/upload/audio', {
+      const res = await fetch(apiUrl('/api/dashboard/upload/audio'), {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`
@@ -247,7 +263,7 @@ export const ReleasesPage: React.FC = () => {
       const formData = new FormData();
       formData.append('artworkFile', file);
 
-      const res = await fetch('/api/dashboard/upload/artwork', {
+      const res = await fetch(apiUrl('/api/dashboard/upload/artwork'), {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`
@@ -288,7 +304,7 @@ export const ReleasesPage: React.FC = () => {
 
     setSavingDraft(true);
     try {
-      const res = await fetch('/api/dashboard/releases', {
+      const res = await fetch(apiUrl('/api/dashboard/releases'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -364,8 +380,9 @@ export const ReleasesPage: React.FC = () => {
     }
 
     setSubmitting(true);
+    setSubmitError(null);
     try {
-      const res = await fetch('/api/dashboard/releases', {
+      const res = await fetch(apiUrl('/api/dashboard/releases'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -377,27 +394,42 @@ export const ReleasesPage: React.FC = () => {
           artist: primaryArtist,
           featuredArtists,
           label: labelName,
+          upc: upcCode,
           type: releaseType,
           language,
           primaryGenre,
           secondaryGenre,
           releaseDate,
           artworkUrl: artworkUrl || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=800&q=80',
+          lyrics,
+          lyricsFileUrl,
           copyrightOwner,
           copyrightYear,
           recordingOwner,
           territories,
           status: 'Submitted',
           rightsConfirmed: true,
+          rightsDeclarations: {
+            usesSamples,
+            sampleLicenseConfirmed,
+            isRemix,
+            remixPermissionConfirmed,
+            isCoverSong,
+            coverLicenseConfirmed,
+            hasCollaborators,
+            collaborationConfirmed
+          },
           tracks: [
             {
               trackNumber: 1,
               title,
+              isrc: isrcCode || undefined,
               primaryArtist,
               featuredArtists,
               composer: composer || primaryArtist,
               lyricist: lyricist || primaryArtist,
               producer,
+              musicDirector,
               duration: audioAnalysis?.durationFormatted || '03:30',
               audioFileName: audioFileName,
               audioFileUrl: audioFileUrl,
@@ -484,7 +516,7 @@ export const ReleasesPage: React.FC = () => {
             <div className="p-6 rounded-2xl bg-[#090e1a] border border-slate-800 flex flex-col items-center text-center">
               <div className="w-48 h-48 rounded-xl overflow-hidden bg-slate-900 border border-slate-700 shadow-xl mb-4 relative group">
                 {activeRelease.artworkUrl ? (
-                  <img src={activeRelease.artworkUrl} alt={activeRelease.title} className="w-full h-full object-cover" />
+                  <img src={apiUrl(activeRelease.artworkUrl)} alt={activeRelease.title} className="w-full h-full object-cover" />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-slate-600">
                     <Disc3 className="w-16 h-16" />
@@ -559,6 +591,13 @@ export const ReleasesPage: React.FC = () => {
               </div>
             </div>
           </div>
+
+          <ReleaseAiTracker
+            releaseId={activeRelease.id}
+            releaseTitle={activeRelease.title}
+            releaseArtist={activeRelease.artist}
+            token={token}
+          />
         </div>
       ) : isNewRoute ? (
         /* VIEW 2: FULL MULTI-STEP SUBMISSION & UPLOAD WORKFLOW */
@@ -923,7 +962,7 @@ export const ReleasesPage: React.FC = () => {
                       <div className="p-6 rounded-2xl bg-slate-900/80 border border-slate-700 space-y-4">
                         <div className="flex flex-col sm:flex-row items-center sm:items-start gap-5">
                           <div className="w-36 h-36 rounded-xl overflow-hidden bg-black border border-slate-700 shadow-xl shrink-0 relative group">
-                            <img src={artworkUrl} alt="Cover preview" className="w-full h-full object-cover" />
+                            <img src={apiUrl(artworkUrl)} alt="Cover preview" className="w-full h-full object-cover" />
                             {artworkAnalysis && (
                               <div className="absolute bottom-1 right-1 px-1.5 py-0.5 bg-black/80 rounded text-[9px] font-mono text-white">
                                 {artworkAnalysis.width}×{artworkAnalysis.height}
@@ -1138,6 +1177,76 @@ export const ReleasesPage: React.FC = () => {
                       </div>
                     </div>
 
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-slate-300 mb-1">Music Director (Optional)</label>
+                        <input
+                          type="text"
+                          value={musicDirector}
+                          onChange={(e) => setMusicDirector(e.target.value)}
+                          placeholder="Music Director"
+                          className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-xs text-white focus:outline-none focus:border-amber-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-slate-300 mb-1">ISRC (If Available)</label>
+                        <input
+                          type="text"
+                          value={isrcCode}
+                          onChange={(e) => setIsrcCode(e.target.value.toUpperCase())}
+                          placeholder="Auto-assigned if blank"
+                          className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-xs text-white font-mono focus:outline-none focus:border-amber-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-slate-300 mb-1">UPC (If Available)</label>
+                        <input
+                          type="text"
+                          value={upcCode}
+                          onChange={(e) => setUpcCode(e.target.value)}
+                          placeholder="Auto-assigned if blank"
+                          className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-xs text-white font-mono focus:outline-none focus:border-amber-500"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-xs font-medium text-slate-300">Lyrics (Recommended for AI Review)</label>
+                        <label className="text-[11px] text-amber-400 hover:underline cursor-pointer">
+                          Upload .txt / .lrc / .pdf
+                          <input
+                            type="file"
+                            accept=".txt,.lrc,.pdf"
+                            className="hidden"
+                            onChange={async (e) => {
+                              const f = e.target.files?.[0];
+                              if (!f || !token) return;
+                              const fd = new FormData();
+                              fd.append('file', f);
+                              const r = await fetch(apiUrl('/api/ai/upload/lyrics'), {
+                                method: 'POST',
+                                headers: { Authorization: `Bearer ${token}` },
+                                body: fd
+                              });
+                              const d = await r.json();
+                              if (r.ok) {
+                                setLyricsFileUrl(d.fileUrl || '');
+                                if (d.extractedText) setLyrics(d.extractedText);
+                              }
+                            }}
+                          />
+                        </label>
+                      </div>
+                      <textarea
+                        rows={3}
+                        value={lyrics}
+                        onChange={(e) => setLyrics(e.target.value)}
+                        placeholder="Paste song lyrics here or upload a lyrics file..."
+                        className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-xs text-white focus:outline-none focus:border-amber-500"
+                      />
+                    </div>
+
                     {/* Explicit Content Toggle */}
                     <div className="pt-2">
                       <label className="flex items-center gap-3 p-3 bg-slate-900/60 rounded-xl border border-slate-800 cursor-pointer">
@@ -1234,6 +1343,49 @@ export const ReleasesPage: React.FC = () => {
                     <p className="text-xs text-slate-400">To prevent automated takedowns and protect artist revenue, confirm copyright ownership.</p>
 
                     <div className="space-y-3 pt-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
+                        <label className="flex items-center gap-2 p-2.5 bg-slate-900/70 rounded-lg border border-slate-800">
+                          <input type="checkbox" checked={usesSamples} onChange={e => setUsesSamples(e.target.checked)} />
+                          <span className="text-slate-300">Contains third-party samples</span>
+                        </label>
+                        {usesSamples && (
+                          <label className="flex items-center gap-2 p-2.5 bg-slate-900/70 rounded-lg border border-amber-700/40">
+                            <input type="checkbox" checked={sampleLicenseConfirmed} onChange={e => setSampleLicenseConfirmed(e.target.checked)} />
+                            <span className="text-amber-300">Sample license cleared</span>
+                          </label>
+                        )}
+                        <label className="flex items-center gap-2 p-2.5 bg-slate-900/70 rounded-lg border border-slate-800">
+                          <input type="checkbox" checked={isRemix} onChange={e => setIsRemix(e.target.checked)} />
+                          <span className="text-slate-300">This is a Remix</span>
+                        </label>
+                        {isRemix && (
+                          <label className="flex items-center gap-2 p-2.5 bg-slate-900/70 rounded-lg border border-amber-700/40">
+                            <input type="checkbox" checked={remixPermissionConfirmed} onChange={e => setRemixPermissionConfirmed(e.target.checked)} />
+                            <span className="text-amber-300">Remix permission secured</span>
+                          </label>
+                        )}
+                        <label className="flex items-center gap-2 p-2.5 bg-slate-900/70 rounded-lg border border-slate-800">
+                          <input type="checkbox" checked={isCoverSong} onChange={e => setIsCoverSong(e.target.checked)} />
+                          <span className="text-slate-300">This is a Cover Song</span>
+                        </label>
+                        {isCoverSong && (
+                          <label className="flex items-center gap-2 p-2.5 bg-slate-900/70 rounded-lg border border-amber-700/40">
+                            <input type="checkbox" checked={coverLicenseConfirmed} onChange={e => setCoverLicenseConfirmed(e.target.checked)} />
+                            <span className="text-amber-300">Mechanical/cover license secured</span>
+                          </label>
+                        )}
+                        <label className="flex items-center gap-2 p-2.5 bg-slate-900/70 rounded-lg border border-slate-800">
+                          <input type="checkbox" checked={hasCollaborators} onChange={e => setHasCollaborators(e.target.checked)} />
+                          <span className="text-slate-300">Includes collaborators / featured artists</span>
+                        </label>
+                        {hasCollaborators && (
+                          <label className="flex items-center gap-2 p-2.5 bg-slate-900/70 rounded-lg border border-amber-700/40">
+                            <input type="checkbox" checked={collaborationConfirmed} onChange={e => setCollaborationConfirmed(e.target.checked)} />
+                            <span className="text-amber-300">Collaboration split agreed</span>
+                          </label>
+                        )}
+                      </div>
+
                       <label className="flex items-start gap-3 p-3.5 bg-slate-900 rounded-xl border border-slate-800 cursor-pointer text-xs">
                         <input
                           type="checkbox"
@@ -1281,7 +1433,7 @@ export const ReleasesPage: React.FC = () => {
                       <div className="flex items-center justify-between pb-2 border-b border-slate-800">
                         <div className="flex items-center gap-3">
                           {artworkUrl && (
-                            <img src={artworkUrl} alt="Cover" className="w-12 h-12 rounded-lg object-cover" />
+                            <img src={apiUrl(artworkUrl)} alt="Cover" className="w-12 h-12 rounded-lg object-cover" />
                           )}
                           <div>
                             <div className="text-sm font-bold text-white">{title} {version && `(${version})`}</div>
@@ -1361,7 +1513,7 @@ export const ReleasesPage: React.FC = () => {
                 <div className="p-4 bg-gradient-to-b from-slate-900 to-black rounded-xl border border-slate-800 space-y-4">
                   <div className="aspect-square w-full rounded-lg overflow-hidden bg-slate-800 shadow-xl">
                     {artworkUrl ? (
-                      <img src={artworkUrl} alt={title} className="w-full h-full object-cover" />
+                      <img src={apiUrl(artworkUrl)} alt={title} className="w-full h-full object-cover" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-slate-600">
                         <Disc3 className="w-16 h-16 animate-spin" />
@@ -1474,7 +1626,7 @@ export const ReleasesPage: React.FC = () => {
                       <td className="py-3 font-medium text-white flex items-center gap-3">
                         <div className="w-9 h-9 rounded bg-slate-800 flex items-center justify-center text-slate-500 overflow-hidden shrink-0">
                           {r.artworkUrl ? (
-                            <img src={r.artworkUrl} alt={r.title} className="w-full h-full object-cover" />
+                            <img src={apiUrl(r.artworkUrl)} alt={r.title} className="w-full h-full object-cover" />
                           ) : (
                             <Disc3 className="w-4 h-4 text-blue-400" />
                           )}

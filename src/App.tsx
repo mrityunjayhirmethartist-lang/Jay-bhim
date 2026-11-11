@@ -34,6 +34,10 @@ import {
 } from './pages/dashboard/DashboardModules';
 import { SmartLandingPage } from './pages/SmartLandingPage';
 import { GoogleDrivePage } from './pages/dashboard/GoogleDrivePage';
+import { GoogleSheetsPage } from './pages/dashboard/GoogleSheetsPage';
+import { GmailPage } from './pages/dashboard/GmailPage';
+import { SuperAdminLoginPage } from './pages/SuperAdminLoginPage';
+import { SuperAdminDashboardPage } from './pages/SuperAdminDashboardPage';
 
 const RouteRenderer: React.FC = () => {
   const { path } = useRouter();
@@ -67,13 +71,30 @@ const RouteRenderer: React.FC = () => {
     if (path === '/dashboard/artists') return <ManageArtistsPage />;
     if (path === '/dashboard/smart-links') return <SmartLinksPage />;
     if (path === '/dashboard/drive') return <GoogleDrivePage />;
+    if (path === '/dashboard/sheets') return <GoogleSheetsPage />;
+    if (path === '/dashboard/gmail') return <GmailPage />;
     if (path === '/dashboard/other-requests') return <OtherRequestsPage />;
     return <DashboardOverviewPage />;
   }
 
+  // Super Admin Routes (strictly isolated to SUPER_ADMIN role)
+  if (path === '/super-admin/login') {
+    if (user && token && user.role === 'SUPER_ADMIN') {
+      return <SuperAdminDashboardPage />;
+    }
+    return <SuperAdminLoginPage />;
+  }
+
+  if (path.startsWith('/super-admin')) {
+    if (!user || !token || user.role !== 'SUPER_ADMIN') {
+      return <SuperAdminLoginPage />;
+    }
+    return <SuperAdminDashboardPage />;
+  }
+
   // Admin Routes
   if (path.startsWith('/admin')) {
-    if (!user || !token || user.role !== 'admin') {
+    if (!user || !token || (user.role !== 'admin' && user.role !== 'SUPER_ADMIN')) {
       return <LoginPage />;
     }
     return <AdminDashboardPage />;

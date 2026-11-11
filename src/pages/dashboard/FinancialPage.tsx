@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { apiUrl } from '../../utils/api';
 import {
   ResponsiveContainer,
   AreaChart,
@@ -162,7 +163,7 @@ export const FinancialPage: React.FC = () => {
   const fetchData = async () => {
     if (!token) return;
     try {
-      const res = await fetch('/api/dashboard/data', {
+      const res = await fetch(apiUrl('/api/dashboard/data'), {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (res.ok) {
@@ -210,7 +211,7 @@ export const FinancialPage: React.FC = () => {
     setPayoutMsg(null);
 
     try {
-      const res = await fetch('/api/dashboard/payout', {
+      const res = await fetch(apiUrl('/api/dashboard/payout'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ amount: amt, method: payoutMethod, details: payoutDetails.trim() })
@@ -269,9 +270,11 @@ export const FinancialPage: React.FC = () => {
 
   // CSV Export Trigger
   const handleDownloadStatement = (month?: string) => {
-    const url = month
-      ? `/api/dashboard/royalties/export?month=${encodeURIComponent(month)}`
-      : '/api/dashboard/royalties/export';
+    const url = apiUrl(
+      month
+        ? `/api/dashboard/royalties/export?month=${encodeURIComponent(month)}`
+        : '/api/dashboard/royalties/export'
+    );
     window.location.href = url;
   };
 

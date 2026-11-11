@@ -5,6 +5,7 @@ import { PublicHeader } from '../components/layout/PublicHeader';
 import { PublicFooter } from '../components/layout/PublicFooter';
 import { PRICING_PLANS } from '../data/pricingData';
 import { CheckCircle2, ArrowRight, ShieldCheck, HelpCircle } from 'lucide-react';
+import { apiUrl } from '../utils/api';
 
 export const PricingPage: React.FC = () => {
   const { navigate } = useRouter();
@@ -14,7 +15,7 @@ export const PricingPage: React.FC = () => {
 
   // Load latest plans from backend (reflects any Super Admin edits/additions)
   useEffect(() => {
-    fetch('/api/plans')
+    fetch(apiUrl('/api/plans'))
       .then(res => res.json())
       .then(d => {
         if (d.plans && Array.isArray(d.plans) && d.plans.length > 0) {

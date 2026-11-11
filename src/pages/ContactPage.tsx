@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { PublicHeader } from '../components/layout/PublicHeader';
 import { PublicFooter } from '../components/layout/PublicFooter';
 import { Mail, Clock, ShieldCheck, Send, CheckCircle2, AlertCircle } from 'lucide-react';
+import { apiUrl } from '../utils/api';
 
 export const ContactPage: React.FC = () => {
   const [name, setName] = useState('');
@@ -23,7 +24,7 @@ export const ContactPage: React.FC = () => {
     setError(null);
 
     try {
-      const res = await fetch('/api/contact', {
+      const res = await fetch(apiUrl('/api/contact'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, email, subject, message })

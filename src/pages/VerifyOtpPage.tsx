@@ -5,6 +5,7 @@ import { PublicHeader } from '../components/layout/PublicHeader';
 import { PublicFooter } from '../components/layout/PublicFooter';
 import { ShieldCheck, CheckCircle2, AlertCircle, RefreshCw, ArrowLeft, Edit3, Mail, Check, X } from 'lucide-react';
 import { OtpInput } from '../components/auth/OtpInput';
+import { apiUrl } from '../utils/api';
 
 export const VerifyOtpPage: React.FC = () => {
   const { navigate, queryParam } = useRouter();
@@ -96,7 +97,7 @@ export const VerifyOtpPage: React.FC = () => {
     setError(null);
     setSuccessNotice(null);
 
-    const endpoint = typeParam === 'login' ? '/api/auth/verify-login-otp' : '/api/auth/verify-otp';
+    const endpoint = apiUrl(typeParam === 'login' ? '/api/auth/verify-login-otp' : '/api/auth/verify-otp');
 
     try {
       const res = await fetch(endpoint, {
@@ -139,7 +140,7 @@ export const VerifyOtpPage: React.FC = () => {
     setSuccessNotice(null);
 
     try {
-      const res = await fetch('/api/auth/resend-otp', {
+      const res = await fetch(apiUrl('/api/auth/resend-otp'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email.trim(), type: typeParam })
@@ -183,7 +184,7 @@ export const VerifyOtpPage: React.FC = () => {
     setChangeError(null);
 
     try {
-      const res = await fetch('/api/auth/change-registration-email', {
+      const res = await fetch(apiUrl('/api/auth/change-registration-email'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ oldEmail: email.trim(), newEmail: cleanNewEmail })

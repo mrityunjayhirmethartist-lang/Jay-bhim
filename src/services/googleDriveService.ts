@@ -1,6 +1,7 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut as fbSignOut } from 'firebase/auth';
 import firebaseConfig from '../../firebase-applet-config.json';
+import { apiUrl } from '../utils/api';
 
 // Initialize Firebase App
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
@@ -9,9 +10,12 @@ export const auth = getAuth(app);
 // Configure Google OAuth Provider for Google Drive
 export const driveProvider = new GoogleAuthProvider();
 
-// Add required Google Drive Scopes
+// Add required Google Drive & Sheets Scopes
 driveProvider.addScope('https://www.googleapis.com/auth/drive');
 driveProvider.addScope('https://www.googleapis.com/auth/drive.file');
+driveProvider.addScope('https://www.googleapis.com/auth/drive.readonly');
+driveProvider.addScope('https://www.googleapis.com/auth/spreadsheets');
+driveProvider.addScope('https://www.googleapis.com/auth/spreadsheets.readonly');
 
 // Enforce consent prompt to obtain active access token
 driveProvider.setCustomParameters({
@@ -88,7 +92,7 @@ export async function connectGoogleDrive(authToken: string): Promise<{
     };
 
     // Store token securely on backend associated with user session
-    const res = await fetch('/api/drive/connect', {
+    const res = await fetch(apiUrl('/api/drive/connect'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -122,7 +126,7 @@ export async function getDriveStatus(authToken: string): Promise<{
   driveUser?: DriveUser;
 }> {
   try {
-    const res = await fetch('/api/drive/status', {
+    const res = await fetch(apiUrl('/api/drive/status'), {
       headers: { Authorization: `Bearer ${authToken}` }
     });
     if (!res.ok) return { connected: false };
@@ -140,7 +144,7 @@ export async function disconnectDrive(authToken: string): Promise<boolean> {
   try {
     setClientAccessToken(null);
     await fbSignOut(auth).catch(() => {});
-    const res = await fetch('/api/drive/disconnect', {
+    const res = await fetch(apiUrl('/api/drive/disconnect'), {
       method: 'POST',
       headers: { Authorization: `Bearer ${authToken}` }
     });
@@ -155,7 +159,7 @@ export async function disconnectDrive(authToken: string): Promise<boolean> {
  * Fetches Google Drive storage quota and user details
  */
 export async function getDriveAbout(authToken: string): Promise<DriveAboutResponse> {
-  const res = await fetch('/api/drive/about', {
+  const res = await fetch(apiUrl('/api/drive/about'), {
     headers: { Authorization: `Bearer ${authToken}` }
   });
   if (!res.ok) {
@@ -183,7 +187,7 @@ export async function listDriveFiles(
   if (options.category && options.category !== 'all') params.append('category', options.category);
   if (options.pageToken) params.append('pageToken', options.pageToken);
 
-  const res = await fetch(`/api/drive/files?${params.toString()}`, {
+  const res = await fetch(apiUrl(`/api/drive/files?${params.toString()}`), {
     headers: { Authorization: `Bearer ${authToken}` }
   });
 
@@ -203,7 +207,7 @@ export async function createDriveFolder(
   name: string,
   parentId?: string
 ): Promise<DriveFileItem> {
-  const res = await fetch('/api/drive/folders', {
+  const res = await fetch(apiUrl('/api/drive/folders'), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -228,7 +232,7 @@ export async function renameDriveItem(
   fileId: string,
   newName: string
 ): Promise<DriveFileItem> {
-  const res = await fetch(`/api/drive/files/${fileId}`, {
+  const res = await fetch(apiUrl(`/api/drive/files/${fileId}`), {
     method: 'PATCH',
     headers: {
       'Content-Type': 'application/json',
@@ -252,7 +256,7 @@ export async function deleteDriveItem(
   authToken: string,
   fileId: string
 ): Promise<{ success: boolean; message: string }> {
-  const res = await fetch(`/api/drive/files/${fileId}`, {
+  const res = await fetch(apiUrl(`/api/drive/files/${fileId}`), {
     method: 'DELETE',
     headers: { Authorization: `Bearer ${authToken}` }
   });
@@ -311,7 +315,7 @@ export function uploadDriveFileWithProgress(
       reject(new Error('Network error occurred while uploading file to Google Drive.'));
     };
 
-    xhr.open('POST', '/api/drive/upload');
+    xhr.open('POST', apiUrl('/api/drive/upload'));
     xhr.setRequestHeader('Authorization', `Bearer ${authToken}`);
     xhr.send(formData);
   });

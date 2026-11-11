@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from '../context/RouterContext';
 import { BrandLogo } from '../components/common/BrandLogo';
+import { apiUrl } from '../utils/api';
 import {
   ExternalLink,
   Play,
@@ -44,7 +45,7 @@ export const SmartLandingPage: React.FC<SmartLandingPageProps> = ({ slug }) => {
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    fetch(`/api/public/smart-link/${slug}`)
+    fetch(apiUrl(`/api/public/smart-link/${slug}`))
       .then(res => {
         if (!res.ok) throw new Error('Release landing page not found');
         return res.json();
@@ -96,7 +97,7 @@ export const SmartLandingPage: React.FC<SmartLandingPageProps> = ({ slug }) => {
   const handleStoreClick = (platform: string, url?: string) => {
     if (!url) return;
     // Track click on backend
-    fetch(`/api/public/smart-link/${slug}/click`, {
+    fetch(apiUrl(`/api/public/smart-link/${slug}/click`), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ platform })

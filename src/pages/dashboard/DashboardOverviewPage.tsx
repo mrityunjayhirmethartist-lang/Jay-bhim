@@ -14,6 +14,7 @@ import { useRouter } from '../../context/RouterContext';
 import { useAuth } from '../../context/AuthContext';
 import { DashboardLayout } from '../../components/dashboard/DashboardLayout';
 import { Release, LabelItem, MonthlyRoyalty, DspRoyaltyShare } from '../../types';
+import { apiUrl } from '../../utils/api';
 import {
   Tag,
   Disc3,
@@ -28,7 +29,8 @@ import {
   CheckCircle2,
   Filter,
   Sparkles,
-  HardDrive
+  HardDrive,
+  FileSpreadsheet
 } from 'lucide-react';
 
 export const DashboardOverviewPage: React.FC = () => {
@@ -52,7 +54,7 @@ export const DashboardOverviewPage: React.FC = () => {
     const fetchData = async () => {
       if (!token) return;
       try {
-        const res = await fetch('/api/dashboard/data', {
+        const res = await fetch(apiUrl('/api/dashboard/data'), {
           headers: { Authorization: `Bearer ${token}` }
         });
         if (res.ok) {
@@ -241,6 +243,33 @@ export const DashboardOverviewPage: React.FC = () => {
             className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-semibold whitespace-nowrap transition-colors shrink-0 shadow-sm"
           >
             <span>Open Google Drive</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+
+        {/* GOOGLE SHEETS LIVE SYNC BANNER */}
+        <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-emerald-950/40 via-[#0a1818] to-[#090e1a] border border-emerald-900/40 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5">
+            <div className="w-10 h-10 rounded-xl bg-emerald-600/20 text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-500/30">
+              <FileSpreadsheet className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="text-sm font-bold text-white flex items-center gap-2">
+                <span>Google Sheets Live Catalog & Royalties</span>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400">
+                  Google Workspace
+                </span>
+              </div>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Automatically export, write, and synchronize your releases, UPCs, ISRCs, and monthly DSP streaming royalties to Google Spreadsheets.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => navigate('/dashboard/sheets')}
+            className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold whitespace-nowrap transition-colors shrink-0 shadow-sm"
+          >
+            <span>Open Google Sheets</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </button>
         </div>

@@ -6,6 +6,7 @@ import { PublicFooter } from '../components/layout/PublicFooter';
 import { Disc3, Lock, Mail, User as UserIcon, Globe, ArrowRight, CheckCircle2, AlertCircle, RefreshCw, KeyRound, ServerCrash, ShieldCheck, ArrowLeft, Edit3, Check, X } from 'lucide-react';
 import { BrandLogo } from '../components/common/BrandLogo';
 import { OtpInput } from '../components/auth/OtpInput';
+import { apiUrl } from '../utils/api';
 
 export const SignUpPage: React.FC = () => {
   const { navigate, queryParam } = useRouter();
@@ -119,7 +120,7 @@ export const SignUpPage: React.FC = () => {
     setLoading(true);
 
     try {
-      const res = await fetch('/api/auth/register', {
+      const res = await fetch(apiUrl('/api/auth/register'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -177,7 +178,7 @@ export const SignUpPage: React.FC = () => {
     setOtpError(null);
 
     try {
-      const res = await fetch('/api/auth/verify-otp', {
+      const res = await fetch(apiUrl('/api/auth/verify-otp'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email.trim(), code, type: 'signup' })
@@ -228,7 +229,7 @@ export const SignUpPage: React.FC = () => {
     setChangeError(null);
 
     try {
-      const res = await fetch('/api/auth/change-registration-email', {
+      const res = await fetch(apiUrl('/api/auth/change-registration-email'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ oldEmail: email.trim(), newEmail: cleanNewEmail })
@@ -263,7 +264,7 @@ export const SignUpPage: React.FC = () => {
     setOtpError(null);
 
     try {
-      const res = await fetch('/api/auth/resend-otp', {
+      const res = await fetch(apiUrl('/api/auth/resend-otp'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email.trim(), type: 'signup' })

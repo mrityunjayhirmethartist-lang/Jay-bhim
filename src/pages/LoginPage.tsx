@@ -6,6 +6,7 @@ import { PublicFooter } from '../components/layout/PublicFooter';
 import { Eye, EyeOff, Lock, Mail, ArrowRight, AlertCircle, CheckCircle2, ShieldCheck, RefreshCw, KeyRound, ArrowLeft } from 'lucide-react';
 import { BrandLogo } from '../components/common/BrandLogo';
 import { OtpInput } from '../components/auth/OtpInput';
+import { apiUrl } from '../utils/api';
 
 export const LoginPage: React.FC = () => {
   const { navigate, queryParam } = useRouter();
@@ -93,7 +94,7 @@ export const LoginPage: React.FC = () => {
     setError(null);
 
     try {
-      const res = await fetch('/api/auth/login', {
+      const res = await fetch(apiUrl('/api/auth/login'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email.trim(), password })
@@ -152,7 +153,7 @@ export const LoginPage: React.FC = () => {
     setOtpError(null);
 
     try {
-      const res = await fetch('/api/auth/verify-login-otp', {
+      const res = await fetch(apiUrl('/api/auth/verify-login-otp'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email.trim(), code })
@@ -185,7 +186,7 @@ export const LoginPage: React.FC = () => {
     setOtpError(null);
 
     try {
-      const res = await fetch('/api/auth/resend-otp', {
+      const res = await fetch(apiUrl('/api/auth/resend-otp'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email.trim(), type: 'login' })
@@ -220,7 +221,7 @@ export const LoginPage: React.FC = () => {
     setForgotError(null);
 
     try {
-      const res = await fetch('/api/auth/forgot-password', {
+      const res = await fetch(apiUrl('/api/auth/forgot-password'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: forgotEmail.trim() })
@@ -263,7 +264,7 @@ export const LoginPage: React.FC = () => {
     setForgotError(null);
 
     try {
-      const res = await fetch('/api/auth/reset-password', {
+      const res = await fetch(apiUrl('/api/auth/reset-password'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

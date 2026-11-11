@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { DashboardLayout } from '../../components/dashboard/DashboardLayout';
 import { useAuth } from '../../context/AuthContext';
+import { apiUrl } from '../../utils/api';
 import {
   connectGoogleDrive,
   getDriveStatus,
@@ -747,7 +748,7 @@ export const GoogleDrivePage: React.FC = () => {
                 <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
                   <audio
                     ref={audioRef}
-                    src={`/api/drive/files/${activeAudioItem.id}/stream`}
+                    src={apiUrl(`/api/drive/files/${activeAudioItem.id}/stream`)}
                     controls
                     autoPlay
                     onPlay={() => setIsPlaying(true)}
@@ -843,7 +844,7 @@ export const GoogleDrivePage: React.FC = () => {
                           <div className="flex items-center gap-1 opacity-70 group-hover:opacity-100 transition-opacity">
                             {!folder && (
                               <a
-                                href={`/api/drive/files/${file.id}/download`}
+                                href={apiUrl(`/api/drive/files/${file.id}/download`)}
                                 download
                                 className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800"
                                 title="Download File"
@@ -937,7 +938,7 @@ export const GoogleDrivePage: React.FC = () => {
                           </button>
                         ) : (
                           <a
-                            href={`/api/drive/files/${file.id}/download`}
+                            href={apiUrl(`/api/drive/files/${file.id}/download`)}
                             download
                             className="inline-flex items-center gap-1 text-[11px] text-slate-400 hover:text-white font-medium"
                           >
@@ -1041,7 +1042,7 @@ export const GoogleDrivePage: React.FC = () => {
                               )}
                               {!folder && (
                                 <a
-                                  href={`/api/drive/files/${file.id}/download`}
+                                  href={apiUrl(`/api/drive/files/${file.id}/download`)}
                                   download
                                   className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800"
                                   title="Download File"
@@ -1258,7 +1259,7 @@ export const GoogleDrivePage: React.FC = () => {
 
             <div className="flex items-center justify-center bg-black/60 rounded-xl overflow-hidden p-2 min-h-[300px] max-h-[70vh]">
               <img
-                src={`/api/drive/files/${previewImage.id}/download`}
+                src={apiUrl(`/api/drive/files/${previewImage.id}/download`)}
                 alt={previewImage.name}
                 className="max-h-[65vh] object-contain rounded-lg"
               />
@@ -1267,7 +1268,7 @@ export const GoogleDrivePage: React.FC = () => {
             <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-800 text-xs">
               <span className="text-slate-400 font-mono">{formatBytes(previewImage.size)}</span>
               <a
-                href={`/api/drive/files/${previewImage.id}/download`}
+                href={apiUrl(`/api/drive/files/${previewImage.id}/download`)}
                 download
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold transition-colors"
               >

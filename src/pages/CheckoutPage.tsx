@@ -5,6 +5,7 @@ import { PublicHeader } from '../components/layout/PublicHeader';
 import { PublicFooter } from '../components/layout/PublicFooter';
 import { PRICING_PLANS } from '../data/pricingData';
 import { PricingPlan } from '../types';
+import { apiUrl } from '../utils/api';
 import {
   CheckCircle2,
   ShieldCheck,
@@ -89,7 +90,7 @@ export const CheckoutPage: React.FC = () => {
 
   // Fetch Razorpay configuration
   useEffect(() => {
-    fetch('/api/razorpay/config')
+    fetch(apiUrl('/api/razorpay/config'))
       .then((res) => res.json())
       .then((data) => setGatewayConfig(data))
       .catch(() => {
@@ -127,7 +128,7 @@ export const CheckoutPage: React.FC = () => {
     planId: string
   ) => {
     try {
-      const res = await fetch('/api/razorpay/verify-payment', {
+      const res = await fetch(apiUrl('/api/razorpay/verify-payment'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -199,7 +200,7 @@ export const CheckoutPage: React.FC = () => {
 
     try {
       // Step 1: Create Order on Backend (never trust frontend prices)
-      const res = await fetch('/api/razorpay/create-order', {
+      const res = await fetch(apiUrl('/api/razorpay/create-order'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -265,7 +266,7 @@ export const CheckoutPage: React.FC = () => {
                 orderId: orderData.orderId,
                 planName: selectedPlan.name
               });
-              fetch('/api/razorpay/record-cancellation', {
+              fetch(apiUrl('/api/razorpay/record-cancellation'), {
                 method: 'POST',
                 headers: {
                   'Content-Type': 'application/json',
@@ -287,7 +288,7 @@ export const CheckoutPage: React.FC = () => {
             description: resp.error?.description || 'Your payment was declined by the issuer or cancelled.',
             paymentId: resp.error?.metadata?.payment_id
           });
-          fetch('/api/razorpay/record-failure', {
+          fetch(apiUrl('/api/razorpay/record-failure'), {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -325,7 +326,7 @@ export const CheckoutPage: React.FC = () => {
         orderId: pendingSimOrder.orderId,
         planName: selectedPlan.name
       });
-      await fetch('/api/razorpay/record-cancellation', {
+      await fetch(apiUrl('/api/razorpay/record-cancellation'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ orderId: pendingSimOrder.orderId })
@@ -340,7 +341,7 @@ export const CheckoutPage: React.FC = () => {
         description: 'Payment authorization declined by issuing bank (Simulated Test Mode).',
         paymentId: `pay_test_${Date.now().toString().slice(-6)}`
       });
-      await fetch('/api/razorpay/record-failure', {
+      await fetch(apiUrl('/api/razorpay/record-failure'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({

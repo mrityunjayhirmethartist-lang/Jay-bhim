@@ -31,7 +31,9 @@ import {
   Home,
   Sun,
   Moon,
-  HardDrive
+  HardDrive,
+  FileSpreadsheet,
+  Mail
 } from 'lucide-react';
 
 interface DashboardLayoutProps {
@@ -90,6 +92,8 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, titl
     { label: 'Manage Artists', href: '/dashboard/artists', icon: Mic2 },
     { label: 'Smart Links', href: '/dashboard/smart-links', icon: Share2 },
     { label: 'Google Drive', href: '/dashboard/drive', icon: HardDrive },
+    { label: 'Google Sheets', href: '/dashboard/sheets', icon: FileSpreadsheet },
+    { label: 'Gmail', href: '/dashboard/gmail', icon: Mail },
     { label: 'Other Requests', href: '/dashboard/other-requests', icon: FileEdit }
   ];
 

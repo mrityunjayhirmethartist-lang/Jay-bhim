@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { DashboardLayout } from '../../components/dashboard/DashboardLayout';
 import { LabelItem, ArtistProfile, SupportTicket, SmartLink, SmartLinkStores, Release, OtherRequest, TransactionItem } from '../../types';
 import { PRICING_PLANS } from '../../data/pricingData';
+import { apiUrl } from '../../utils/api';
 import {
   Tag,
   Plus,
@@ -63,7 +64,7 @@ export const MyLabelsPage: React.FC = () => {
 
   useEffect(() => {
     if (!token) return;
-    fetch('/api/dashboard/data', { headers: { Authorization: `Bearer ${token}` } })
+    fetch(apiUrl('/api/dashboard/data'), { headers: { Authorization: `Bearer ${token}` } })
       .then(res => res.json())
       .then(data => setLabels(data.labels || []));
   }, [token]);
@@ -73,7 +74,7 @@ export const MyLabelsPage: React.FC = () => {
     if (!newLabelName.trim()) return;
     setLoading(true);
     try {
-      const res = await fetch('/api/dashboard/labels', {
+      const res = await fetch(apiUrl('/api/dashboard/labels'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ name: newLabelName })
@@ -163,55 +164,409 @@ export const MyLabelsPage: React.FC = () => {
 
 // ======================== 2. PROFILE PAGE ========================
 export const ProfilePage: React.FC = () => {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
+  const [fullName, setFullName] = useState(user?.fullName || '');
+  const [country, setCountry] = useState(user?.country || '');
   const [saved, setSaved] = useState(false);
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [profileCompletion, setProfileCompletion] = useState(0);
+
+  // KYC State
+  const [kycStatus, setKycStatus] = useState<string>('Not Submitted');
+  const [kycReason, setKycReason] = useState<string>('');
+  const [servicesUnlocked, setServicesUnlocked] = useState(false);
+  const [fullLegalName, setFullLegalName] = useState(user?.fullName || '');
+  const [dateOfBirth, setDateOfBirth] = useState('');
+  const [address, setAddress] = useState('');
+  const [mobileNumber, setMobileNumber] = useState('');
+  const [aadhaarLast4, setAadhaarLast4] = useState('');
+  const [panNumber, setPanNumber] = useState('');
+
+  const [aadhaarFrontFileId, setAadhaarFrontFileId] = useState('');
+  const [aadhaarFrontUrl, setAadhaarFrontUrl] = useState('');
+  const [aadhaarBackFileId, setAadhaarBackFileId] = useState('');
+  const [aadhaarBackUrl, setAadhaarBackUrl] = useState('');
+  const [panCardFileId, setPanCardFileId] = useState('');
+  const [panCardUrl, setPanCardUrl] = useState('');
+  const [profilePhotoFileId, setProfilePhotoFileId] = useState('');
+  const [profilePhotoUrl, setProfilePhotoUrl] = useState('');
+
+  const [uploadingDoc, setUploadingDoc] = useState<string | null>(null);
+  const [kycSubmitting, setKycSubmitting] = useState(false);
+  const [kycMessage, setKycMessage] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+
+  useEffect(() => {
+    if (!token) return;
+    fetch(apiUrl('/api/profile'), { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(data => {
+        if (data.profile) {
+          setFullName(data.profile.fullName || '');
+          setCountry(data.profile.country || '');
+          setProfileCompletion(data.profile.profileCompletion || 0);
+          const k = data.profile.kyc;
+          if (k) {
+            setKycStatus(k.status || 'Not Submitted');
+            setKycReason(k.rejectionReason || '');
+            setServicesUnlocked(Boolean(k.servicesUnlocked));
+            if (k.fullLegalName) setFullLegalName(k.fullLegalName);
+            if (k.dateOfBirth) setDateOfBirth(k.dateOfBirth);
+            if (k.address) setAddress(k.address);
+            if (k.mobileNumber) setMobileNumber(k.mobileNumber);
+            if (k.aadhaarNumberLast4) setAadhaarLast4(k.aadhaarNumberLast4);
+            if (k.panNumber) setPanNumber(k.panNumber);
+            if (k.aadhaarFrontFileId) setAadhaarFrontFileId(k.aadhaarFrontFileId);
+            if (k.aadhaarFrontUrl) setAadhaarFrontUrl(k.aadhaarFrontUrl);
+            if (k.aadhaarBackFileId) setAadhaarBackFileId(k.aadhaarBackFileId);
+            if (k.aadhaarBackUrl) setAadhaarBackUrl(k.aadhaarBackUrl);
+            if (k.panCardFileId) setPanCardFileId(k.panCardFileId);
+            if (k.panCardUrl) setPanCardUrl(k.panCardUrl);
+            if (k.profilePhotoFileId) setProfilePhotoFileId(k.profilePhotoFileId);
+            if (k.profilePhotoUrl) setProfilePhotoUrl(k.profilePhotoUrl);
+          }
+        }
+      })
+      .catch(() => {});
+  }, [token]);
+
+  const handleSaveProfile = async () => {
+    if (!token) return;
+    setSavingProfile(true);
+    setSaved(false);
+    try {
+      const res = await fetch(apiUrl('/api/profile'), {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ fullName, country })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setSaved(true);
+        if (typeof data.profileCompletion === 'number') setProfileCompletion(data.profileCompletion);
+      }
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
+  const handleDocUpload = async (docType: 'aadhaarFront' | 'aadhaarBack' | 'panCard' | 'profilePhoto', file: File) => {
+    if (!token) return;
+    setUploadingDoc(docType);
+    setKycMessage(null);
+    try {
+      const formData = new FormData();
+      formData.append('docType', docType);
+      formData.append('file', file);
+      const res = await fetch(apiUrl('/api/profile/kyc/upload'), {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setKycMessage({ type: 'err', text: data.error || 'Document upload failed.' });
+        return;
+      }
+      if (docType === 'aadhaarFront') {
+        setAadhaarFrontFileId(data.fileId);
+        setAadhaarFrontUrl(data.fileUrl);
+      } else if (docType === 'aadhaarBack') {
+        setAadhaarBackFileId(data.fileId);
+        setAadhaarBackUrl(data.fileUrl);
+      } else if (docType === 'panCard') {
+        setPanCardFileId(data.fileId);
+        setPanCardUrl(data.fileUrl);
+      } else if (docType === 'profilePhoto') {
+        setProfilePhotoFileId(data.fileId);
+        setProfilePhotoUrl(data.fileUrl);
+      }
+      setKycMessage({ type: 'ok', text: `${file.name} uploaded securely to private storage.` });
+    } catch {
+      setKycMessage({ type: 'err', text: 'Network error uploading document.' });
+    } finally {
+      setUploadingDoc(null);
+    }
+  };
+
+  const handleSubmitKyc = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token) return;
+    setKycSubmitting(true);
+    setKycMessage(null);
+    try {
+      const res = await fetch(apiUrl('/api/profile/kyc'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          fullLegalName,
+          dateOfBirth,
+          address,
+          mobileNumber,
+          aadhaarNumberLast4: aadhaarLast4,
+          panNumber,
+          aadhaarFrontFileId,
+          aadhaarFrontUrl,
+          aadhaarBackFileId,
+          aadhaarBackUrl,
+          panCardFileId,
+          panCardUrl,
+          profilePhotoFileId,
+          profilePhotoUrl
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setKycMessage({ type: 'err', text: data.error || 'KYC submission failed.' });
+        return;
+      }
+      setKycStatus(data.kyc.status);
+      setKycReason('');
+      setServicesUnlocked(Boolean(data.kyc.servicesUnlocked));
+      if (typeof data.profileCompletion === 'number') setProfileCompletion(data.profileCompletion);
+      setKycMessage({ type: 'ok', text: 'KYC documents submitted securely. Our compliance team will review them shortly.' });
+    } catch {
+      setKycMessage({ type: 'err', text: 'Network error submitting KYC.' });
+    } finally {
+      setKycSubmitting(false);
+    }
+  };
 
   return (
-    <DashboardLayout title="Profile">
-      <div className="max-w-2xl space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold text-white font-display">Artist Account Profile</h1>
-          <p className="text-xs text-slate-400">Manage legal identification, country, and security credentials</p>
+    <DashboardLayout title="Profile & KYC">
+      <div className="max-w-3xl space-y-6">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-white font-display">Artist Account Profile & KYC</h1>
+            <p className="text-xs text-slate-400">Manage legal identification, country, and identity verification documents</p>
+          </div>
+          <div className="px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs font-mono text-slate-300">
+            Completion: <span className="text-amber-400 font-semibold">{profileCompletion}%</span>
+          </div>
         </div>
 
+        {/* Basic Account Details */}
         <div className="p-6 rounded-2xl bg-[#090e1a] border border-slate-800 space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          <h2 className="text-sm font-semibold text-white">Account Information</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-medium text-slate-300 mb-1">Display Name</label>
-              <input type="text" defaultValue={user?.fullName} className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-xs text-white" />
+              <input
+                type="text"
+                value={fullName}
+                onChange={e => setFullName(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-xs text-white"
+              />
             </div>
             <div>
               <label className="block text-xs font-medium text-slate-300 mb-1">Account Email</label>
-              <input type="email" readOnly value={user?.email} className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-xs text-slate-400 cursor-not-allowed" />
+              <input
+                type="email"
+                readOnly
+                value={user?.email || ''}
+                className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-xs text-slate-400 cursor-not-allowed"
+              />
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-medium text-slate-300 mb-1">Country</label>
-              <input type="text" defaultValue={user?.country} className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-xs text-white" />
+              <input
+                type="text"
+                value={country}
+                onChange={e => setCountry(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-xs text-white"
+              />
             </div>
             <div>
               <label className="block text-xs font-medium text-slate-300 mb-1">Account Role</label>
-              <input type="text" readOnly value={user?.role} className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-xs text-blue-400 font-mono capitalize" />
+              <input
+                type="text"
+                readOnly
+                value={user?.role || ''}
+                className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-xs text-blue-400 font-mono capitalize"
+              />
             </div>
           </div>
 
           {saved && (
-            <div className="p-3 text-xs text-emerald-300 bg-emerald-950/60 rounded-lg">
-              Profile details updated.
+            <div className="p-3 text-xs text-emerald-300 bg-emerald-950/60 border border-emerald-800/40 rounded-lg">
+              Profile details updated and saved.
             </div>
           )}
 
           <div className="pt-2 flex justify-end">
             <button
-              onClick={() => setSaved(true)}
-              className="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-semibold"
+              onClick={handleSaveProfile}
+              disabled={savingProfile}
+              className="px-5 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-lg text-xs font-semibold"
             >
-              Save Profile Changes
+              {savingProfile ? 'Saving...' : 'Save Profile Changes'}
             </button>
           </div>
         </div>
+
+        {/* KYC Verification Section */}
+        <form onSubmit={handleSubmitKyc} className="p-6 rounded-2xl bg-[#090e1a] border border-slate-800 space-y-5">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-4">
+            <div>
+              <h2 className="text-sm font-semibold text-white">KYC Identity Verification</h2>
+              <p className="text-xs text-slate-400">Encrypted & stored privately for royalty payouts and distribution compliance</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span
+                className={`px-2.5 py-1 rounded text-[11px] font-semibold uppercase tracking-wide ${
+                  kycStatus === 'Approved'
+                    ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
+                    : kycStatus === 'Pending'
+                      ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
+                      : kycStatus === 'Rejected' || kycStatus === 'Reupload Required'
+                        ? 'bg-red-500/15 text-red-300 border border-red-500/30'
+                        : 'bg-slate-800 text-slate-300'
+                }`}
+              >
+                {kycStatus}
+              </span>
+              {servicesUnlocked && (
+                <span className="px-2 py-1 rounded text-[11px] bg-emerald-900/40 text-emerald-300 border border-emerald-700/40">
+                  Services Unlocked
+                </span>
+              )}
+            </div>
+          </div>
+
+          {kycReason && (
+            <div className="p-3 rounded-lg bg-red-950/50 border border-red-800/50 text-xs text-red-200">
+              <span className="font-semibold">Admin Review Note:</span> {kycReason}
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-medium text-slate-300 mb-1">Full Legal Name *</label>
+              <input
+                type="text"
+                required
+                value={fullLegalName}
+                onChange={e => setFullLegalName(e.target.value)}
+                placeholder="As printed on Aadhaar / PAN"
+                className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-xs text-white"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-300 mb-1">Date of Birth *</label>
+              <input
+                type="date"
+                required
+                value={dateOfBirth}
+                onChange={e => setDateOfBirth(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-xs text-white"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-300 mb-1">Mobile Number *</label>
+              <input
+                type="tel"
+                required
+                value={mobileNumber}
+                onChange={e => setMobileNumber(e.target.value)}
+                placeholder="+91 98XXXXXXXX"
+                className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-xs text-white"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-300 mb-1">PAN Number</label>
+              <input
+                type="text"
+                value={panNumber}
+                onChange={e => setPanNumber(e.target.value.toUpperCase())}
+                placeholder="ABCDE1234F"
+                maxLength={10}
+                className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-xs text-white font-mono uppercase"
+              />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="block text-xs font-medium text-slate-300 mb-1">Residential / Registered Address *</label>
+              <input
+                type="text"
+                required
+                value={address}
+                onChange={e => setAddress(e.target.value)}
+                placeholder="Full street address, city, state, PIN code"
+                className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-xs text-white"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-300 mb-1">Aadhaar Last 4 Digits</label>
+              <input
+                type="text"
+                value={aadhaarLast4}
+                onChange={e => setAadhaarLast4(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                placeholder="1234"
+                maxLength={4}
+                className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-xs text-white font-mono"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+            {[
+              { key: 'aadhaarFront' as const, label: 'Aadhaar Front', fileId: aadhaarFrontFileId },
+              { key: 'aadhaarBack' as const, label: 'Aadhaar Back', fileId: aadhaarBackFileId },
+              { key: 'panCard' as const, label: 'PAN Card', fileId: panCardFileId },
+              { key: 'profilePhoto' as const, label: 'Profile Photograph', fileId: profilePhotoFileId }
+            ].map(doc => (
+              <div key={doc.key} className="p-3 rounded-xl bg-slate-900/70 border border-slate-800 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-slate-200">{doc.label}</span>
+                  {doc.fileId ? (
+                    <span className="text-[11px] text-emerald-400 font-mono">Uploaded</span>
+                  ) : (
+                    <span className="text-[11px] text-slate-500">Required</span>
+                  )}
+                </div>
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,application/pdf"
+                  onChange={e => {
+                    const f = e.target.files?.[0];
+                    if (f) handleDocUpload(doc.key, f);
+                  }}
+                  className="block w-full text-[11px] text-slate-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-slate-800 file:text-slate-200 hover:file:bg-slate-700"
+                />
+                {uploadingDoc === doc.key && <p className="text-[11px] text-amber-400">Uploading securely...</p>}
+              </div>
+            ))}
+          </div>
+
+          {kycMessage && (
+            <div
+              className={`p-3 rounded-lg text-xs border ${
+                kycMessage.type === 'ok'
+                  ? 'bg-emerald-950/60 border-emerald-800/40 text-emerald-300'
+                  : 'bg-red-950/60 border-red-800/40 text-red-300'
+              }`}
+            >
+              {kycMessage.text}
+            </div>
+          )}
+
+          <div className="flex justify-end">
+            <button
+              type="submit"
+              disabled={kycSubmitting}
+              className="px-5 py-2.5 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black rounded-lg text-xs font-bold"
+            >
+              {kycSubmitting ? 'Submitting KYC...' : kycStatus === 'Pending' ? 'Update KYC Submission' : 'Submit KYC for Verification'}
+            </button>
+          </div>
+        </form>
       </div>
     </DashboardLayout>
   );
@@ -226,7 +581,7 @@ export const ReportsPage: React.FC = () => {
 
   useEffect(() => {
     if (!token) return;
-    fetch('/api/dashboard/data', { headers: { Authorization: `Bearer ${token}` } })
+    fetch(apiUrl('/api/dashboard/data'), { headers: { Authorization: `Bearer ${token}` } })
       .then(res => res.json())
       .then(d => {
         setStatements(d.monthlyRoyalties || []);
@@ -235,9 +590,11 @@ export const ReportsPage: React.FC = () => {
   }, [token]);
 
   const handleDownload = (month?: string) => {
-    const url = month
-      ? `/api/dashboard/royalties/export?month=${encodeURIComponent(month)}`
-      : '/api/dashboard/royalties/export';
+    const url = apiUrl(
+      month
+        ? `/api/dashboard/royalties/export?month=${encodeURIComponent(month)}`
+        : '/api/dashboard/royalties/export'
+    );
     window.location.href = url;
   };
 
@@ -352,7 +709,7 @@ export const UserManagementPage: React.FC = () => {
 
   useEffect(() => {
     if (!token) return;
-    fetch('/api/dashboard/data', { headers: { Authorization: `Bearer ${token}` } })
+    fetch(apiUrl('/api/dashboard/data'), { headers: { Authorization: `Bearer ${token}` } })
       .then(res => res.json())
       .then(d => setMembers(d.teamMembers || []));
   }, [token]);
@@ -361,7 +718,7 @@ export const UserManagementPage: React.FC = () => {
     e.preventDefault();
     if (!inviteName || !inviteEmail) return;
 
-    const res = await fetch('/api/dashboard/users', {
+    const res = await fetch(apiUrl('/api/dashboard/users'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ name: inviteName, email: inviteEmail, role: inviteRole })
@@ -453,7 +810,7 @@ export const SupportPage: React.FC = () => {
 
   useEffect(() => {
     if (!token) return;
-    fetch('/api/dashboard/data', { headers: { Authorization: `Bearer ${token}` } })
+    fetch(apiUrl('/api/dashboard/data'), { headers: { Authorization: `Bearer ${token}` } })
       .then(res => res.json())
       .then(d => setTickets(d.tickets || []));
   }, [token]);
@@ -461,7 +818,7 @@ export const SupportPage: React.FC = () => {
   const handleCreateTicket = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!subject || !message) return;
-    const res = await fetch('/api/dashboard/support', {
+    const res = await fetch(apiUrl('/api/dashboard/support'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ subject, category, message, priority: 'Medium' })
@@ -559,7 +916,7 @@ export const SubscriptionPlanPage: React.FC = () => {
 
   const fetchSubscriptionData = () => {
     if (!token) return;
-    fetch('/api/dashboard/data', { headers: { Authorization: `Bearer ${token}` } })
+    fetch(apiUrl('/api/dashboard/data'), { headers: { Authorization: `Bearer ${token}` } })
       .then(res => res.json())
       .then(d => {
         if (d.planId) setActivePlanId(d.planId);
@@ -575,7 +932,7 @@ export const SubscriptionPlanPage: React.FC = () => {
     if (!confirm('Are you sure you want to cancel automatic renewal? Your benefits will remain active until the end of your current cycle.')) return;
     setCancelLoading(true);
     try {
-      const res = await fetch('/api/razorpay/cancel-subscription', {
+      const res = await fetch(apiUrl('/api/razorpay/cancel-subscription'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
       });
@@ -840,7 +1197,7 @@ export const WalletTransactionsPage: React.FC = () => {
 
   useEffect(() => {
     if (!token) return;
-    fetch('/api/dashboard/data', { headers: { Authorization: `Bearer ${token}` } })
+    fetch(apiUrl('/api/dashboard/data'), { headers: { Authorization: `Bearer ${token}` } })
       .then(res => res.json())
       .then(d => setTransactions(d.transactions || []));
   }, [token]);
@@ -1001,7 +1358,7 @@ export const ManageArtistsPage: React.FC = () => {
 
   useEffect(() => {
     if (!token) return;
-    fetch('/api/dashboard/data', { headers: { Authorization: `Bearer ${token}` } })
+    fetch(apiUrl('/api/dashboard/data'), { headers: { Authorization: `Bearer ${token}` } })
       .then(res => res.json())
       .then(d => setArtists(d.artists || []));
   }, [token]);
@@ -1009,7 +1366,7 @@ export const ManageArtistsPage: React.FC = () => {
   const handleCreateArtist = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
-    const res = await fetch('/api/dashboard/artists', {
+    const res = await fetch(apiUrl('/api/dashboard/artists'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ name, primaryGenre, spotifyId })
@@ -1130,7 +1487,7 @@ export const SmartLinksPage: React.FC = () => {
   const fetchDashboardData = () => {
     if (!token) return;
     setLoading(true);
-    fetch('/api/dashboard/data', { headers: { Authorization: `Bearer ${token}` } })
+    fetch(apiUrl('/api/dashboard/data'), { headers: { Authorization: `Bearer ${token}` } })
       .then(res => res.json())
       .then(d => {
         if (d.smartLinks) setLinks(d.smartLinks);
@@ -1284,7 +1641,7 @@ export const SmartLinksPage: React.FC = () => {
         stores
       };
 
-      const endpoint = editingId ? `/api/dashboard/smart-links/${editingId}` : '/api/dashboard/smart-links';
+      const endpoint = apiUrl(editingId ? `/api/dashboard/smart-links/${editingId}` : '/api/dashboard/smart-links');
       const method = editingId ? 'PUT' : 'POST';
 
       const res = await fetch(endpoint, {
@@ -1312,7 +1669,7 @@ export const SmartLinksPage: React.FC = () => {
     if (!confirm(`Are you sure you want to delete the smart link for "${linkTitle}"?`)) return;
 
     try {
-      const res = await fetch(`/api/dashboard/smart-links/${id}`, {
+      const res = await fetch(apiUrl(`/api/dashboard/smart-links/${id}`), {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -2137,7 +2494,7 @@ export const OtherRequestsPage: React.FC = () => {
 
   useEffect(() => {
     if (!token) return;
-    fetch('/api/dashboard/data', { headers: { Authorization: `Bearer ${token}` } })
+    fetch(apiUrl('/api/dashboard/data'), { headers: { Authorization: `Bearer ${token}` } })
       .then(res => res.json())
       .then(d => setRequests(d.requests || []));
   }, [token]);
@@ -2145,7 +2502,7 @@ export const OtherRequestsPage: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!details.trim()) return;
-    const res = await fetch('/api/dashboard/other-requests', {
+    const res = await fetch(apiUrl('/api/dashboard/other-requests'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ type, details })
@@ -2299,19 +2656,19 @@ export const AdminDashboardPage: React.FC = () => {
 
   const fetchAllData = () => {
     if (!token) return;
-    fetch('/api/admin/overview', { headers: { Authorization: `Bearer ${token}` } })
+    fetch(apiUrl('/api/admin/overview'), { headers: { Authorization: `Bearer ${token}` } })
       .then(res => res.json())
       .then(d => {
         setOverview(d.metrics);
       })
       .catch(() => {});
 
-    fetch('/api/admin/releases', { headers: { Authorization: `Bearer ${token}` } })
+    fetch(apiUrl('/api/admin/releases'), { headers: { Authorization: `Bearer ${token}` } })
       .then(res => res.json())
       .then(d => setAllReleases(d.releases || []))
       .catch(() => {});
 
-    fetch('/api/admin/payments', { headers: { Authorization: `Bearer ${token}` } })
+    fetch(apiUrl('/api/admin/payments'), { headers: { Authorization: `Bearer ${token}` } })
       .then(res => res.json())
       .then(d => {
         setPayments(d.payments || []);
@@ -2319,17 +2676,17 @@ export const AdminDashboardPage: React.FC = () => {
       })
       .catch(() => {});
 
-    fetch('/api/admin/customers', { headers: { Authorization: `Bearer ${token}` } })
+    fetch(apiUrl('/api/admin/customers'), { headers: { Authorization: `Bearer ${token}` } })
       .then(res => res.json())
       .then(d => setCustomers(d.customers || []))
       .catch(() => {});
 
-    fetch('/api/admin/plans', { headers: { Authorization: `Bearer ${token}` } })
+    fetch(apiUrl('/api/admin/plans'), { headers: { Authorization: `Bearer ${token}` } })
       .then(res => res.json())
       .then(d => setAdminPlans(d.plans || []))
       .catch(() => {});
 
-    fetch('/api/admin/audit-logs', { headers: { Authorization: `Bearer ${token}` } })
+    fetch(apiUrl('/api/admin/audit-logs'), { headers: { Authorization: `Bearer ${token}` } })
       .then(res => res.json())
       .then(d => setAuditLogs(d.logs || []))
       .catch(() => {});
@@ -2362,7 +2719,7 @@ export const AdminDashboardPage: React.FC = () => {
   // Handlers
   const handleTogglePlan = async (planId: string) => {
     try {
-      const res = await fetch(`/api/admin/plans/${planId}/toggle`, {
+      const res = await fetch(apiUrl(`/api/admin/plans/${planId}/toggle`), {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -2416,7 +2773,7 @@ export const AdminDashboardPage: React.FC = () => {
     setActionError(null);
     try {
       const feats = planForm.features.split('\n').map(s => s.trim()).filter(Boolean);
-      const res = await fetch('/api/admin/plans', {
+      const res = await fetch(apiUrl('/api/admin/plans'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
@@ -2454,7 +2811,7 @@ export const AdminDashboardPage: React.FC = () => {
     setGrantLoading(true);
     setActionError(null);
     try {
-      const res = await fetch('/api/admin/subscriptions/grant', {
+      const res = await fetch(apiUrl('/api/admin/subscriptions/grant'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
@@ -2488,7 +2845,7 @@ export const AdminDashboardPage: React.FC = () => {
     setRevokeLoading(true);
     setActionError(null);
     try {
-      const res = await fetch('/api/admin/subscriptions/revoke', {
+      const res = await fetch(apiUrl('/api/admin/subscriptions/revoke'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
@@ -2518,7 +2875,7 @@ export const AdminDashboardPage: React.FC = () => {
     e.preventDefault();
     if (!selectedRelease) return;
 
-    const res = await fetch(`/api/admin/releases/${selectedRelease.id}/review`, {
+    const res = await fetch(apiUrl(`/api/admin/releases/${selectedRelease.id}/review`), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({

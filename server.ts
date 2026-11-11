@@ -6,44 +6,140 @@ import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import nodemailer from 'nodemailer';
 import multer from 'multer';
+import cors from 'cors';
+import bcrypt from 'bcryptjs';
+import rateLimit from 'express-rate-limit';
 import { generateRoyaltyForecast } from './src/utils/mlForecasting';
 import { ForecastModelType, ForecastScenario, CombinedChartPoint } from './src/types';
+import {
+  initDatabase,
+  isDatabaseEnabled,
+  getDbPool,
+  dbUpsertUser,
+  dbDeleteUserByEmail,
+  dbSaveOtp,
+  dbDeleteOtp,
+  dbSaveSession,
+  dbDeleteSession,
+  dbSaveDashboard,
+  dbSaveOrder,
+  dbSaveNotification,
+  dbSaveAuditLog,
+  dbSaveDriveConnection,
+  dbDeleteDriveConnection,
+  dbSaveGmailConnection,
+  dbDeleteGmailConnection,
+  dbSavePlatformSetting,
+  dbGetAllPlatformSettings
+} from './server/db';
+import { registerGmailRoutes, UserGmailConnection } from './server/gmail';
+import { saveUploadedMedia, getStoredMedia, getStorageProviderName } from './server/storage';
+import {
+  registerSuperAdminRoutes,
+  bootstrapSuperAdmin,
+  DEFAULT_PLATFORM_SETTINGS,
+  PlatformSettings
+} from './server/superAdmin';
+import {
+  DEFAULT_AI_SETTINGS,
+  AiServiceSettings,
+  AiReviewJob,
+  AiReviewResult,
+  enqueueAiReviewJob
+} from './server/ai/reviewQueue';
+import { registerAiRoutes } from './server/ai/routes';
 
 dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Ensure uploads folders exist
+// Local dev upload folders (production uses S3-compatible object storage or PostgreSQL persistent storage)
 const audioUploadDir = path.join(__dirname, 'uploads', 'audio');
 const artworkUploadDir = path.join(__dirname, 'uploads', 'artwork');
-fs.mkdirSync(audioUploadDir, { recursive: true });
-fs.mkdirSync(artworkUploadDir, { recursive: true });
+const localKycDir = path.join(__dirname, 'uploads', 'kyc');
+const localLyricsDir = path.join(__dirname, 'uploads', 'lyrics');
+const localEvidenceDir = path.join(__dirname, 'uploads', 'evidence');
+if (process.env.NODE_ENV !== 'production') {
+  fs.mkdirSync(audioUploadDir, { recursive: true });
+  fs.mkdirSync(artworkUploadDir, { recursive: true });
+  fs.mkdirSync(localKycDir, { recursive: true });
+  fs.mkdirSync(localLyricsDir, { recursive: true });
+  fs.mkdirSync(localEvidenceDir, { recursive: true });
+}
 
 const app = express();
+app.set('trust proxy', 1); // Required behind Render / Netlify reverse proxies for rate limiting
 const PORT = Number(process.env.PORT) || 3000;
+
+// ======================== CORS CONFIGURATION (NETLIFY + LOCALHOST) ========================
+const configuredOrigins = [
+  process.env.FRONTEND_URL,
+  process.env.NETLIFY_URL,
+  process.env.APP_URL,
+  'http://localhost:3000',
+  'http://localhost:5173',
+  'http://127.0.0.1:3000',
+  'http://127.0.0.1:5173'
+]
+  .filter((o): o is string => Boolean(o && o.trim()))
+  .map(o => o.trim().replace(/\/+$/, ''));
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // Allow server-to-server, curl, Razorpay webhooks, and same-origin requests
+      if (!origin) return callback(null, true);
+      const cleanOrigin = origin.replace(/\/+$/, '');
+      if (
+        configuredOrigins.includes(cleanOrigin) ||
+        cleanOrigin.endsWith('.netlify.app') ||
+        (process.env.NODE_ENV !== 'production' && cleanOrigin.startsWith('http://localhost:'))
+      ) {
+        return callback(null, true);
+      }
+      return callback(new Error(`CORS policy blocked origin: ${origin}`));
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+  })
+);
 
 app.use(express.json({
   verify: (req: any, _res, buf) => {
     req.rawBody = buf;
   }
 }));
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// Audio Multer Setup
-const audioStorage = multer.diskStorage({
-  destination: (_req, _file, cb) => {
-    cb(null, audioUploadDir);
-  },
-  filename: (_req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + crypto.randomBytes(6).toString('hex');
-    const ext = path.extname(file.originalname).toLowerCase();
-    cb(null, `audio-${uniqueSuffix}${ext}`);
-  }
+if (process.env.NODE_ENV !== 'production') {
+  app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+}
+
+// Health check endpoint for Render & monitoring
+app.get('/api/health', (_req, res) => {
+  return res.json({
+    status: 'ok',
+    service: 'rudraatma-music-api',
+    environment: process.env.NODE_ENV || 'development',
+    database: isDatabaseEnabled() ? 'postgresql' : 'in-memory-dev',
+    storage: getStorageProviderName(),
+    timestamp: new Date().toISOString()
+  });
 });
 
+// Rate limiter for authentication endpoints (20 requests per 15 min per IP)
+const authRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 25,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many authentication requests from this IP. Please wait 15 minutes and try again.' }
+});
+
+// Audio Multer Setup (memoryStorage so files persist to S3 or PostgreSQL, never ephemeral Render disk)
 const audioUpload = multer({
-  storage: audioStorage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 150 * 1024 * 1024 }, // 150MB limit
   fileFilter: (_req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
@@ -57,20 +153,9 @@ const audioUpload = multer({
   }
 });
 
-// Artwork Multer Setup
-const artworkStorage = multer.diskStorage({
-  destination: (_req, _file, cb) => {
-    cb(null, artworkUploadDir);
-  },
-  filename: (_req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + crypto.randomBytes(6).toString('hex');
-    const ext = path.extname(file.originalname).toLowerCase();
-    cb(null, `cover-${uniqueSuffix}${ext}`);
-  }
-});
-
+// Artwork Multer Setup (memoryStorage so files persist to S3 or PostgreSQL)
 const artworkUpload = multer({
-  storage: artworkStorage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 25 * 1024 * 1024 }, // 25MB limit
   fileFilter: (_req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
@@ -229,6 +314,30 @@ function hashString(str: string): string {
   return crypto.createHash('sha256').update(str).digest('hex');
 }
 
+const BCRYPT_ROUNDS = 12;
+
+async function hashPassword(password: string): Promise<string> {
+  return bcrypt.hash(password, BCRYPT_ROUNDS);
+}
+
+/**
+ * Verifies a password against bcrypt (preferred) or legacy SHA-256 hash.
+ * If legacy SHA-256 matches, automatically upgrades user.passwordHash to bcrypt and persists to PostgreSQL.
+ */
+async function verifyAndUpgradePassword(user: StoredUser, plainPassword: string): Promise<boolean> {
+  if (!user.passwordHash) return false;
+  if (user.passwordHash.startsWith('$2a$') || user.passwordHash.startsWith('$2b$') || user.passwordHash.startsWith('$2y$')) {
+    return bcrypt.compare(plainPassword, user.passwordHash);
+  }
+  // Legacy SHA-256 migration path (preserves existing accounts seamlessly)
+  if (hashString(plainPassword) === user.passwordHash) {
+    user.passwordHash = await hashPassword(plainPassword);
+    await dbUpsertUser(user);
+    return true;
+  }
+  return false;
+}
+
 // ======================== DATA SCHEMAS ========================
 
 export interface StoredUser {
@@ -237,8 +346,11 @@ export interface StoredUser {
   email: string;
   country: string;
   passwordHash: string;
-  role: 'artist' | 'label_manager' | 'admin';
+  role: 'artist' | 'label_manager' | 'admin' | 'SUPER_ADMIN';
   isActive: boolean;
+  accountStatus?: 'active' | 'suspended' | 'terminated';
+  statusReason?: string;
+  kyc?: any;
   selectedPlanId?: string;
   createdAt: string;
 }
@@ -267,6 +379,7 @@ export interface ReleaseTrack {
   composer: string;
   lyricist: string;
   producer?: string;
+  musicDirector?: string;
   duration?: string;
   audioFileName?: string;
   audioFileUrl?: string;
@@ -301,6 +414,19 @@ export interface StoredRelease {
   releaseDate: string;
   tracks: ReleaseTrack[];
   artworkUrl?: string;
+  lyrics?: string;
+  lyricsFileUrl?: string;
+  rightsDeclarations?: {
+    usesSamples?: boolean;
+    sampleLicenseConfirmed?: boolean;
+    sampleDetails?: string;
+    isRemix?: boolean;
+    remixPermissionConfirmed?: boolean;
+    isCoverSong?: boolean;
+    coverLicenseConfirmed?: boolean;
+    hasCollaborators?: boolean;
+    collaborationConfirmed?: boolean;
+  };
   copyrightOwner: string;
   copyrightYear: number;
   recordingOwner: string;
@@ -605,7 +731,7 @@ users.set('demo@rudraatmamusic.com', {
   fullName: 'Aarav Mehta',
   email: 'demo@rudraatmamusic.com',
   country: 'India',
-  passwordHash: hashString('Password123!'),
+  passwordHash: bcrypt.hashSync('Password123!', 10),
   role: 'artist',
   isActive: true,
   selectedPlanId: 'growth-monthly',
@@ -618,7 +744,7 @@ users.set('admin@rudraatmamusic.com', {
   fullName: 'Rudra Admin Desk',
   email: 'admin@rudraatmamusic.com',
   country: 'India',
-  passwordHash: hashString('AdminPass123!'),
+  passwordHash: bcrypt.hashSync('AdminPass123!', 10),
   role: 'admin',
   isActive: true,
   createdAt: '2025-12-01T00:00:00.000Z'
@@ -1045,7 +1171,13 @@ function getAuthenticatedUser(req: express.Request): StoredUser | null {
     return null;
   }
   for (const user of users.values()) {
-    if (user.id === session.userId) return user;
+    if (user.id === session.userId) {
+      if (user.accountStatus === 'suspended' || user.accountStatus === 'terminated') {
+        sessions.delete(token);
+        return null;
+      }
+      return user;
+    }
   }
   return null;
 }
@@ -1143,7 +1275,7 @@ function findReleaseById(releaseId: string): { release: StoredRelease; dashboard
 
 // ======================== AUTH ROUTES (6-DIGIT OTP, 5-MIN EXPIRY, 2FA LOGIN) ========================
 
-app.post('/api/auth/register', async (req, res) => {
+app.post('/api/auth/register', authRateLimiter, async (req, res) => {
   const { fullName, email, country, password, confirmPassword, termsAccepted, selectedPlanId } = req.body;
 
   if (!fullName || !email || !password || !confirmPassword) {
@@ -1179,17 +1311,20 @@ app.post('/api/auth/register', async (req, res) => {
   const expiresAt = Date.now() + 5 * 60 * 1000; // Strictly 5 minutes
 
   const userId = existing ? existing.id : 'usr_' + crypto.randomBytes(6).toString('hex');
-  users.set(normalizedEmail, {
+  const passwordHash = await hashPassword(password);
+  const newUser: StoredUser = {
     id: userId,
     fullName: fullName.trim(),
     email: normalizedEmail,
     country: (country || 'India').trim(),
-    passwordHash: hashString(password),
+    passwordHash,
     role: 'artist',
     isActive: false, // Activated ONLY after verified 6-digit OTP
     selectedPlanId: selectedPlanId || 'growth-monthly',
     createdAt: new Date().toISOString()
-  });
+  };
+  users.set(normalizedEmail, newUser);
+  await dbUpsertUser(newUser);
 
   const otpData: StoredOtp = {
     email: normalizedEmail,
@@ -1201,6 +1336,7 @@ app.post('/api/auth/register', async (req, res) => {
   };
 
   signupOtps.set(normalizedEmail, otpData);
+  await dbSaveOtp(otpData);
 
   // Dispatch real email via official hosting SMTP
   const emailResult = await sendEmailOtp(normalizedEmail, otpCode, 'signup');
@@ -1218,20 +1354,7 @@ app.post('/api/auth/register', async (req, res) => {
   });
 });
 
-// Verify Registration OTP & Activate Account
-app.post('/api/auth/verify-otp', (req, res) => {
-  const { email, code, type } = req.body;
-  if (!email || !code) {
-    return res.status(400).json({ error: 'Email and 6-digit verification code are required.' });
-  }
-
-  const normalizedEmail = email.trim().toLowerCase();
-
-  // If client specifically routed a login OTP to this generic endpoint, delegate to login OTP handler
-  if (type === 'login' || (!signupOtps.has(normalizedEmail) && loginOtps.has(normalizedEmail))) {
-    return verifyLoginOtpInternal(req, res, normalizedEmail, code);
-  }
-
+async function verifySignupOtpInternal(_req: express.Request, res: express.Response, normalizedEmail: string, code: string) {
   const otpRecord = signupOtps.get(normalizedEmail);
 
   if (!otpRecord) {
@@ -1240,37 +1363,45 @@ app.post('/api/auth/verify-otp', (req, res) => {
 
   if (Date.now() > otpRecord.expiresAt) {
     signupOtps.delete(normalizedEmail);
+    await dbDeleteOtp(normalizedEmail, 'signup');
     return res.status(400).json({ error: 'This verification code has expired (5-minute limit). Please request a fresh code.' });
   }
 
   if (otpRecord.attempts >= 5) {
     signupOtps.delete(normalizedEmail);
+    await dbDeleteOtp(normalizedEmail, 'signup');
     return res.status(429).json({ error: 'Too many incorrect attempts. Please request a new verification code.' });
   }
 
   const enteredHash = hashString(code.trim());
   if (enteredHash !== otpRecord.codeHash) {
     otpRecord.attempts += 1;
+    await dbSaveOtp(otpRecord);
     const remaining = 5 - otpRecord.attempts;
     return res.status(400).json({ error: `Invalid verification code. ${remaining} attempt(s) remaining.` });
   }
 
   // Invalidate OTP immediately upon successful verification
   signupOtps.delete(normalizedEmail);
+  await dbDeleteOtp(normalizedEmail, 'signup');
 
   const user = users.get(normalizedEmail);
   if (!user) return res.status(404).json({ error: 'Account record not found.' });
 
   // Activate account
   user.isActive = true;
-  getUserDashboard(user.id);
+  await dbUpsertUser(user);
+  const dashboard = getUserDashboard(user.id);
+  await dbSaveDashboard(user.id, dashboard);
 
   const sessionToken = 'sess_' + crypto.randomBytes(24).toString('hex');
-  sessions.set(sessionToken, {
+  const sessionRecord: Session = {
     token: sessionToken,
     userId: user.id,
     expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000
-  });
+  };
+  sessions.set(sessionToken, sessionRecord);
+  await dbSaveSession(sessionRecord);
 
   return res.json({
     success: true,
@@ -1285,10 +1416,27 @@ app.post('/api/auth/verify-otp', (req, res) => {
       selectedPlanId: user.selectedPlanId
     }
   });
+}
+
+// Verify Registration OTP & Activate Account
+app.post('/api/auth/verify-otp', authRateLimiter, async (req, res) => {
+  const { email, code, type } = req.body;
+  if (!email || !code) {
+    return res.status(400).json({ error: 'Email and 6-digit verification code are required.' });
+  }
+
+  const normalizedEmail = email.trim().toLowerCase();
+
+  // If client specifically routed a login OTP to this generic endpoint, delegate to login OTP handler
+  if (type === 'login' || (!signupOtps.has(normalizedEmail) && loginOtps.has(normalizedEmail))) {
+    return verifyLoginOtpInternal(req, res, normalizedEmail, code);
+  }
+
+  return verifySignupOtpInternal(req, res, normalizedEmail, code);
 });
 
 // Change Registration Email before account activation
-app.post('/api/auth/change-registration-email', async (req, res) => {
+app.post('/api/auth/change-registration-email', authRateLimiter, async (req, res) => {
   const { oldEmail, newEmail } = req.body;
   if (!oldEmail || !newEmail) {
     return res.status(400).json({ error: 'Both current email and new email are required.' });
@@ -1325,30 +1473,35 @@ app.post('/api/auth/change-registration-email', async (req, res) => {
   // Migrate user record to new email
   users.delete(normalizedOld);
   signupOtps.delete(normalizedOld);
+  await dbDeleteUserByEmail(normalizedOld);
+  await dbDeleteOtp(normalizedOld, 'signup');
 
   const updatedUser: StoredUser = {
     ...oldUser,
     email: normalizedNew
   };
   users.set(normalizedNew, updatedUser);
+  await dbUpsertUser(updatedUser);
 
   // Generate fresh 6-digit OTP
   const freshCode = crypto.randomInt(100000, 1000000).toString();
   const codeHash = hashString(freshCode);
   const expiresAt = Date.now() + 5 * 60 * 1000; // 5 minutes
 
-  signupOtps.set(normalizedNew, {
+  const newOtpData: StoredOtp = {
     email: normalizedNew,
     codeHash,
     expiresAt,
     attempts: 0,
     lastSentAt: Date.now(),
     purpose: 'signup'
-  });
+  };
+  signupOtps.set(normalizedNew, newOtpData);
+  await dbSaveOtp(newOtpData);
 
   const emailResult = await sendEmailOtp(normalizedNew, freshCode, 'signup');
 
-  console.log(`[Rudraatma Music Email Change] Migrated registration from ${normalizedOld} to ${normalizedNew}. New OTP code: ${freshCode}`);
+  console.log(`[Rudraatma Music Email Change] Migrated registration from ${normalizedOld} to ${normalizedNew}.`);
 
   return res.json({
     success: true,
@@ -1364,14 +1517,18 @@ app.post('/api/auth/change-registration-email', async (req, res) => {
   });
 });
 
-// Dedicated verify-signup-otp alias
-app.post('/api/auth/verify-signup-otp', (req, res) => {
-  req.body.type = 'signup';
-  return app._router.handle(req, res, () => {});
+// Dedicated verify-signup-otp alias (direct handler, no internal router recursion)
+app.post('/api/auth/verify-signup-otp', authRateLimiter, async (req, res) => {
+  const { email, code } = req.body;
+  if (!email || !code) {
+    return res.status(400).json({ error: 'Email and 6-digit verification code are required.' });
+  }
+  const normalizedEmail = email.trim().toLowerCase();
+  return verifySignupOtpInternal(req, res, normalizedEmail, code);
 });
 
 // Login Step 1: Verify Password & Dispatch 6-digit Login OTP (2FA)
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', authRateLimiter, async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'Email and password are required.' });
 
@@ -1409,8 +1566,21 @@ app.post('/api/auth/login', async (req, res) => {
     });
   }
 
-  // Password verification
-  if (hashString(password) !== user.passwordHash) {
+  // Block suspended or terminated accounts
+  if (user.accountStatus === 'suspended') {
+    return res.status(403).json({
+      error: `Your account has been suspended by Rudraatma Music Administration.${user.statusReason ? ` Reason: ${user.statusReason}` : ''}`
+    });
+  }
+  if (user.accountStatus === 'terminated') {
+    return res.status(403).json({
+      error: `Your account has been permanently terminated.${user.statusReason ? ` Reason: ${user.statusReason}` : ''}`
+    });
+  }
+
+  // Password verification (bcrypt with automatic legacy SHA-256 upgrade)
+  const passwordValid = await verifyAndUpgradePassword(user, password);
+  if (!passwordValid) {
     const curr = failedLoginAttempts.get(normalizedEmail) || { count: 0, lockedUntil: 0, lastAttempt: Date.now() };
     curr.count += 1;
     curr.lastAttempt = Date.now();
@@ -1449,14 +1619,16 @@ app.post('/api/auth/login', async (req, res) => {
   const codeHash = hashString(loginCode);
   const expiresAt = Date.now() + 5 * 60 * 1000; // Strictly 5 minutes
 
-  loginOtps.set(normalizedEmail, {
+  const loginOtpRecord: StoredOtp = {
     email: normalizedEmail,
     codeHash,
     expiresAt,
     attempts: 0,
     lastSentAt: Date.now(),
     purpose: 'login'
-  });
+  };
+  loginOtps.set(normalizedEmail, loginOtpRecord);
+  await dbSaveOtp(loginOtpRecord);
 
   // Dispatch 2FA Login OTP via official hosting SMTP
   const emailResult = await sendEmailOtp(normalizedEmail, loginCode, 'login');
@@ -1477,7 +1649,7 @@ app.post('/api/auth/login', async (req, res) => {
 });
 
 // Helper for login OTP verification
-function verifyLoginOtpInternal(req: express.Request, res: express.Response, normalizedEmail: string, code: string) {
+async function verifyLoginOtpInternal(_req: express.Request, res: express.Response, normalizedEmail: string, code: string) {
   const otpRecord = loginOtps.get(normalizedEmail);
 
   if (!otpRecord) {
@@ -1486,23 +1658,27 @@ function verifyLoginOtpInternal(req: express.Request, res: express.Response, nor
 
   if (Date.now() > otpRecord.expiresAt) {
     loginOtps.delete(normalizedEmail);
+    await dbDeleteOtp(normalizedEmail, 'login');
     return res.status(400).json({ error: 'This login verification code has expired (5-minute limit). Please log in again to request a fresh code.' });
   }
 
   if (otpRecord.attempts >= 5) {
     loginOtps.delete(normalizedEmail);
+    await dbDeleteOtp(normalizedEmail, 'login');
     return res.status(429).json({ error: 'Too many incorrect verification attempts. Please log in again to request a new code.' });
   }
 
   const enteredHash = hashString(code.trim());
   if (enteredHash !== otpRecord.codeHash) {
     otpRecord.attempts += 1;
+    await dbSaveOtp(otpRecord);
     const remaining = 5 - otpRecord.attempts;
     return res.status(400).json({ error: `Invalid login verification code. ${remaining} attempt(s) remaining.` });
   }
 
   // Invalidate OTP immediately upon verified use
   loginOtps.delete(normalizedEmail);
+  await dbDeleteOtp(normalizedEmail, 'login');
 
   const user = users.get(normalizedEmail);
   if (!user || !user.isActive) {
@@ -1511,11 +1687,13 @@ function verifyLoginOtpInternal(req: express.Request, res: express.Response, nor
 
   // Issue authenticated session token
   const sessionToken = 'sess_' + crypto.randomBytes(24).toString('hex');
-  sessions.set(sessionToken, {
+  const sessionRecord: Session = {
     token: sessionToken,
     userId: user.id,
     expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000
-  });
+  };
+  sessions.set(sessionToken, sessionRecord);
+  await dbSaveSession(sessionRecord);
 
   return res.json({
     success: true,
@@ -1533,7 +1711,7 @@ function verifyLoginOtpInternal(req: express.Request, res: express.Response, nor
 }
 
 // Login Step 2: Verify 6-digit Login OTP & Grant Dashboard Access
-app.post('/api/auth/verify-login-otp', (req, res) => {
+app.post('/api/auth/verify-login-otp', authRateLimiter, async (req, res) => {
   const { email, code } = req.body;
   if (!email || !code) {
     return res.status(400).json({ error: 'Email and 6-digit login verification code are required.' });
@@ -1544,7 +1722,7 @@ app.post('/api/auth/verify-login-otp', (req, res) => {
 });
 
 // Resend OTP (Handles Signup, Login 2FA, and Password Reset)
-app.post('/api/auth/resend-otp', async (req, res) => {
+app.post('/api/auth/resend-otp', authRateLimiter, async (req, res) => {
   const { email, type } = req.body;
   if (!email) return res.status(400).json({ error: 'Email address is required.' });
 
@@ -1573,14 +1751,16 @@ app.post('/api/auth/resend-otp', async (req, res) => {
   const newCode = crypto.randomInt(100000, 1000000).toString();
   const codeHash = hashString(newCode);
 
-  targetMap.set(normalizedEmail, {
+  const newOtpRecord: StoredOtp = {
     email: normalizedEmail,
     codeHash,
     expiresAt: Date.now() + 5 * 60 * 1000, // Strictly 5 minutes
     attempts: 0,
     lastSentAt: Date.now(),
     purpose: targetType
-  });
+  };
+  targetMap.set(normalizedEmail, newOtpRecord);
+  await dbSaveOtp(newOtpRecord);
 
   const emailResult = await sendEmailOtp(normalizedEmail, newCode, targetType);
 
@@ -1598,7 +1778,7 @@ app.post('/api/auth/resend-otp', async (req, res) => {
 });
 
 // Forgot Password - Step 1: Dispatch 6-digit Reset OTP
-app.post('/api/auth/forgot-password', async (req, res) => {
+app.post('/api/auth/forgot-password', authRateLimiter, async (req, res) => {
   const { email } = req.body;
   if (!email) return res.status(400).json({ error: 'Email address is required.' });
 
@@ -1613,14 +1793,16 @@ app.post('/api/auth/forgot-password', async (req, res) => {
     }
 
     const resetCode = crypto.randomInt(100000, 1000000).toString();
-    resetOtps.set(normalizedEmail, {
+    const resetRecord: StoredOtp = {
       email: normalizedEmail,
       codeHash: hashString(resetCode),
       expiresAt: Date.now() + 5 * 60 * 1000, // Strictly 5 minutes
       attempts: 0,
       lastSentAt: Date.now(),
       purpose: 'reset'
-    });
+    };
+    resetOtps.set(normalizedEmail, resetRecord);
+    await dbSaveOtp(resetRecord);
 
     await sendEmailOtp(normalizedEmail, resetCode, 'reset');
   }
@@ -1634,7 +1816,7 @@ app.post('/api/auth/forgot-password', async (req, res) => {
 });
 
 // Forgot Password - Step 2: Verify 6-digit OTP & Set New Password
-app.post('/api/auth/reset-password', (req, res) => {
+app.post('/api/auth/reset-password', authRateLimiter, async (req, res) => {
   const { email, code, newPassword, confirmPassword } = req.body;
   if (!email || !code || !newPassword || !confirmPassword) {
     return res.status(400).json({ error: 'Email, 6-digit reset code, and new password are required.' });
@@ -1657,17 +1839,20 @@ app.post('/api/auth/reset-password', (req, res) => {
 
   if (Date.now() > resetRecord.expiresAt) {
     resetOtps.delete(normalizedEmail);
+    await dbDeleteOtp(normalizedEmail, 'reset');
     return res.status(400).json({ error: 'This password reset code has expired (5-minute limit). Please request a new code.' });
   }
 
   if (resetRecord.attempts >= 5) {
     resetOtps.delete(normalizedEmail);
+    await dbDeleteOtp(normalizedEmail, 'reset');
     return res.status(429).json({ error: 'Too many incorrect attempts. Please request a new password reset code.' });
   }
 
   const enteredHash = hashString(code.trim());
   if (enteredHash !== resetRecord.codeHash) {
     resetRecord.attempts += 1;
+    await dbSaveOtp(resetRecord);
     const remaining = 5 - resetRecord.attempts;
     return res.status(400).json({ error: `Invalid reset code. ${remaining} attempt(s) remaining.` });
   }
@@ -1675,14 +1860,17 @@ app.post('/api/auth/reset-password', (req, res) => {
   const user = users.get(normalizedEmail);
   if (!user) return res.status(404).json({ error: 'Account not found.' });
 
-  // Update password hash
-  user.passwordHash = hashString(newPassword);
+  // Update password hash using bcrypt
+  user.passwordHash = await hashPassword(newPassword);
+  await dbUpsertUser(user);
   resetOtps.delete(normalizedEmail);
+  await dbDeleteOtp(normalizedEmail, 'reset');
 
   // Invalidate any existing active sessions to force re-authentication with new password + 2FA
   for (const [tokenKey, sess] of sessions.entries()) {
     if (sess.userId === user.id) {
       sessions.delete(tokenKey);
+      await dbDeleteSession(tokenKey);
     }
   }
 
@@ -1740,11 +1928,12 @@ app.get('/api/auth/session', (req, res) => {
   });
 });
 
-app.post('/api/auth/logout', (req, res) => {
+app.post('/api/auth/logout', async (req, res) => {
   const authHeader = req.headers.authorization;
   if (authHeader && authHeader.startsWith('Bearer ')) {
     const token = authHeader.split(' ')[1];
     sessions.delete(token);
+    await dbDeleteSession(token);
   }
   return res.json({ success: true, message: 'Logged out successfully.' });
 });
@@ -1776,7 +1965,7 @@ app.get('/api/notifications', (req, res) => {
 });
 
 // Dismiss popup (keeps in center, does not reopen)
-app.post('/api/notifications/:id/dismiss', (req, res) => {
+app.post('/api/notifications/:id/dismiss', async (req, res) => {
   const user = getAuthenticatedUser(req);
   if (!user) return res.status(401).json({ error: 'Unauthorized.' });
 
@@ -1786,11 +1975,12 @@ app.post('/api/notifications/:id/dismiss', (req, res) => {
   }
 
   notif.dismissed_at = new Date().toISOString();
+  await dbSaveNotification({ ...notif, userId: notif.recipient_user_id });
   return res.json({ success: true, notification: notif });
 });
 
 // Mark notification read
-app.post('/api/notifications/:id/read', (req, res) => {
+app.post('/api/notifications/:id/read', async (req, res) => {
   const user = getAuthenticatedUser(req);
   if (!user) return res.status(401).json({ error: 'Unauthorized.' });
 
@@ -1800,6 +1990,7 @@ app.post('/api/notifications/:id/read', (req, res) => {
   }
 
   notif.read_at = new Date().toISOString();
+  await dbSaveNotification({ ...notif, userId: notif.recipient_user_id });
   return res.json({ success: true, notification: notif });
 });
 
@@ -1808,7 +1999,7 @@ app.post('/api/notifications/:id/read', (req, res) => {
 function requireAdmin(req: express.Request, res: express.Response, next: express.NextFunction) {
   const user = getAuthenticatedUser(req);
   if (!user) return res.status(401).json({ error: 'Unauthorized. Please log in.' });
-  if (user.role !== 'admin') {
+  if (user.role !== 'admin' && user.role !== 'SUPER_ADMIN') {
     return res.status(403).json({ error: 'Access forbidden. Administrator privileges required.' });
   }
   next();
@@ -1863,7 +2054,7 @@ app.get('/api/admin/overview', requireAdmin, (req, res) => {
 });
 
 // Admin Review Release (Approve / Changes Requested / Reject)
-app.post('/api/admin/releases/:id/review', requireAdmin, (req, res) => {
+app.post('/api/admin/releases/:id/review', requireAdmin, async (req, res) => {
   const user = getAuthenticatedUser(req)!;
   const releaseId = req.params.id;
   const { action, notes, reason } = req.body;
@@ -1935,6 +2126,8 @@ app.post('/api/admin/releases/:id/review', requireAdmin, (req, res) => {
   };
 
   notifications.set(notifId, newNotif);
+  await dbSaveNotification({ ...newNotif, userId: release.userId });
+  await dbSaveDashboard(release.userId, dashboard);
 
   // Add audit log
   const auditEntry: AuditLog = {
@@ -1948,6 +2141,7 @@ app.post('/api/admin/releases/:id/review', requireAdmin, (req, res) => {
     timestamp: new Date().toISOString()
   };
   auditLogs.push(auditEntry);
+  await dbSaveAuditLog(auditEntry);
 
   return res.json({
     success: true,
@@ -2099,7 +2293,7 @@ app.get('/api/admin/customers', requireAdmin, (_req, res) => {
 });
 
 // Admin Manually Grant Plan
-app.post('/api/admin/subscriptions/grant', requireAdmin, (req, res) => {
+app.post('/api/admin/subscriptions/grant', requireAdmin, async (req, res) => {
   const adminUser = getAuthenticatedUser(req)!;
   const { userEmail, planId, validityDays, reason } = req.body;
 
@@ -2155,7 +2349,10 @@ app.post('/api/admin/subscriptions/grant', requireAdmin, (req, res) => {
     date: now.toISOString().split('T')[0]
   });
 
-  auditLogs.push({
+  await dbUpsertUser(targetUser);
+  await dbSaveDashboard(targetUser.id, db);
+
+  const grantAudit: AuditLog = {
     id: 'aud_' + Date.now(),
     actorEmail: adminUser.email,
     actorRole: adminUser.role,
@@ -2164,7 +2361,9 @@ app.post('/api/admin/subscriptions/grant', requireAdmin, (req, res) => {
     entityId: targetUser.id,
     details: `Super Admin (${adminUser.email}) manually granted "${plan.name}" (valid for ${days} days until ${renewsAtDate}) to customer ${targetUser.email}. Reason: ${reason || 'Administrative Grant'}.`,
     timestamp: new Date().toISOString()
-  });
+  };
+  auditLogs.push(grantAudit);
+  await dbSaveAuditLog(grantAudit);
 
   return res.json({
     success: true,
@@ -2174,7 +2373,7 @@ app.post('/api/admin/subscriptions/grant', requireAdmin, (req, res) => {
 });
 
 // Admin Manually Revoke Plan
-app.post('/api/admin/subscriptions/revoke', requireAdmin, (req, res) => {
+app.post('/api/admin/subscriptions/revoke', requireAdmin, async (req, res) => {
   const adminUser = getAuthenticatedUser(req)!;
   const { userEmail, reason } = req.body;
 
@@ -2197,7 +2396,9 @@ app.post('/api/admin/subscriptions/revoke', requireAdmin, (req, res) => {
     db.subscription.daysRemaining = 0;
   }
 
-  auditLogs.push({
+  await dbSaveDashboard(targetUser.id, db);
+
+  const revokeAudit: AuditLog = {
     id: 'aud_' + Date.now(),
     actorEmail: adminUser.email,
     actorRole: adminUser.role,
@@ -2206,7 +2407,9 @@ app.post('/api/admin/subscriptions/revoke', requireAdmin, (req, res) => {
     entityId: targetUser.id,
     details: `Super Admin (${adminUser.email}) revoked subscription for "${prevPlan}" from customer ${targetUser.email}. Reason: ${reason || 'Administrative Revocation'}.`,
     timestamp: new Date().toISOString()
-  });
+  };
+  auditLogs.push(revokeAudit);
+  await dbSaveAuditLog(revokeAudit);
 
   return res.json({
     success: true,
@@ -2354,7 +2557,7 @@ app.post('/api/razorpay/create-order', (req, res) => {
       planName: plan.name,
       planType: plan.type
     }
-  }).then(orderRes => {
+  }).then(async orderRes => {
     const orderRecord: RazorpayOrderRecord = {
       orderId: orderRes.orderId,
       userId: user.id,
@@ -2374,6 +2577,7 @@ app.post('/api/razorpay/create-order', (req, res) => {
     };
 
     razorpayOrders.set(orderRes.orderId, orderRecord);
+    await dbSaveOrder(orderRecord);
 
     return res.json({
       success: true,
@@ -2397,7 +2601,7 @@ app.post('/api/razorpay/create-order', (req, res) => {
 });
 
 // 3. Razorpay Payment Verification & Activation (Server-side HMAC verification)
-app.post('/api/razorpay/verify-payment', (req, res) => {
+app.post('/api/razorpay/verify-payment', async (req, res) => {
   const user = getAuthenticatedUser(req);
   if (!user) {
     return res.status(401).json({ error: 'Authentication required to verify payment.' });
@@ -2438,7 +2642,8 @@ app.post('/api/razorpay/verify-payment', (req, res) => {
   if (!isValid) {
     order.status = 'failed';
     order.failureReason = 'Cryptographic signature mismatch';
-    auditLogs.push({
+    await dbSaveOrder(order);
+    const sigAudit: AuditLog = {
       id: 'aud_' + Date.now(),
       actorEmail: user.email,
       actorRole: user.role,
@@ -2447,7 +2652,9 @@ app.post('/api/razorpay/verify-payment', (req, res) => {
       entityId: orderId,
       details: `Payment verification failed for payment ${paymentId}. Signature mismatch.`,
       timestamp: new Date().toISOString()
-    });
+    };
+    auditLogs.push(sigAudit);
+    await dbSaveAuditLog(sigAudit);
     return res.status(400).json({ error: 'Invalid payment signature. Verification failed on server.' });
   }
 
@@ -2495,8 +2702,12 @@ app.post('/api/razorpay/verify-payment', (req, res) => {
   };
   dashboard.transactions.unshift(tx);
 
+  await dbSaveOrder(order);
+  await dbUpsertUser(user);
+  await dbSaveDashboard(user.id, dashboard);
+
   // Audit log
-  auditLogs.push({
+  const rzpAudit: AuditLog = {
     id: 'aud_' + Date.now(),
     actorEmail: user.email,
     actorRole: user.role,
@@ -2505,7 +2716,9 @@ app.post('/api/razorpay/verify-payment', (req, res) => {
     entityId: orderId,
     details: `Verified payment ${paymentId} for ₹${plan.priceINR} (${plan.name}). Activated for ${user.email}.`,
     timestamp: new Date().toISOString()
-  });
+  };
+  auditLogs.push(rzpAudit);
+  await dbSaveAuditLog(rzpAudit);
 
   return res.json({
     success: true,
@@ -2517,7 +2730,7 @@ app.post('/api/razorpay/verify-payment', (req, res) => {
 });
 
 // 4. Record Payment Failure
-app.post('/api/razorpay/record-failure', (req, res) => {
+app.post('/api/razorpay/record-failure', async (req, res) => {
   const user = getAuthenticatedUser(req);
   if (!user) return res.status(401).json({ error: 'Unauthorized.' });
 
@@ -2527,8 +2740,9 @@ app.post('/api/razorpay/record-failure', (req, res) => {
     order.status = 'failed';
     order.failureReason = errorReason || 'Customer bank authorization rejected';
     if (paymentId) order.paymentId = paymentId;
+    await dbSaveOrder(order);
 
-    auditLogs.push({
+    const failAudit: AuditLog = {
       id: 'aud_' + Date.now(),
       actorEmail: user.email,
       actorRole: user.role,
@@ -2537,14 +2751,16 @@ app.post('/api/razorpay/record-failure', (req, res) => {
       entityId: orderId,
       details: `Payment failure recorded for order ${orderId}: ${errorReason || 'Unspecified'}`,
       timestamp: new Date().toISOString()
-    });
+    };
+    auditLogs.push(failAudit);
+    await dbSaveAuditLog(failAudit);
   }
 
   return res.json({ success: true });
 });
 
 // 5. Record Payment Dismissal / Cancellation
-app.post('/api/razorpay/record-cancellation', (req, res) => {
+app.post('/api/razorpay/record-cancellation', async (req, res) => {
   const user = getAuthenticatedUser(req);
   if (!user) return res.status(401).json({ error: 'Unauthorized.' });
 
@@ -2552,12 +2768,13 @@ app.post('/api/razorpay/record-cancellation', (req, res) => {
   const order = razorpayOrders.get(orderId);
   if (order && order.status === 'created') {
     order.status = 'cancelled';
+    await dbSaveOrder(order);
   }
   return res.json({ success: true });
 });
 
 // 6. Subscription Cancellation / Auto-Renew Toggle
-app.post('/api/razorpay/cancel-subscription', (req, res) => {
+app.post('/api/razorpay/cancel-subscription', async (req, res) => {
   const user = getAuthenticatedUser(req);
   if (!user) return res.status(401).json({ error: 'Unauthorized.' });
 
@@ -2566,8 +2783,9 @@ app.post('/api/razorpay/cancel-subscription', (req, res) => {
     dashboard.subscription.autoRenew = false;
     dashboard.subscription.status = 'cancelled';
     dashboard.subscription.cancelledAt = new Date().toISOString();
+    await dbSaveDashboard(user.id, dashboard);
 
-    auditLogs.push({
+    const cancelAudit: AuditLog = {
       id: 'aud_' + Date.now(),
       actorEmail: user.email,
       actorRole: user.role,
@@ -2576,7 +2794,9 @@ app.post('/api/razorpay/cancel-subscription', (req, res) => {
       entityId: dashboard.subscription.orderId,
       details: `Auto-renewal cancelled by user ${user.email} for plan ${dashboard.subscription.planName}.`,
       timestamp: new Date().toISOString()
-    });
+    };
+    auditLogs.push(cancelAudit);
+    await dbSaveAuditLog(cancelAudit);
   }
 
   return res.json({
@@ -2586,7 +2806,7 @@ app.post('/api/razorpay/cancel-subscription', (req, res) => {
 });
 
 // 7. Razorpay Webhook Handler (Raw body signature verification + Idempotent reconciliation)
-app.post('/api/razorpay/webhook', (req: any, res) => {
+app.post('/api/razorpay/webhook', async (req: any, res) => {
   const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET?.trim();
   const signature = req.headers['x-razorpay-signature'] as string;
 
@@ -2655,9 +2875,12 @@ app.post('/api/razorpay/webhook', (req: any, res) => {
               reference: paymentId,
               date: new Date().toISOString().split('T')[0]
             });
+            await dbUpsertUser(user);
+            await dbSaveDashboard(user.id, dashboard);
           }
 
-          auditLogs.push({
+          await dbSaveOrder(order);
+          const whAudit: AuditLog = {
             id: 'aud_' + Date.now(),
             actorEmail: 'system@razorpay.webhook',
             actorRole: 'system',
@@ -2666,7 +2889,9 @@ app.post('/api/razorpay/webhook', (req: any, res) => {
             entityId: orderId,
             details: `Reconciled payment ${paymentId} via Razorpay webhook (${eventType}).`,
             timestamp: new Date().toISOString()
-          });
+          };
+          auditLogs.push(whAudit);
+          await dbSaveAuditLog(whAudit);
         }
       }
     } else if (eventType === 'payment.failed') {
@@ -2676,14 +2901,16 @@ app.post('/api/razorpay/webhook', (req: any, res) => {
         const order = razorpayOrders.get(orderId)!;
         order.status = 'failed';
         order.failureReason = paymentEntity?.error_description || 'Gateway reported transaction failure';
+        await dbSaveOrder(order);
       }
     } else if (eventType === 'subscription.cancelled') {
       const subEntity = eventPayload?.payload?.subscription?.entity;
       // Reconcile subscription cancellation
-      for (const db of userDashboards.values()) {
+      for (const [ownerId, db] of userDashboards.entries()) {
         if (db.subscription && db.subscription.paymentId === subEntity?.id) {
           db.subscription.status = 'cancelled';
           db.subscription.autoRenew = false;
+          await dbSaveDashboard(ownerId, db);
         }
       }
     }
@@ -2818,12 +3045,12 @@ app.get('/api/dashboard/releases/:id', (req, res) => {
   return res.json({ release });
 });
 
-// Upload Audio Master endpoint (Multer)
+// Upload Audio Master endpoint (Multer -> S3 or PostgreSQL persistent storage)
 app.post('/api/dashboard/upload/audio', (req, res) => {
   const user = getAuthenticatedUser(req);
   if (!user) return res.status(401).json({ error: 'Unauthorized.' });
 
-  audioUpload.single('audioFile')(req, res, (err: any) => {
+  audioUpload.single('audioFile')(req, res, async (err: any) => {
     if (err) {
       return res.status(400).json({ error: err.message || 'Failed to upload audio file.' });
     }
@@ -2831,24 +3058,37 @@ app.post('/api/dashboard/upload/audio', (req, res) => {
       return res.status(400).json({ error: 'No audio file was received.' });
     }
 
-    const file = req.file;
-    return res.json({
-      success: true,
-      fileName: file.filename,
-      originalName: file.originalname,
-      size: file.size,
-      mimetype: file.mimetype,
-      fileUrl: `/uploads/audio/${file.filename}`
-    });
+    try {
+      const file = req.file;
+      const stored = await saveUploadedMedia({
+        userId: user.id,
+        category: 'audio',
+        originalName: file.originalname,
+        mimeType: file.mimetype || 'audio/wav',
+        buffer: file.buffer,
+        localUploadDir: audioUploadDir
+      });
+      return res.json({
+        success: true,
+        fileName: stored.fileName,
+        originalName: file.originalname,
+        size: stored.size,
+        mimetype: stored.mimeType,
+        fileUrl: stored.fileUrl,
+        storageProvider: stored.storageProvider
+      });
+    } catch (uploadErr: any) {
+      return res.status(500).json({ error: uploadErr.message || 'Failed to persist audio file.' });
+    }
   });
 });
 
-// Upload Artwork endpoint (Multer)
+// Upload Artwork endpoint (Multer -> S3 or PostgreSQL persistent storage)
 app.post('/api/dashboard/upload/artwork', (req, res) => {
   const user = getAuthenticatedUser(req);
   if (!user) return res.status(401).json({ error: 'Unauthorized.' });
 
-  artworkUpload.single('artworkFile')(req, res, (err: any) => {
+  artworkUpload.single('artworkFile')(req, res, async (err: any) => {
     if (err) {
       return res.status(400).json({ error: err.message || 'Failed to upload artwork file.' });
     }
@@ -2856,20 +3096,49 @@ app.post('/api/dashboard/upload/artwork', (req, res) => {
       return res.status(400).json({ error: 'No artwork file was received.' });
     }
 
-    const file = req.file;
-    return res.json({
-      success: true,
-      fileName: file.filename,
-      originalName: file.originalname,
-      size: file.size,
-      mimetype: file.mimetype,
-      fileUrl: `/uploads/artwork/${file.filename}`
-    });
+    try {
+      const file = req.file;
+      const stored = await saveUploadedMedia({
+        userId: user.id,
+        category: 'artwork',
+        originalName: file.originalname,
+        mimeType: file.mimetype || 'image/jpeg',
+        buffer: file.buffer,
+        localUploadDir: artworkUploadDir
+      });
+      return res.json({
+        success: true,
+        fileName: stored.fileName,
+        originalName: file.originalname,
+        size: stored.size,
+        mimetype: stored.mimeType,
+        fileUrl: stored.fileUrl,
+        storageProvider: stored.storageProvider
+      });
+    } catch (uploadErr: any) {
+      return res.status(500).json({ error: uploadErr.message || 'Failed to persist artwork file.' });
+    }
   });
 });
 
+// Stream / download persisted media from S3 or PostgreSQL
+app.get('/api/media/:fileId', async (req, res) => {
+  try {
+    const media = await getStoredMedia(req.params.fileId);
+    if (!media) {
+      return res.status(404).json({ error: 'Media file not found.' });
+    }
+    res.setHeader('Content-Type', media.mimeType);
+    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(media.originalName)}"`);
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    return res.send(media.buffer);
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || 'Failed to retrieve media file.' });
+  }
+});
+
 // Create Full Release (Step 8 submission or Draft save)
-app.post('/api/dashboard/releases', (req, res) => {
+app.post('/api/dashboard/releases', async (req, res) => {
   const user = getAuthenticatedUser(req);
   if (!user) return res.status(401).json({ error: 'Unauthorized.' });
 
@@ -2877,7 +3146,7 @@ app.post('/api/dashboard/releases', (req, res) => {
     title, version, artist, featuredArtists, label, type, language,
     primaryGenre, secondaryGenre, releaseDate, tracks, artworkUrl,
     copyrightOwner, copyrightYear, recordingOwner, territories, rightsConfirmed,
-    status
+    status, upc, lyrics, lyricsFileUrl, rightsDeclarations
   } = req.body;
 
   const targetStatus = status === 'Draft' ? 'Draft' : 'Submitted';
@@ -2890,8 +3159,21 @@ app.post('/api/dashboard/releases', (req, res) => {
     return res.status(400).json({ error: 'Rights ownership declaration is required.' });
   }
 
+  if (
+    targetStatus === 'Submitted' &&
+    user.role !== 'SUPER_ADMIN' &&
+    user.role !== 'admin' &&
+    user.id !== demoUserId &&
+    platformSettings.platformPolicies?.kycMandatoryForDistribution &&
+    user.kyc?.status !== 'Approved'
+  ) {
+    return res.status(403).json({
+      error: 'KYC verification must be approved before submitting releases for distribution. Complete your KYC under Profile & KYC.'
+    });
+  }
+
   const dashboard = getUserDashboard(user.id);
-  const releaseId = 'rel-' + (dashboard.releases.length + 301);
+  const releaseId = 'rel-' + (dashboard.releases.length + 301) + '-' + Date.now().toString().slice(-4);
 
   const formattedTracks: ReleaseTrack[] = Array.isArray(tracks) && tracks.length > 0
     ? tracks.map((t, idx) => ({
@@ -2903,6 +3185,7 @@ app.post('/api/dashboard/releases', (req, res) => {
         composer: t.composer || artist,
         lyricist: t.lyricist || artist,
         producer: t.producer || '',
+        musicDirector: t.musicDirector || '',
         duration: t.duration || '03:30',
         audioFileName: t.audioFileName || '',
         audioFileUrl: t.audioFileUrl || '',
@@ -2927,7 +3210,7 @@ app.post('/api/dashboard/releases', (req, res) => {
     artist: artist.trim(),
     featuredArtists: featuredArtists?.trim(),
     label: label?.trim() || (dashboard.labels[0]?.name || 'Independent / Self-Released'),
-    upc: '890' + Math.floor(1000000000 + Math.random() * 9000000000),
+    upc: (upc && String(upc).trim()) || '890' + Math.floor(1000000000 + Math.random() * 9000000000),
     type: type,
     status: targetStatus,
     language: language || 'English',
@@ -2936,17 +3219,21 @@ app.post('/api/dashboard/releases', (req, res) => {
     releaseDate: releaseDate || new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0],
     tracks: formattedTracks,
     artworkUrl: artworkUrl || '',
+    lyrics: typeof lyrics === 'string' ? lyrics : undefined,
+    lyricsFileUrl: typeof lyricsFileUrl === 'string' ? lyricsFileUrl : undefined,
+    rightsDeclarations: rightsDeclarations || undefined,
     copyrightOwner: copyrightOwner?.trim() || label || artist,
     copyrightYear: Number(copyrightYear) || new Date().getFullYear(),
     recordingOwner: recordingOwner?.trim() || artist,
     territories: territories || 'Worldwide',
-    rightsConfirmed: true,
+    rightsConfirmed: Boolean(rightsConfirmed),
     submittedAt: new Date().toISOString()
   };
 
   dashboard.releases.unshift(newRelease);
+  await dbSaveDashboard(user.id, dashboard);
 
-  auditLogs.push({
+  const relAudit: AuditLog = {
     id: 'aud_' + Date.now(),
     actorEmail: user.email,
     actorRole: user.role,
@@ -2955,18 +3242,29 @@ app.post('/api/dashboard/releases', (req, res) => {
     entityId: releaseId,
     details: `Release "${newRelease.title}" submitted by ${user.fullName}`,
     timestamp: new Date().toISOString()
-  });
+  };
+  auditLogs.push(relAudit);
+  await dbSaveAuditLog(relAudit);
+
+  let aiJob: AiReviewJob | null = null;
+  if (targetStatus === 'Submitted' && aiSettings.aiReviewEnabled) {
+    aiJob = enqueueAiReviewJob(aiContext, user.id, newRelease.id);
+  }
 
   return res.json({
     success: true,
     submissionId: 'SUB-' + Date.now().toString().slice(-6),
     release: newRelease,
-    message: 'Release submitted successfully. It is now awaiting internal review by the artist desk.'
+    aiJob,
+    message:
+      targetStatus === 'Draft'
+        ? 'Draft saved successfully.'
+        : 'Release submitted successfully. Our AI system is analyzing your audio and release information.'
   });
 });
 
 // Add Label
-app.post('/api/dashboard/labels', (req, res) => {
+app.post('/api/dashboard/labels', async (req, res) => {
   const user = getAuthenticatedUser(req);
   if (!user) return res.status(401).json({ error: 'Unauthorized.' });
 
@@ -2984,11 +3282,12 @@ app.post('/api/dashboard/labels', (req, res) => {
   };
 
   dashboard.labels.unshift(newLabel);
+  await dbSaveDashboard(user.id, dashboard);
   return res.json({ success: true, label: newLabel });
 });
 
 // Add Artist
-app.post('/api/dashboard/artists', (req, res) => {
+app.post('/api/dashboard/artists', async (req, res) => {
   const user = getAuthenticatedUser(req);
   if (!user) return res.status(401).json({ error: 'Unauthorized.' });
 
@@ -3006,11 +3305,12 @@ app.post('/api/dashboard/artists', (req, res) => {
   };
 
   dashboard.artists.unshift(newArtist);
+  await dbSaveDashboard(user.id, dashboard);
   return res.json({ success: true, artist: newArtist });
 });
 
 // Support Ticket
-app.post('/api/dashboard/support', (req, res) => {
+app.post('/api/dashboard/support', async (req, res) => {
   const user = getAuthenticatedUser(req);
   if (!user) return res.status(401).json({ error: 'Unauthorized.' });
 
@@ -3031,6 +3331,7 @@ app.post('/api/dashboard/support', (req, res) => {
   };
 
   dashboard.tickets.unshift(newTicket);
+  await dbSaveDashboard(user.id, dashboard);
   return res.json({ success: true, ticket: newTicket });
 });
 
@@ -3043,7 +3344,7 @@ app.get('/api/dashboard/smart-links', (req, res) => {
   return res.json({ success: true, smartLinks: dashboard.smartLinks || [] });
 });
 
-app.post('/api/dashboard/smart-links', (req, res) => {
+app.post('/api/dashboard/smart-links', async (req, res) => {
   const user = getAuthenticatedUser(req);
   if (!user) return res.status(401).json({ error: 'Unauthorized.' });
 
@@ -3069,6 +3370,7 @@ app.post('/api/dashboard/smart-links', (req, res) => {
         description: description || dashboard.smartLinks[existingIndex].description,
         genre: genre || dashboard.smartLinks[existingIndex].genre
       };
+      await dbSaveDashboard(user.id, dashboard);
       return res.json({ success: true, smartLink: dashboard.smartLinks[existingIndex], message: 'Smart Link updated successfully!' });
     }
   }
@@ -3093,10 +3395,11 @@ app.post('/api/dashboard/smart-links', (req, res) => {
   };
 
   dashboard.smartLinks.unshift(newLink);
+  await dbSaveDashboard(user.id, dashboard);
   return res.json({ success: true, smartLink: newLink, message: 'Smart Link generated successfully!' });
 });
 
-app.put('/api/dashboard/smart-links/:id', (req, res) => {
+app.put('/api/dashboard/smart-links/:id', async (req, res) => {
   const user = getAuthenticatedUser(req);
   if (!user) return res.status(401).json({ error: 'Unauthorized.' });
 
@@ -3122,10 +3425,11 @@ app.put('/api/dashboard/smart-links/:id', (req, res) => {
     genre: genre !== undefined ? genre : dashboard.smartLinks[index].genre
   };
 
+  await dbSaveDashboard(user.id, dashboard);
   return res.json({ success: true, smartLink: dashboard.smartLinks[index], message: 'Smart link updated successfully.' });
 });
 
-app.delete('/api/dashboard/smart-links/:id', (req, res) => {
+app.delete('/api/dashboard/smart-links/:id', async (req, res) => {
   const user = getAuthenticatedUser(req);
   if (!user) return res.status(401).json({ error: 'Unauthorized.' });
 
@@ -3135,6 +3439,7 @@ app.delete('/api/dashboard/smart-links/:id', (req, res) => {
   if (index === -1) return res.status(404).json({ error: 'Smart link not found.' });
 
   dashboard.smartLinks.splice(index, 1);
+  await dbSaveDashboard(user.id, dashboard);
   return res.json({ success: true, message: 'Smart link removed successfully.' });
 });
 
@@ -3181,14 +3486,15 @@ app.get('/api/public/smart-link/:slug', (req, res) => {
 });
 
 // Public Click Tracker
-app.post('/api/public/smart-link/:slug/click', (req, res) => {
+app.post('/api/public/smart-link/:slug/click', async (req, res) => {
   const slug = req.params.slug.trim().toLowerCase();
   const { platform } = req.body;
 
-  for (const dashboard of userDashboards.values()) {
+  for (const [ownerId, dashboard] of userDashboards.entries()) {
     const found = dashboard.smartLinks.find(l => l.slug.toLowerCase() === slug);
     if (found) {
       found.clicks = (found.clicks || 0) + 1;
+      await dbSaveDashboard(ownerId, dashboard);
       return res.json({ success: true, clicks: found.clicks, platform });
     }
   }
@@ -3197,7 +3503,7 @@ app.post('/api/public/smart-link/:slug/click', (req, res) => {
 });
 
 // Other Request
-app.post('/api/dashboard/other-requests', (req, res) => {
+app.post('/api/dashboard/other-requests', async (req, res) => {
   const user = getAuthenticatedUser(req);
   if (!user) return res.status(401).json({ error: 'Unauthorized.' });
 
@@ -3214,11 +3520,12 @@ app.post('/api/dashboard/other-requests', (req, res) => {
   };
 
   dashboard.requests.unshift(newReq);
+  await dbSaveDashboard(user.id, dashboard);
   return res.json({ success: true, request: newReq });
 });
 
 // Payout Request
-app.post('/api/dashboard/payout', (req, res) => {
+app.post('/api/dashboard/payout', async (req, res) => {
   const user = getAuthenticatedUser(req);
   if (!user) return res.status(401).json({ error: 'Unauthorized.' });
 
@@ -3244,6 +3551,7 @@ app.post('/api/dashboard/payout', (req, res) => {
   };
 
   dashboard.transactions.unshift(newTx);
+  await dbSaveDashboard(user.id, dashboard);
   return res.json({ success: true, transaction: newTx, newBalance: dashboard.balance });
 });
 
@@ -3393,7 +3701,7 @@ app.get('/api/dashboard/royalties/forecast/export', (req, res) => {
 });
 
 // Invite Team Member
-app.post('/api/dashboard/users', (req, res) => {
+app.post('/api/dashboard/users', async (req, res) => {
   const user = getAuthenticatedUser(req);
   if (!user) return res.status(401).json({ error: 'Unauthorized.' });
 
@@ -3410,6 +3718,7 @@ app.post('/api/dashboard/users', (req, res) => {
   };
 
   dashboard.teamMembers.push(newMember);
+  await dbSaveDashboard(user.id, dashboard);
   return res.json({ success: true, member: newMember });
 });
 
@@ -3431,6 +3740,7 @@ app.post('/api/contact', (req, res) => {
     date: new Date().toISOString()
   };
   contactSubmissions.push(submission);
+  void dbSavePlatformSetting('contact_submissions', contactSubmissions);
 
   return res.json({
     success: true,
@@ -3452,6 +3762,7 @@ app.post('/api/feedback', (req, res) => {
     rating: Number(rating) || 5,
     date: new Date().toISOString()
   });
+  void dbSavePlatformSetting('artist_feedbacks', artistFeedbacks);
 
   return res.json({
     success: true,
@@ -3482,6 +3793,7 @@ interface UserDriveConnection {
 }
 
 const userDriveConnections = new Map<string, UserDriveConnection>();
+const userGmailConnections = new Map<string, UserGmailConnection>();
 
 // Memory storage for Drive uploads (supports up to 100MB per file: stems, WAV masters, artworks, docs)
 const driveUpload = multer({
@@ -3511,7 +3823,7 @@ app.get('/api/drive/status', (req, res) => {
 });
 
 // Store user Drive OAuth credentials securely on backend
-app.post('/api/drive/connect', (req, res) => {
+app.post('/api/drive/connect', async (req, res) => {
   const user = getAuthenticatedUser(req);
   if (!user) return res.status(401).json({ error: 'Unauthorized. Please login.' });
 
@@ -3520,14 +3832,16 @@ app.post('/api/drive/connect', (req, res) => {
     return res.status(400).json({ error: 'OAuth access token is required.' });
   }
 
-  userDriveConnections.set(user.id, {
+  const conn: UserDriveConnection = {
     userId: user.id,
     accessToken,
     email: email || '',
     displayName: displayName || user.fullName,
     photoUrl: photoUrl || '',
     connectedAt: Date.now()
-  });
+  };
+  userDriveConnections.set(user.id, conn);
+  await dbSaveDriveConnection(conn);
 
   return res.json({
     success: true,
@@ -3536,11 +3850,12 @@ app.post('/api/drive/connect', (req, res) => {
 });
 
 // Disconnect Drive
-app.post('/api/drive/disconnect', (req, res) => {
+app.post('/api/drive/disconnect', async (req, res) => {
   const user = getAuthenticatedUser(req);
   if (!user) return res.status(401).json({ error: 'Unauthorized.' });
 
   userDriveConnections.delete(user.id);
+  await dbDeleteDriveConnection(user.id);
   return res.json({ success: true, message: 'Google Drive disconnected.' });
 });
 
@@ -3880,9 +4195,950 @@ app.get('/api/drive/files/:fileId/stream', async (req, res) => {
   }
 });
 
-// ======================== STATIC & VITE INTEGRATION ========================
+// ======================== OFFICIAL GOOGLE SHEETS INTEGRATION ========================
+// Per user requirements:
+// 1. Connect Google Sheets through OAuth.
+// 2. Create new spreadsheets.
+// 3. Read, write and update spreadsheet data.
+// 4. Create artist, label, release and royalty tracking sheets.
+// 5. Maintain monthly streaming and revenue reports.
+// 6. Add automatic data synchronization when authorized.
+// 7. Allow users to export reports.
+// 8. Provide search, sorting and filtering.
+// 9. Keep user data isolated and secure.
+// 10. Use official Google Sheets API v4. Never fabricate streaming or royalty figures.
+
+// Helper to build authentic batch data from user's actual stored catalog and royalties
+function generateUserSheetData(user: StoredUser, dashboard: UserDashboardData) {
+  const artists = dashboard.artists || [];
+  const labels = dashboard.labels || [];
+  const releases = dashboard.releases || [];
+  const royalties = dashboard.monthlyRoyalties || [];
+  const dspBreakdown = dashboard.dspBreakdown || [];
+
+  const totalRoyalties = royalties.reduce((sum, r) => sum + (r.netRoyalty || 0), 0);
+  const totalStreams = royalties.reduce((sum, r) => sum + (r.streams || 0), 0);
+
+  return [
+    {
+      range: 'Overview!A1:D14',
+      values: [
+        ['RUDRAATMA MUSIC – ARTIST CATALOG & REVENUE MASTER'],
+        ['Account Holder:', user.fullName, 'Account Email:', user.email],
+        ['Portal Synchronized:', new Date().toLocaleString(), 'Platform:', 'Rudraatma Music Distribution'],
+        [],
+        ['SUMMARY METRICS', 'CURRENT VALUE', 'STATUS / NOTES'],
+        ['Active Artists & Performers', String(artists.length), 'Registered under account'],
+        ['Approved Record Labels', String(labels.length), 'Verified label profiles'],
+        ['Total Releases In Catalog', String(releases.length), 'Singles, EPs & Albums'],
+        ['Cumulative Net Royalties', `₹${totalRoyalties.toLocaleString('en-IN')}`, '100% Artist Keep Payouts'],
+        ['Total Reconciled Streams', String(totalStreams.toLocaleString('en-IN')), 'Aggregated across Spotify, Apple, etc.'],
+        ['Current Subscription Plan', dashboard.subscription?.planName || 'Growth Plan', dashboard.subscription?.status || 'Active'],
+        [],
+        ['Official Verification Statement:', 'Figures extracted directly from verified DSP distribution settlements.', 'Authentic Data']
+      ]
+    },
+    {
+      range: `Artists!A1:G${Math.max(artists.length + 1, 2)}`,
+      values: [
+        ['Artist ID', 'Artist Name', 'Primary Genre', 'Spotify Artist ID', 'Apple Music ID', 'Catalog Releases', 'Status'],
+        ...(artists.length > 0
+          ? artists.map(a => [
+              a.id,
+              a.name,
+              a.primaryGenre || 'Various',
+              a.spotifyId || 'Not linked',
+              a.appleMusicId || 'Not linked',
+              String(a.releasesCount || 0),
+              'Active / Verified'
+            ])
+          : [['—', 'No artists registered yet', '—', '—', '—', '0', 'Pending']])
+      ]
+    },
+    {
+      range: `Labels!A1:E${Math.max(labels.length + 1, 2)}`,
+      values: [
+        ['Label ID', 'Label Name', 'Label Code', 'Catalog Releases Count', 'Approval Status'],
+        ...(labels.length > 0
+          ? labels.map(l => [
+              l.id,
+              l.name,
+              l.code,
+              String(l.catalogCount || 0),
+              l.status
+            ])
+          : [['—', 'No labels created yet', '—', '0', 'Pending']])
+      ]
+    },
+    {
+      range: `Releases!A1:I${Math.max(releases.length + 1, 2)}`,
+      values: [
+        ['Release ID', 'Release Title', 'Primary Artist', 'Record Label', 'UPC / Barcode', 'Release Date', 'Status', 'Tracks', 'Language'],
+        ...(releases.length > 0
+          ? releases.map(r => [
+              r.id,
+              r.title,
+              r.artist,
+              r.label,
+              r.upc || 'Processing',
+              r.releaseDate,
+              r.status,
+              String(r.tracks?.length || 1),
+              r.language || 'Hindi / English'
+            ])
+          : [['—', 'No releases uploaded yet', '—', '—', '—', '—', 'Empty', '0', '—']])
+      ]
+    },
+    {
+      range: `Royalties!A1:G${Math.max(royalties.length + 1, 2)}`,
+      values: [
+        ['Month Code', 'Statement Period', 'Gross Royalties (INR)', 'Platform Fee (INR)', 'Net Artist Share (INR)', 'Stream Count', 'Payout Status'],
+        ...(royalties.length > 0
+          ? royalties.map(m => [
+              m.month,
+              m.monthLabel || m.month,
+              `₹${(m.grossRoyalty || 0).toLocaleString('en-IN')}`,
+              `₹${((m.grossRoyalty || 0) - (m.netRoyalty || 0)).toLocaleString('en-IN')}`,
+              `₹${(m.netRoyalty || 0).toLocaleString('en-IN')}`,
+              String(m.streams || 0),
+              m.status || 'Cleared'
+            ])
+          : [['—', 'No statements yet', '0', '0', '0', '0', 'Awaiting DSP Feed']])
+      ]
+    },
+    {
+      range: `Streaming!A1:E${Math.max(dspBreakdown.length + 1, 2)}`,
+      values: [
+        ['Digital Streaming Partner (DSP)', 'Royalties Generated (INR)', 'Reconciled Stream Count', 'Market Share', 'Reporting Currency'],
+        ...(dspBreakdown.length > 0
+          ? dspBreakdown.map(d => [
+              d.name,
+              `₹${(d.royalties || 0).toLocaleString('en-IN')}`,
+              String(d.streams || 0),
+              `${d.percentage}%`,
+              'INR (₹)'
+            ])
+          : [['—', 'No DSP breakdown available yet', '0', '0%', 'INR']])
+      ]
+    }
+  ];
+}
+
+// Check Google Sheets connection status
+app.get('/api/sheets/status', (req, res) => {
+  const user = getAuthenticatedUser(req);
+  if (!user) return res.status(401).json({ error: 'Unauthorized.' });
+
+  const conn = userDriveConnections.get(user.id);
+  if (!conn) {
+    return res.json({ connected: false });
+  }
+
+  return res.json({
+    connected: true,
+    sheetsUser: {
+      email: conn.email || '',
+      displayName: conn.displayName || 'Google Account',
+      photoUrl: conn.photoUrl || '',
+      connectedAt: conn.connectedAt
+    }
+  });
+});
+
+// Connect Google Sheets (saves OAuth token in user's session & PostgreSQL)
+app.post('/api/sheets/connect', async (req, res) => {
+  const user = getAuthenticatedUser(req);
+  if (!user) return res.status(401).json({ error: 'Unauthorized. Please login.' });
+
+  const { accessToken, email, displayName, photoUrl } = req.body;
+  if (!accessToken) {
+    return res.status(400).json({ error: 'OAuth access token is required.' });
+  }
+
+  const conn: UserDriveConnection = {
+    userId: user.id,
+    accessToken,
+    email: email || '',
+    displayName: displayName || user.fullName,
+    photoUrl: photoUrl || '',
+    connectedAt: Date.now()
+  };
+  userDriveConnections.set(user.id, conn);
+  await dbSaveDriveConnection(conn);
+
+  return res.json({
+    success: true,
+    message: 'Google Sheets connected securely to your session.'
+  });
+});
+
+// Disconnect Google Sheets
+app.post('/api/sheets/disconnect', async (req, res) => {
+  const user = getAuthenticatedUser(req);
+  if (!user) return res.status(401).json({ error: 'Unauthorized.' });
+
+  userDriveConnections.delete(user.id);
+  await dbDeleteDriveConnection(user.id);
+  return res.json({ success: true, message: 'Google Sheets disconnected.' });
+});
+
+// List spreadsheets from user's Google Drive
+app.get('/api/sheets/list', async (req, res) => {
+  const user = getAuthenticatedUser(req);
+  if (!user) return res.status(401).json({ error: 'Unauthorized.' });
+
+  const conn = userDriveConnections.get(user.id);
+  if (!conn) return res.status(400).json({ error: 'Google Sheets is not connected for this account.' });
+
+  try {
+    const driveRes = await fetch(
+      "https://www.googleapis.com/drive/v3/files?q=mimeType='application/vnd.google-apps.spreadsheet' and trashed=false&fields=files(id,name,webViewLink,createdTime,modifiedTime)&orderBy=modifiedTime desc&pageSize=50",
+      {
+        headers: { Authorization: `Bearer ${conn.accessToken}` }
+      }
+    );
+
+    if (!driveRes.ok) {
+      if (driveRes.status === 401) {
+        userDriveConnections.delete(user.id);
+        return res.status(401).json({ error: 'Google authorization expired. Please reconnect.', code: 'TOKEN_EXPIRED' });
+      }
+      const errText = await driveRes.text();
+      return res.status(driveRes.status).json({ error: 'Drive error listing sheets', details: errText });
+    }
+
+    const data = await driveRes.json();
+    return res.json({ spreadsheets: data.files || [] });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || 'Error listing spreadsheets.' });
+  }
+});
+
+// Create new Google Spreadsheet (Master Catalog Tracker or Blank)
+app.post('/api/sheets/create', async (req, res) => {
+  const user = getAuthenticatedUser(req);
+  if (!user) return res.status(401).json({ error: 'Unauthorized.' });
+
+  const conn = userDriveConnections.get(user.id);
+  if (!conn) return res.status(400).json({ error: 'Google Sheets is not connected.' });
+
+  const { title, type } = req.body;
+  const spreadSheetTitle = title && title.trim() ? title.trim() : `Rudraatma Music – Master Catalog & Royalties (${user.fullName})`;
+
+  try {
+    const isMasterCatalog = type !== 'blank';
+
+    // 1. Create spreadsheet with sheets
+    const sheetsToCreate = isMasterCatalog
+      ? [
+          { properties: { title: 'Overview', gridProperties: { frozenRowCount: 1 } } },
+          { properties: { title: 'Artists', gridProperties: { frozenRowCount: 1 } } },
+          { properties: { title: 'Labels', gridProperties: { frozenRowCount: 1 } } },
+          { properties: { title: 'Releases', gridProperties: { frozenRowCount: 1 } } },
+          { properties: { title: 'Royalties', gridProperties: { frozenRowCount: 1 } } },
+          { properties: { title: 'Streaming', gridProperties: { frozenRowCount: 1 } } }
+        ]
+      : [{ properties: { title: 'Sheet1', gridProperties: { frozenRowCount: 1 } } }];
+
+    const createRes = await fetch('https://sheets.googleapis.com/v4/spreadsheets', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${conn.accessToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        properties: {
+          title: spreadSheetTitle
+        },
+        sheets: sheetsToCreate
+      })
+    });
+
+    if (!createRes.ok) {
+      const errText = await createRes.text();
+      return res.status(createRes.status).json({ error: 'Failed to create spreadsheet on Google Sheets', details: errText });
+    }
+
+    const createdSheet = await createRes.json();
+    const spreadsheetId = createdSheet.spreadsheetId;
+
+    // 2. If Master Catalog, write user's actual stored data
+    if (isMasterCatalog) {
+      const dashboard = getUserDashboard(user.id);
+      const batchData = generateUserSheetData(user, dashboard);
+
+      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchUpdate`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${conn.accessToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          valueInputOption: 'USER_ENTERED',
+          data: batchData
+        })
+      });
+    }
+
+    return res.json({
+      spreadsheetId,
+      title: spreadSheetTitle,
+      webViewLink: `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit`,
+      sheets: (createdSheet.sheets || []).map((s: any) => ({
+        sheetId: s.properties.sheetId,
+        title: s.properties.title,
+        rowCount: s.properties.gridProperties?.rowCount,
+        columnCount: s.properties.gridProperties?.columnCount
+      }))
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || 'Error creating spreadsheet.' });
+  }
+});
+
+// Get spreadsheet details & sheet list
+app.get('/api/sheets/:spreadsheetId', async (req, res) => {
+  const user = getAuthenticatedUser(req);
+  if (!user) return res.status(401).json({ error: 'Unauthorized.' });
+
+  const conn = userDriveConnections.get(user.id);
+  if (!conn) return res.status(400).json({ error: 'Google Sheets is not connected.' });
+
+  const { spreadsheetId } = req.params;
+
+  try {
+    const sheetRes = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?fields=spreadsheetId,properties.title,sheets.properties(sheetId,title,gridProperties)`,
+      {
+        headers: { Authorization: `Bearer ${conn.accessToken}` }
+      }
+    );
+
+    if (!sheetRes.ok) {
+      const errText = await sheetRes.text();
+      return res.status(sheetRes.status).json({ error: 'Failed to get spreadsheet details', details: errText });
+    }
+
+    const data = await sheetRes.json();
+    return res.json({
+      spreadsheetId: data.spreadsheetId,
+      title: data.properties?.title || 'Spreadsheet',
+      webViewLink: `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit`,
+      sheets: (data.sheets || []).map((s: any) => ({
+        sheetId: s.properties.sheetId,
+        title: s.properties.title,
+        rowCount: s.properties.gridProperties?.rowCount,
+        columnCount: s.properties.gridProperties?.columnCount
+      }))
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || 'Error fetching spreadsheet.' });
+  }
+});
+
+// Read values from a specific sheet range
+app.get('/api/sheets/:spreadsheetId/values', async (req, res) => {
+  const user = getAuthenticatedUser(req);
+  if (!user) return res.status(401).json({ error: 'Unauthorized.' });
+
+  const conn = userDriveConnections.get(user.id);
+  if (!conn) return res.status(400).json({ error: 'Google Sheets is not connected.' });
+
+  const { spreadsheetId } = req.params;
+  const range = (req.query.range as string) || 'A1:Z100';
+
+  try {
+    const valRes = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}`,
+      {
+        headers: { Authorization: `Bearer ${conn.accessToken}` }
+      }
+    );
+
+    if (!valRes.ok) {
+      const errText = await valRes.text();
+      return res.status(valRes.status).json({ error: 'Failed to read sheet values', details: errText });
+    }
+
+    const data = await valRes.json();
+    return res.json({
+      range: data.range,
+      majorDimension: data.majorDimension,
+      values: data.values || []
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || 'Error reading values.' });
+  }
+});
+
+// Update/write values in a range
+app.put('/api/sheets/:spreadsheetId/values', async (req, res) => {
+  const user = getAuthenticatedUser(req);
+  if (!user) return res.status(401).json({ error: 'Unauthorized.' });
+
+  const conn = userDriveConnections.get(user.id);
+  if (!conn) return res.status(400).json({ error: 'Google Sheets is not connected.' });
+
+  const { spreadsheetId } = req.params;
+  const { range, values } = req.body;
+  if (!range || !values) return res.status(400).json({ error: 'Range and values array are required.' });
+
+  try {
+    const updateRes = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}?valueInputOption=USER_ENTERED`,
+      {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${conn.accessToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          range,
+          majorDimension: 'ROWS',
+          values
+        })
+      }
+    );
+
+    if (!updateRes.ok) {
+      const errText = await updateRes.text();
+      return res.status(updateRes.status).json({ error: 'Failed to update sheet values', details: errText });
+    }
+
+    const data = await updateRes.json();
+    return res.json({
+      updatedCells: data.updatedCells || 0,
+      updatedRows: data.updatedRows || 0
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || 'Error updating values.' });
+  }
+});
+
+// Append row to sheet
+app.post('/api/sheets/:spreadsheetId/append', async (req, res) => {
+  const user = getAuthenticatedUser(req);
+  if (!user) return res.status(401).json({ error: 'Unauthorized.' });
+
+  const conn = userDriveConnections.get(user.id);
+  if (!conn) return res.status(400).json({ error: 'Google Sheets is not connected.' });
+
+  const { spreadsheetId } = req.params;
+  const { sheetName, values } = req.body;
+  if (!sheetName || !values) return res.status(400).json({ error: 'sheetName and values array are required.' });
+
+  try {
+    const appendRes = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(sheetName)}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${conn.accessToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          majorDimension: 'ROWS',
+          values
+        })
+      }
+    );
+
+    if (!appendRes.ok) {
+      const errText = await appendRes.text();
+      return res.status(appendRes.status).json({ error: 'Failed to append row', details: errText });
+    }
+
+    const data = await appendRes.json();
+    return res.json(data);
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || 'Error appending row.' });
+  }
+});
+
+// Synchronize Spreadsheet with user's actual stored catalog and royalties
+app.post('/api/sheets/:spreadsheetId/sync', async (req, res) => {
+  const user = getAuthenticatedUser(req);
+  if (!user) return res.status(401).json({ error: 'Unauthorized.' });
+
+  const conn = userDriveConnections.get(user.id);
+  if (!conn) return res.status(400).json({ error: 'Google Sheets is not connected.' });
+
+  const { spreadsheetId } = req.params;
+
+  try {
+    // 1. Fetch existing sheets to ensure required sheet tabs exist
+    const sheetMetaRes = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?fields=sheets.properties.title`,
+      {
+        headers: { Authorization: `Bearer ${conn.accessToken}` }
+      }
+    );
+
+    if (!sheetMetaRes.ok) {
+      return res.status(sheetMetaRes.status).json({ error: 'Failed to read spreadsheet structure.' });
+    }
+
+    const metaData = await sheetMetaRes.json();
+    const existingTitles = new Set((metaData.sheets || []).map((s: any) => s.properties.title));
+
+    const requiredSheets = ['Overview', 'Artists', 'Labels', 'Releases', 'Royalties', 'Streaming'];
+    const addSheetRequests = requiredSheets
+      .filter(title => !existingTitles.has(title))
+      .map(title => ({
+        addSheet: {
+          properties: { title, gridProperties: { frozenRowCount: 1 } }
+        }
+      }));
+
+    if (addSheetRequests.length > 0) {
+      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${conn.accessToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ requests: addSheetRequests })
+      });
+    }
+
+    // 2. Fetch fresh user dashboard records & populate
+    const dashboard = getUserDashboard(user.id);
+    const batchData = generateUserSheetData(user, dashboard);
+
+    const updateRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchUpdate`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${conn.accessToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        valueInputOption: 'USER_ENTERED',
+        data: batchData
+      })
+    });
+
+    if (!updateRes.ok) {
+      const errText = await updateRes.text();
+      return res.status(updateRes.status).json({ error: 'Failed to write sync data to Google Sheets', details: errText });
+    }
+
+    return res.json({
+      success: true,
+      message: 'Google Spreadsheet successfully synchronized with your latest catalog and royalty statements.',
+      lastSynced: new Date().toISOString()
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || 'Error during sheet synchronization.' });
+  }
+});
+
+// Export report as XLSX, CSV or PDF
+app.get('/api/sheets/:spreadsheetId/export', async (req, res) => {
+  const user = getAuthenticatedUser(req);
+  if (!user) return res.status(401).json({ error: 'Unauthorized.' });
+
+  const conn = userDriveConnections.get(user.id);
+  if (!conn) return res.status(400).json({ error: 'Google Sheets is not connected.' });
+
+  const { spreadsheetId } = req.params;
+  const format = (req.query.format as string) || 'xlsx';
+
+  try {
+    const metaRes = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?fields=properties.title`,
+      {
+        headers: { Authorization: `Bearer ${conn.accessToken}` }
+      }
+    );
+    let title = 'Rudraatma_Music_Report';
+    if (metaRes.ok) {
+      const meta = await metaRes.json();
+      if (meta.properties?.title) title = meta.properties.title.replace(/[^a-zA-Z0-9_-]/g, '_');
+    }
+
+    const exportUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=${format}`;
+    const exportRes = await fetch(exportUrl, {
+      headers: { Authorization: `Bearer ${conn.accessToken}` }
+    });
+
+    if (!exportRes.ok) {
+      return res.status(exportRes.status).json({ error: 'Failed to export spreadsheet file from Google.' });
+    }
+
+    const mimeTypes: Record<string, string> = {
+      xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      csv: 'text/csv',
+      pdf: 'application/pdf'
+    };
+
+    res.setHeader('Content-Disposition', `attachment; filename="${title}.${format}"`);
+    res.setHeader('Content-Type', mimeTypes[format] || 'application/octet-stream');
+
+    const arrayBuffer = await exportRes.arrayBuffer();
+    return res.send(Buffer.from(arrayBuffer));
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || 'Error exporting spreadsheet.' });
+  }
+});
+
+// ======================== DATABASE HYDRATION & SERVER STARTUP ========================
+
+async function hydrateFromDatabase() {
+  if (!isDatabaseEnabled()) return;
+  const pool = getDbPool();
+
+  // 1. Ensure seeded demo & admin accounts exist in PostgreSQL if table is empty / missing them
+  for (const seedUser of users.values()) {
+    await pool.query(
+      `INSERT INTO users (id, full_name, email, country, password_hash, role, is_active, selected_plan_id, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       ON CONFLICT (email) DO NOTHING`,
+      [
+        seedUser.id,
+        seedUser.fullName,
+        seedUser.email,
+        seedUser.country,
+        seedUser.passwordHash,
+        seedUser.role,
+        seedUser.isActive,
+        seedUser.selectedPlanId || null,
+        seedUser.createdAt
+      ]
+    );
+  }
+
+  // 2. Load all users
+  const userRows = await pool.query('SELECT * FROM users');
+  users.clear();
+  for (const row of userRows.rows) {
+    users.set(row.email, {
+      id: row.id,
+      fullName: row.full_name,
+      email: row.email,
+      country: row.country,
+      passwordHash: row.password_hash,
+      role: row.role,
+      isActive: Boolean(row.is_active),
+      accountStatus: row.account_status || 'active',
+      statusReason: row.status_reason || undefined,
+      kyc: row.kyc_data || undefined,
+      selectedPlanId: row.selected_plan_id || undefined,
+      createdAt: new Date(row.created_at).toISOString()
+    });
+  }
+
+  // 3. Load non-expired OTP codes
+  const now = Date.now();
+  const otpRows = await pool.query('SELECT * FROM otp_codes WHERE expires_at > $1', [now]);
+  signupOtps.clear();
+  loginOtps.clear();
+  resetOtps.clear();
+  for (const row of otpRows.rows) {
+    const otp: StoredOtp = {
+      email: row.email,
+      codeHash: row.code_hash,
+      expiresAt: Number(row.expires_at),
+      attempts: Number(row.attempts),
+      lastSentAt: Number(row.last_sent_at),
+      purpose: row.purpose
+    };
+    if (otp.purpose === 'signup') signupOtps.set(otp.email, otp);
+    else if (otp.purpose === 'login') loginOtps.set(otp.email, otp);
+    else if (otp.purpose === 'reset') resetOtps.set(otp.email, otp);
+  }
+
+  // 4. Load non-expired sessions
+  const sessionRows = await pool.query('SELECT * FROM sessions WHERE expires_at > $1', [now]);
+  sessions.clear();
+  for (const row of sessionRows.rows) {
+    sessions.set(row.token, {
+      token: row.token,
+      userId: row.user_id,
+      expiresAt: Number(row.expires_at)
+    });
+  }
+
+  // 5. Load user dashboards (releases, labels, artists, smart links, subscriptions, transactions)
+  const dashRows = await pool.query('SELECT user_id, data FROM user_dashboards');
+  for (const row of dashRows.rows) {
+    userDashboards.set(row.user_id, row.data as UserDashboardData);
+  }
+
+  // 6. Load Razorpay orders
+  const orderRows = await pool.query('SELECT order_id, data FROM razorpay_orders');
+  razorpayOrders.clear();
+  for (const row of orderRows.rows) {
+    razorpayOrders.set(row.order_id, row.data as RazorpayOrderRecord);
+  }
+
+  // 7. Load notifications
+  const notifRows = await pool.query('SELECT id, data FROM notifications');
+  notifications.clear();
+  for (const row of notifRows.rows) {
+    notifications.set(row.id, row.data as StoredNotification);
+  }
+
+  // 8. Load audit logs (latest 500)
+  const auditRows = await pool.query('SELECT data FROM audit_logs ORDER BY created_at ASC LIMIT 500');
+  auditLogs.length = 0;
+  for (const row of auditRows.rows) {
+    auditLogs.push(row.data as AuditLog);
+  }
+
+  // 9. Load Google Drive/Sheets OAuth connections
+  const driveRows = await pool.query('SELECT * FROM drive_connections');
+  userDriveConnections.clear();
+  for (const row of driveRows.rows) {
+    userDriveConnections.set(row.user_id, {
+      userId: row.user_id,
+      accessToken: row.access_token,
+      email: row.email || '',
+      displayName: row.display_name || '',
+      photoUrl: row.photo_url || '',
+      connectedAt: Number(row.connected_at)
+    });
+  }
+
+  // 10. Load personal Gmail OAuth connections
+  const gmailRows = await pool.query('SELECT * FROM gmail_connections');
+  userGmailConnections.clear();
+  for (const row of gmailRows.rows) {
+    userGmailConnections.set(row.user_id, {
+      userId: row.user_id,
+      accessToken: row.access_token,
+      email: row.email || '',
+      displayName: row.display_name || '',
+      photoUrl: row.photo_url || '',
+      connectedAt: Number(row.connected_at)
+    });
+  }
+
+  // 11. Load platform settings, contact submissions, feedback & plan overrides
+  const allPlatformSettings = await dbGetAllPlatformSettings();
+  if (allPlatformSettings.platform_settings) {
+    Object.assign(platformSettings, allPlatformSettings.platform_settings);
+  }
+  if (allPlatformSettings.plan_catalog_overrides) {
+    for (const [k, v] of Object.entries(allPlatformSettings.plan_catalog_overrides)) {
+      if (PLAN_CATALOG[k] && v && typeof v === 'object') {
+        Object.assign(PLAN_CATALOG[k], v);
+      }
+    }
+  }
+  if (Array.isArray(allPlatformSettings.contact_submissions)) {
+    contactSubmissions.length = 0;
+    contactSubmissions.push(...allPlatformSettings.contact_submissions);
+  }
+  if (Array.isArray(allPlatformSettings.artist_feedbacks)) {
+    artistFeedbacks.length = 0;
+    artistFeedbacks.push(...allPlatformSettings.artist_feedbacks);
+  }
+
+  // 12. Hydrate Rudraatma AI tables
+  const aiSettingRows = await pool.query('SELECT key, value FROM ai_service_settings');
+  for (const row of aiSettingRows.rows) {
+    if (row.key === 'ai_service_settings' && row.value) {
+      Object.assign(aiSettings, row.value);
+    }
+  }
+  const aiJobRows = await pool.query('SELECT * FROM ai_review_jobs');
+  aiJobs.clear();
+  for (const row of aiJobRows.rows) {
+    aiJobs.set(row.id, {
+      id: row.id,
+      userId: row.user_id,
+      releaseId: row.release_id,
+      status: row.status,
+      stage: row.stage,
+      progress: Number(row.progress || 0),
+      attempts: Number(row.attempts || 0),
+      maxAttempts: Number(row.max_attempts || 3),
+      errorDetails: row.error_details || undefined,
+      createdAt: new Date(row.created_at).toISOString(),
+      startedAt: row.started_at ? new Date(row.started_at).toISOString() : undefined,
+      completedAt: row.completed_at ? new Date(row.completed_at).toISOString() : undefined
+    });
+  }
+  const aiResultRows = await pool.query('SELECT * FROM ai_review_results');
+  aiResults.clear();
+  for (const row of aiResultRows.rows) {
+    aiResults.set(row.release_id, {
+      id: row.id,
+      jobId: row.job_id,
+      releaseId: row.release_id,
+      userId: row.user_id,
+      riskLevel: row.risk_level,
+      recommendedDecision: row.recommended_decision,
+      finalDecision: row.final_decision,
+      reviewerId: row.reviewer_id || undefined,
+      confidenceScore: Number(row.confidence_score || 0),
+      durationSec: Number(row.audio_quality?.durationSec || 0),
+      fingerprintStatus: 'GENERATED',
+      acoustIdStatus: 'NO_MATCH_FOUND',
+      acoustIdMatches: [],
+      geminiReport: row.gemini_report,
+      audioQuality: row.audio_quality,
+      duplicateCheck: row.duplicate_check,
+      internalNotes: row.internal_notes || undefined,
+      createdAt: new Date(row.created_at).toISOString(),
+      updatedAt: new Date(row.updated_at).toISOString()
+    });
+  }
+  const fpRows = await pool.query('SELECT * FROM audio_fingerprints');
+  audioFingerprints.length = 0;
+  for (const row of fpRows.rows) {
+    audioFingerprints.push({
+      id: row.id,
+      releaseId: row.release_id,
+      userId: row.user_id,
+      trackIndex: Number(row.track_index || 0),
+      durationSec: Number(row.duration_sec || 0),
+      fingerprint: row.fingerprint,
+      fingerprintHash: row.fingerprint_hash,
+      fileId: row.file_id || undefined,
+      createdAt: new Date(row.created_at).toISOString()
+    });
+  }
+  const repRows = await pool.query('SELECT release_id, report_data FROM release_compliance_reports');
+  complianceReports.clear();
+  for (const row of repRows.rows) {
+    complianceReports.set(row.release_id, row.report_data);
+  }
+  const histRows = await pool.query('SELECT * FROM release_review_history ORDER BY created_at ASC');
+  reviewHistory.length = 0;
+  for (const row of histRows.rows) {
+    reviewHistory.push({
+      id: row.id,
+      releaseId: row.release_id,
+      actorEmail: row.actor_email,
+      actorRole: row.actor_role,
+      action: row.action,
+      previousStatus: row.previous_status,
+      newStatus: row.new_status,
+      notes: row.notes,
+      createdAt: new Date(row.created_at).toISOString()
+    });
+  }
+  const appealRows = await pool.query('SELECT * FROM release_appeals ORDER BY created_at ASC');
+  releaseAppeals.length = 0;
+  for (const row of appealRows.rows) {
+    releaseAppeals.push({
+      id: row.id,
+      releaseId: row.release_id,
+      userId: row.user_id,
+      explanation: row.explanation,
+      correctedMetadata: row.corrected_metadata,
+      evidenceFiles: row.evidence_files || [],
+      status: row.status,
+      adminNotes: row.admin_notes,
+      reviewedBy: row.reviewed_by,
+      createdAt: new Date(row.created_at).toISOString(),
+      reviewedAt: row.reviewed_at ? new Date(row.reviewed_at).toISOString() : undefined
+    });
+  }
+
+  console.log(
+    `[Rudraatma DB] Hydrated ${users.size} users, ${sessions.size} active sessions, ${userDashboards.size} dashboards, ${razorpayOrders.size} payment orders.`
+  );
+}
+
+const platformSettings: PlatformSettings = JSON.parse(JSON.stringify(DEFAULT_PLATFORM_SETTINGS));
+const aiSettings: AiServiceSettings = JSON.parse(JSON.stringify(DEFAULT_AI_SETTINGS));
+const aiJobs = new Map<string, AiReviewJob>();
+const aiResults = new Map<string, AiReviewResult>();
+const audioFingerprints: any[] = [];
+const complianceReports = new Map<string, any>();
+const reviewHistory: any[] = [];
+const aiAuditLogs: any[] = [];
+const releaseAppeals: any[] = [];
+
+const aiContext = {
+  aiSettings,
+  aiJobs,
+  aiResults,
+  audioFingerprints,
+  complianceReports,
+  reviewHistory,
+  aiAuditLogs,
+  releaseAppeals,
+  userDashboards,
+  users,
+  audioUploadDir,
+  artworkUploadDir,
+  dbSaveDashboard
+};
+
+async function recordAudit(
+  actorEmail: string,
+  actorRole: string,
+  action: string,
+  entityType: string,
+  entityId: string,
+  details: string
+) {
+  const entry: AuditLog = {
+    id: 'aud_' + Date.now() + '_' + crypto.randomBytes(3).toString('hex'),
+    actorEmail,
+    actorRole,
+    action,
+    entityType,
+    entityId,
+    details,
+    timestamp: new Date().toISOString()
+  };
+  auditLogs.push(entry);
+  await dbSaveAuditLog(entry);
+}
+
+// Register official Gmail API v1 routes (strictly separated from company transactional SMTP)
+registerGmailRoutes(app, {
+  getAuthenticatedUser,
+  userGmailConnections,
+  dbSaveGmailConnection,
+  dbDeleteGmailConnection
+});
+
+// Register Super Admin & KYC/Profile routes
+registerSuperAdminRoutes(app, {
+  users,
+  sessions,
+  failedLoginAttempts,
+  userDashboards,
+  razorpayOrders,
+  notifications,
+  auditLogs,
+  contactSubmissions,
+  artistFeedbacks,
+  PLAN_CATALOG,
+  platformSettings,
+  authRateLimiter,
+  getAuthenticatedUser,
+  getUserDashboard,
+  recordAudit,
+  dbUpsertUser,
+  dbSaveSession,
+  dbDeleteSession,
+  dbSaveDashboard,
+  dbSaveOrder,
+  dbSaveNotification,
+  dbSavePlatformSetting,
+  localKycDir
+});
+
+// Register Rudraatma AI Music Intelligence & Copyright Risk Detection routes
+registerAiRoutes(app, {
+  ...aiContext,
+  getAuthenticatedUser,
+  notifications,
+  localLyricsDir,
+  localEvidenceDir
+});
 
 async function startServer() {
+  await initDatabase();
+  await hydrateFromDatabase();
+  await bootstrapSuperAdmin({ users, dbUpsertUser });
+
   const isProduction = process.env.NODE_ENV === 'production';
 
   if (!isProduction) {
@@ -3893,16 +5149,29 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.resolve(__dirname, 'dist');
-    app.use(express.static(distPath));
-    app.get('*', (_req, res) => {
-      res.sendFile(path.resolve(distPath, 'index.html'));
+    // API-only mode in production (Render): frontend is hosted separately on Netlify
+    app.get('/', (_req, res) => {
+      return res.json({
+        status: 'ok',
+        service: 'rudraatma-music-api',
+        message: 'Rudraatma Music Distribution API Server. Frontend is hosted separately on Netlify.',
+        health: '/api/health'
+      });
+    });
+
+    app.use('/api/*', (_req, res) => {
+      return res.status(404).json({ error: 'API endpoint not found.' });
     });
   }
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`[Rudraatma Music] Full-Stack server running on http://0.0.0.0:${PORT}`);
+    console.log(
+      `[Rudraatma Music] ${isProduction ? 'API-Only Production' : 'Full-Stack Dev'} server running on http://0.0.0.0:${PORT}`
+    );
   });
 }
 
-startServer();
+startServer().catch((err) => {
+  console.error('[FATAL] Failed to start Rudraatma Music server:', err);
+  process.exit(1);
+});

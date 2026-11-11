@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { X, Send, CheckCircle2, MessageSquare, Star } from 'lucide-react';
+import { apiUrl } from '../../utils/api';
 
 interface FeedbackModalProps {
   isOpen: boolean;
@@ -29,7 +30,7 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({ isOpen, onClose })
     setError(null);
 
     try {
-      const res = await fetch('/api/feedback', {
+      const res = await fetch(apiUrl('/api/feedback'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, email, role, rating, feedback })

@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, NotificationItem } from '../types';
+import { apiUrl } from '../utils/api';
 
 interface AuthContextType {
   user: User | null;
@@ -45,7 +46,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       try {
-        const res = await fetch('/api/auth/session', {
+        const res = await fetch(apiUrl('/api/auth/session'), {
           headers: { Authorization: `Bearer ${storedToken}` }
         });
         if (res.ok) {
@@ -76,7 +77,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const refreshNotifications = async () => {
     if (!token) return;
     try {
-      const res = await fetch('/api/notifications', {
+      const res = await fetch(apiUrl('/api/notifications'), {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (res.ok) {
@@ -106,7 +107,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const logout = async () => {
     if (token) {
       try {
-        await fetch('/api/auth/logout', {
+        await fetch(apiUrl('/api/auth/logout'), {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}` }
         });
@@ -125,7 +126,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setActivePopup(null);
     if (!token) return;
     try {
-      await fetch(`/api/notifications/${notifId}/dismiss`, {
+      await fetch(apiUrl(`/api/notifications/${notifId}/dismiss`), {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -138,7 +139,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const markNotificationRead = async (notifId: string) => {
     if (!token) return;
     try {
-      await fetch(`/api/notifications/${notifId}/read`, {
+      await fetch(apiUrl(`/api/notifications/${notifId}/read`), {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` }
       });

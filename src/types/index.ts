@@ -3,7 +3,8 @@ export interface User {
   fullName: string;
   email: string;
   country: string;
-  role: 'artist' | 'label_manager' | 'admin';
+  role: 'artist' | 'label_manager' | 'admin' | 'SUPER_ADMIN';
+  accountStatus?: 'active' | 'suspended' | 'terminated';
   selectedPlanId?: string;
 }
 
