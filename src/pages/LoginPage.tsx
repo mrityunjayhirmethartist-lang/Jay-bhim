@@ -6,7 +6,7 @@ import { PublicFooter } from '../components/layout/PublicFooter';
 import { Eye, EyeOff, Lock, Mail, ArrowRight, AlertCircle, CheckCircle2, ShieldCheck, RefreshCw, KeyRound, ArrowLeft } from 'lucide-react';
 import { BrandLogo } from '../components/common/BrandLogo';
 import { OtpInput } from '../components/auth/OtpInput';
-import { apiUrl } from '../utils/api';
+import { apiUrl, parseJsonSafe, formatNetworkError } from '../utils/api';
 
 export const LoginPage: React.FC = () => {
   const { navigate, queryParam } = useRouter();
@@ -99,12 +99,7 @@ export const LoginPage: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email.trim(), password })
       });
-      let data: any = null;
-      try {
-        data = await res.json();
-      } catch {
-        throw new Error(`Server returned status ${res.status}. Please check server connectivity.`);
-      }
+      const data = await parseJsonSafe(res);
 
       if (res.ok && data.success) {
         if (data.requiresOtp) {
@@ -129,7 +124,7 @@ export const LoginPage: React.FC = () => {
         }
       }
     } catch (err: any) {
-      setError(err?.message || 'Network communication failure. Please verify backend connection and try again.');
+      setError(formatNetworkError(err, 'Unable to complete login. Please try again.'));
     } finally {
       setLoading(false);
     }
@@ -158,12 +153,7 @@ export const LoginPage: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email.trim(), code })
       });
-      let data: any = null;
-      try {
-        data = await res.json();
-      } catch {
-        throw new Error(`Server returned HTTP ${res.status}.`);
-      }
+      const data = await parseJsonSafe(res);
 
       if (res.ok && data.success && data.token && data.user) {
         // Authenticated successfully! Grant access to dashboard
@@ -174,7 +164,7 @@ export const LoginPage: React.FC = () => {
         setOtpError(data?.error || 'Invalid or expired verification code.');
       }
     } catch (err: any) {
-      setOtpError(err?.message || 'Verification failed due to a network communication error.');
+      setOtpError(formatNetworkError(err, 'Verification failed due to a network error.'));
     } finally {
       setOtpLoading(false);
     }
@@ -191,7 +181,7 @@ export const LoginPage: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email.trim(), type: 'login' })
       });
-      const data = await res.json();
+      const data = await parseJsonSafe(res);
 
       if (res.ok && data.success) {
         setCooldown(data.cooldownSeconds || 60);
@@ -200,8 +190,8 @@ export const LoginPage: React.FC = () => {
       } else {
         setOtpError(data.error || 'Failed to dispatch new verification code.');
       }
-    } catch {
-      setOtpError('Failed to resend verification code. Please check your network.');
+    } catch (err: any) {
+      setOtpError(formatNetworkError(err, 'Failed to resend verification code.'));
     }
   };
 
@@ -226,7 +216,7 @@ export const LoginPage: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: forgotEmail.trim() })
       });
-      const data = await res.json();
+      const data = await parseJsonSafe(res);
 
       if (res.ok && data.success) {
         setForgotStep('verify');
@@ -234,8 +224,8 @@ export const LoginPage: React.FC = () => {
       } else {
         setForgotError(data.error || 'Failed to dispatch password reset code.');
       }
-    } catch {
-      setForgotError('Request failed due to a network error.');
+    } catch (err: any) {
+      setForgotError(formatNetworkError(err, 'Failed to dispatch password reset code.'));
     } finally {
       setForgotLoading(false);
     }

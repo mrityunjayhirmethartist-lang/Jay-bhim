@@ -6,7 +6,7 @@ import { PublicFooter } from '../components/layout/PublicFooter';
 import { Disc3, Lock, Mail, User as UserIcon, Globe, ArrowRight, CheckCircle2, AlertCircle, RefreshCw, KeyRound, ServerCrash, ShieldCheck, ArrowLeft, Edit3, Check, X } from 'lucide-react';
 import { BrandLogo } from '../components/common/BrandLogo';
 import { OtpInput } from '../components/auth/OtpInput';
-import { apiUrl } from '../utils/api';
+import { apiUrl, parseJsonSafe, formatNetworkError } from '../utils/api';
 
 export const SignUpPage: React.FC = () => {
   const { navigate, queryParam } = useRouter();
@@ -134,12 +134,7 @@ export const SignUpPage: React.FC = () => {
         })
       });
 
-      let data: any = null;
-      try {
-        data = await res.json();
-      } catch {
-        throw new Error(`Server returned HTTP ${res.status}. Please check server connectivity.`);
-      }
+      const data = await parseJsonSafe(res);
 
       if (res.ok && data.success) {
         try {
@@ -155,7 +150,7 @@ export const SignUpPage: React.FC = () => {
         setError(data?.error || 'Registration failed.');
       }
     } catch (err: any) {
-      setError(err?.message || 'Network communication failure. Please check your connection and try again.');
+      setError(formatNetworkError(err, 'Registration failed due to a network error. Please try again.'));
     } finally {
       setLoading(false);
     }
@@ -184,12 +179,7 @@ export const SignUpPage: React.FC = () => {
         body: JSON.stringify({ email: email.trim(), code, type: 'signup' })
       });
 
-      let data: any = null;
-      try {
-        data = await res.json();
-      } catch {
-        throw new Error(`Server returned HTTP ${res.status}.`);
-      }
+      const data = await parseJsonSafe(res);
 
       if (res.ok && data.success && data.token && data.user) {
         try {
@@ -205,7 +195,7 @@ export const SignUpPage: React.FC = () => {
         setOtpError(data?.error || 'Invalid or expired verification code.');
       }
     } catch (err: any) {
-      setOtpError(err?.message || 'Verification failed due to a network error. Please try again.');
+      setOtpError(formatNetworkError(err, 'Verification failed due to a network error. Please try again.'));
     } finally {
       setOtpLoading(false);
     }
@@ -234,7 +224,7 @@ export const SignUpPage: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ oldEmail: email.trim(), newEmail: cleanNewEmail })
       });
-      const data = await res.json();
+      const data = await parseJsonSafe(res);
 
       if (res.ok && data.success) {
         setEmail(cleanNewEmail);
@@ -252,8 +242,8 @@ export const SignUpPage: React.FC = () => {
       } else {
         setChangeError(data.error || 'Failed to update email address.');
       }
-    } catch {
-      setChangeError('Network communication error while updating email.');
+    } catch (err: any) {
+      setChangeError(formatNetworkError(err, 'Network error while updating email.'));
     } finally {
       setChangeLoading(false);
     }
@@ -269,7 +259,7 @@ export const SignUpPage: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email.trim(), type: 'signup' })
       });
-      const data = await res.json();
+      const data = await parseJsonSafe(res);
       if (res.ok && data.success) {
         setCooldown(data.cooldownSeconds || 60);
         setExpirySeconds(data.expiresInSeconds || 300);
@@ -277,8 +267,8 @@ export const SignUpPage: React.FC = () => {
       } else {
         setOtpError(data.error || 'Failed to resend code.');
       }
-    } catch {
-      setOtpError('Failed to resend code.');
+    } catch (err: any) {
+      setOtpError(formatNetworkError(err, 'Failed to resend code.'));
     }
   };
 

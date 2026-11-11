@@ -5,7 +5,7 @@ import { PublicFooter } from '../components/layout/PublicFooter';
 import { KeyRound, Mail, Lock, ArrowRight, ArrowLeft, CheckCircle2, AlertCircle, RefreshCw, ShieldCheck } from 'lucide-react';
 import { BrandLogo } from '../components/common/BrandLogo';
 import { OtpInput } from '../components/auth/OtpInput';
-import { apiUrl } from '../utils/api';
+import { apiUrl, parseJsonSafe, formatNetworkError } from '../utils/api';
 
 export const ForgotPasswordPage: React.FC = () => {
   const { navigate, queryParam } = useRouter();
@@ -46,12 +46,7 @@ export const ForgotPasswordPage: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email.trim() })
       });
-      let data: any = null;
-      try {
-        data = await res.json();
-      } catch {
-        throw new Error(`Server returned HTTP ${res.status}.`);
-      }
+      const data = await parseJsonSafe(res);
 
       if (res.ok && data.success) {
         setStep('verify');
@@ -61,7 +56,7 @@ export const ForgotPasswordPage: React.FC = () => {
         setError(data?.error || 'Failed to dispatch reset code.');
       }
     } catch (err: any) {
-      setError(err?.message || 'Network communication failure. Please check your connection.');
+      setError(formatNetworkError(err, 'Unable to reach server. Please check your connection.'));
     } finally {
       setLoading(false);
     }
@@ -99,12 +94,7 @@ export const ForgotPasswordPage: React.FC = () => {
           confirmPassword
         })
       });
-      let data: any = null;
-      try {
-        data = await res.json();
-      } catch {
-        throw new Error(`Server returned HTTP ${res.status}.`);
-      }
+      const data = await parseJsonSafe(res);
 
       if (res.ok && data.success) {
         setResetSuccess(true);
@@ -112,7 +102,7 @@ export const ForgotPasswordPage: React.FC = () => {
         setError(data?.error || 'Password reset failed. Invalid or expired code.');
       }
     } catch (err: any) {
-      setError(err?.message || 'Network communication failure. Please try again.');
+      setError(formatNetworkError(err, 'Password reset failed due to a network error.'));
     } finally {
       setLoading(false);
     }

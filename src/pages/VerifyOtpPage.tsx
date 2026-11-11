@@ -5,7 +5,7 @@ import { PublicHeader } from '../components/layout/PublicHeader';
 import { PublicFooter } from '../components/layout/PublicFooter';
 import { ShieldCheck, CheckCircle2, AlertCircle, RefreshCw, ArrowLeft, Edit3, Mail, Check, X } from 'lucide-react';
 import { OtpInput } from '../components/auth/OtpInput';
-import { apiUrl } from '../utils/api';
+import { apiUrl, parseJsonSafe, formatNetworkError } from '../utils/api';
 
 export const VerifyOtpPage: React.FC = () => {
   const { navigate, queryParam } = useRouter();
@@ -105,12 +105,7 @@ export const VerifyOtpPage: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email.trim(), code, type: typeParam })
       });
-      let data: any = null;
-      try {
-        data = await res.json();
-      } catch {
-        throw new Error(`Server returned HTTP ${res.status}.`);
-      }
+      const data = await parseJsonSafe(res);
 
       if (res.ok && data.success && data.token && data.user) {
         try {
@@ -128,7 +123,7 @@ export const VerifyOtpPage: React.FC = () => {
         setError(data?.error || 'Invalid or expired verification code.');
       }
     } catch (err: any) {
-      setError(err?.message || 'Verification failed due to a network error. Please try again.');
+      setError(formatNetworkError(err, 'Verification failed due to a network error. Please try again.'));
     } finally {
       setLoading(false);
     }
@@ -145,12 +140,7 @@ export const VerifyOtpPage: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email.trim(), type: typeParam })
       });
-      let data: any = null;
-      try {
-        data = await res.json();
-      } catch {
-        throw new Error(`Server returned HTTP ${res.status}.`);
-      }
+      const data = await parseJsonSafe(res);
 
       if (res.ok && data.success) {
         setCooldown(data.cooldownSeconds || 60);
@@ -161,7 +151,7 @@ export const VerifyOtpPage: React.FC = () => {
         setError(data?.error || 'Failed to resend verification code.');
       }
     } catch (err: any) {
-      setError(err?.message || 'Failed to resend code due to network failure.');
+      setError(formatNetworkError(err, 'Failed to resend code due to network failure.'));
     }
   };
 

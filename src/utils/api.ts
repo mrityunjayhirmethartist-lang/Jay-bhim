@@ -35,3 +35,30 @@ export function apiUrl(path: string): string {
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
   return `${API_BASE_URL}${normalizedPath}`;
 }
+
+export async function parseJsonSafe(res: Response): Promise<any> {
+  const text = await res.text();
+  if (!text) return {};
+  try {
+    return JSON.parse(text);
+  } catch {
+    const target = API_BASE_URL || window.location.origin;
+    throw new Error(
+      `Server at ${target} returned HTTP ${res.status} (non-JSON response). If Render is waking up, wait a few seconds and retry.`
+    );
+  }
+}
+
+export function formatNetworkError(err: any, fallback: string): string {
+  const msg = String(err?.message || '');
+  if (
+    msg === 'Failed to fetch' ||
+    msg === 'Load failed' ||
+    msg.includes('NetworkError') ||
+    msg.includes('fetch')
+  ) {
+    const target = API_BASE_URL || 'the backend server';
+    return `Unable to reach ${target}. Please check your internet connection or wait 20–30s if the Render backend is waking from sleep, then try again.`;
+  }
+  return msg || fallback;
+}

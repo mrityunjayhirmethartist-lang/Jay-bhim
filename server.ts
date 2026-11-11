@@ -346,16 +346,19 @@ async function sendEmailOtp(
       return { success: true, delivered: true, sender: from };
     } catch (err: any) {
       console.error(`[Rudraatma Music Hosting Email Error] SMTP dispatch failure to ${toEmail} via ${host}:${port}:`, err.message);
-      console.log(`[Rudraatma Music Auth Audit Log] Active 6-digit ${purpose} OTP for ${toEmail}: >>> ${code} <<< (Expires in 5 minutes)`);
+      if (process.env.NODE_ENV !== 'production') {
+        console.log(`[Rudraatma Music Dev OTP] Active 6-digit ${purpose} OTP for ${toEmail}: ${code}`);
+      }
       return { success: true, delivered: false, error: `Hosting SMTP: ${err.message}`, sender: from };
     }
   }
 
   // Hosting email credentials not yet set in environment
   console.log(`[Rudraatma Music Hosting Email Notice] Official hosting email sender: ${from}`);
-  console.log(`[Rudraatma Music Host Credentials Status] SMTP_PASS is missing in environment variables. To deliver live emails from ${OFFICIAL_SENDER_EMAIL}:`);
-  console.log(`  Set environment variables: SMTP_HOST=${host}, SMTP_PORT=${port}, SMTP_USER=${user}, SMTP_PASS=<password>`);
-  console.log(`[Rudraatma Music Auth Audit Log] Active 6-digit ${purpose} OTP for ${toEmail}: >>> ${code} <<< (Expires in 5 minutes)`);
+  console.log(`[Rudraatma Music Host Credentials Status] SMTP_PASS is missing in environment variables.`);
+  if (process.env.NODE_ENV !== 'production') {
+    console.log(`[Rudraatma Music Dev OTP] Active 6-digit ${purpose} OTP for ${toEmail}: ${code}`);
+  }
 
   return { success: true, delivered: false, missingConfig: true, sender: from };
 }
