@@ -219,7 +219,7 @@ export function registerSuperAdminRoutes(app: express.Express, deps: SuperAdminD
 
   // ======================== 1. SUPER ADMIN AUTHENTICATION (NO OTP) ========================
 
-  // One-time bootstrap endpoint (only works if SUPER_ADMIN has no password yet and matches BOOTSTRAP_SECRET if configured)
+  // One-time bootstrap endpoint (only works if SUPER_ADMIN has no password yet and matches SUPER_ADMIN_BOOTSTRAP_SECRET)
   app.post('/api/super-admin/bootstrap', deps.authRateLimiter, async (req, res) => {
     const adminEmail = getMainSuperAdminEmail();
     const existing = deps.users.get(adminEmail);
@@ -227,11 +227,21 @@ export function registerSuperAdminRoutes(app: express.Express, deps: SuperAdminD
       return res.status(403).json({ error: 'Super Admin account is already bootstrapped.' });
     }
 
-    const { password, bootstrapSecret } = req.body || {};
     const expectedSecret = process.env.SUPER_ADMIN_BOOTSTRAP_SECRET?.trim();
-    if (expectedSecret && bootstrapSecret !== expectedSecret) {
+    if (!expectedSecret) {
+      return res.status(503).json({
+        error: 'SUPER_ADMIN_BOOTSTRAP_SECRET is not configured on the server. Set it in Render environment variables before bootstrapping.'
+      });
+    }
+
+    const { password, bootstrapSecret } = req.body || {};
+    const providedSecret = typeof bootstrapSecret === 'string' ? bootstrapSecret.trim() : '';
+    const expectedBuf = Buffer.from(expectedSecret, 'utf8');
+    const providedBuf = Buffer.from(providedSecret, 'utf8');
+    if (expectedBuf.length !== providedBuf.length || !crypto.timingSafeEqual(expectedBuf, providedBuf)) {
       return res.status(403).json({ error: 'Invalid bootstrap secret.' });
     }
+
     if (!password || String(password).length < 10) {
       return res.status(400).json({ error: 'A strong password (minimum 10 characters) is required.' });
     }

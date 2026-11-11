@@ -36,7 +36,14 @@ export const SuperAdminLoginPage: React.FC = () => {
           ...(requiresTwoFactor && twoFactorPin ? { twoFactorPin } : {})
         })
       });
-      const data = await res.json();
+      const rawText = await res.text();
+      let data: any = {};
+      try {
+        data = rawText ? JSON.parse(rawText) : {};
+      } catch {
+        setError(`Authentication server returned an unexpected response (${res.status}). Check VITE_API_BASE_URL and CORS settings.`);
+        return;
+      }
 
       if (data.requiresTwoFactor) {
         setRequiresTwoFactor(true);
@@ -45,7 +52,7 @@ export const SuperAdminLoginPage: React.FC = () => {
       }
 
       if (!res.ok || !data.success) {
-        setError(data.error || 'Authentication failed.');
+        setError(data.error || `Authentication failed (${res.status}).`);
         return;
       }
 
@@ -53,8 +60,12 @@ export const SuperAdminLoginPage: React.FC = () => {
         login(data.token, data.user);
         navigate('/super-admin');
       }
-    } catch {
-      setError('Unable to reach authentication server. Please verify backend connectivity.');
+    } catch (err: any) {
+      setError(
+        err?.message && err.message !== 'Failed to fetch'
+          ? err.message
+          : 'Unable to reach authentication server (CORS or backend offline). Please verify https://rudraatma-music.onrender.com/api/health.'
+      );
     } finally {
       setLoading(false);
     }

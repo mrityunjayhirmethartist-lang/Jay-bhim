@@ -72,11 +72,14 @@ const app = express();
 app.set('trust proxy', 1); // Required behind Render / Netlify reverse proxies for rate limiting
 const PORT = Number(process.env.PORT) || 3000;
 
-// ======================== CORS CONFIGURATION (NETLIFY + LOCALHOST) ========================
+// ======================== CORS CONFIGURATION (NETLIFY + CUSTOM DOMAINS + LOCALHOST) ========================
 const configuredOrigins = [
   process.env.FRONTEND_URL,
   process.env.NETLIFY_URL,
   process.env.APP_URL,
+  'https://rudraatmamusic.com',
+  'https://www.rudraatmamusic.com',
+  'https://rudraatma-music.netlify.app',
   'http://localhost:3000',
   'http://localhost:5173',
   'http://127.0.0.1:3000',
@@ -85,26 +88,40 @@ const configuredOrigins = [
   .filter((o): o is string => Boolean(o && o.trim()))
   .map(o => o.trim().replace(/\/+$/, ''));
 
-app.use(
-  cors({
-    origin: (origin, callback) => {
-      // Allow server-to-server, curl, Razorpay webhooks, and same-origin requests
-      if (!origin) return callback(null, true);
-      const cleanOrigin = origin.replace(/\/+$/, '');
-      if (
-        configuredOrigins.includes(cleanOrigin) ||
-        cleanOrigin.endsWith('.netlify.app') ||
-        (process.env.NODE_ENV !== 'production' && cleanOrigin.startsWith('http://localhost:'))
-      ) {
-        return callback(null, true);
-      }
-      return callback(new Error(`CORS policy blocked origin: ${origin}`));
-    },
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
-  })
-);
+function isOriginAllowed(origin?: string): boolean {
+  if (!origin) return true;
+  const cleanOrigin = origin.trim().replace(/\/+$/, '');
+  if (
+    configuredOrigins.includes(cleanOrigin) ||
+    cleanOrigin.endsWith('.netlify.app') ||
+    cleanOrigin.endsWith('.onrender.com') ||
+    cleanOrigin.endsWith('.run.app')
+  ) {
+    return true;
+  }
+  if (process.env.NODE_ENV !== 'production' && (cleanOrigin.startsWith('http://localhost:') || cleanOrigin.startsWith('http://127.0.0.1:'))) {
+    return true;
+  }
+  return false;
+}
+
+const corsMiddleware = cors({
+  origin: (origin, callback) => {
+    if (isOriginAllowed(origin)) {
+      return callback(null, true);
+    }
+    const err: any = new Error(`CORS policy blocked origin: ${origin}`);
+    err.status = 403;
+    return callback(err);
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  optionsSuccessStatus: 204
+});
+
+app.use(corsMiddleware);
+app.options('*', corsMiddleware);
 
 app.use(express.json({
   verify: (req: any, _res, buf) => {
@@ -116,13 +133,46 @@ if (process.env.NODE_ENV !== 'production') {
   app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 }
 
-// Health check endpoint for Render & monitoring
-app.get('/api/health', (_req, res) => {
+// Health check endpoint for Render & monitoring (verifies live PostgreSQL connectivity)
+app.get('/api/health', async (_req, res) => {
+  let dbStatus: 'postgresql' | 'in-memory-dev' | 'error' = isDatabaseEnabled() ? 'postgresql' : 'in-memory-dev';
+  let dbLatencyMs: number | undefined;
+
+  if (isDatabaseEnabled()) {
+    const start = Date.now();
+    try {
+      await getDbPool().query('SELECT 1');
+      dbLatencyMs = Date.now() - start;
+    } catch (err: any) {
+      dbStatus = 'error';
+      return res.status(503).json({
+        status: 'error',
+        service: 'rudraatma-music-api',
+        environment: process.env.NODE_ENV || 'development',
+        database: 'error',
+        error: 'Database health check failed.',
+        storage: getStorageProviderName(),
+        timestamp: new Date().toISOString()
+      });
+    }
+  } else if (process.env.NODE_ENV === 'production') {
+    return res.status(503).json({
+      status: 'error',
+      service: 'rudraatma-music-api',
+      environment: 'production',
+      database: 'disconnected',
+      error: 'PostgreSQL database is not connected in production.',
+      storage: getStorageProviderName(),
+      timestamp: new Date().toISOString()
+    });
+  }
+
   return res.json({
     status: 'ok',
     service: 'rudraatma-music-api',
     environment: process.env.NODE_ENV || 'development',
-    database: isDatabaseEnabled() ? 'postgresql' : 'in-memory-dev',
+    database: dbStatus,
+    ...(typeof dbLatencyMs === 'number' ? { dbLatencyMs } : {}),
     storage: getStorageProviderName(),
     timestamp: new Date().toISOString()
   });
@@ -1168,12 +1218,14 @@ function getAuthenticatedUser(req: express.Request): StoredUser | null {
   if (!session) return null;
   if (Date.now() > session.expiresAt) {
     sessions.delete(token);
+    void dbDeleteSession(token);
     return null;
   }
   for (const user of users.values()) {
     if (user.id === session.userId) {
       if (user.accountStatus === 'suspended' || user.accountStatus === 'terminated') {
         sessions.delete(token);
+        void dbDeleteSession(token);
         return null;
       }
       return user;
@@ -1999,7 +2051,8 @@ app.post('/api/notifications/:id/read', async (req, res) => {
 function requireAdmin(req: express.Request, res: express.Response, next: express.NextFunction) {
   const user = getAuthenticatedUser(req);
   if (!user) return res.status(401).json({ error: 'Unauthorized. Please log in.' });
-  if (user.role !== 'admin' && user.role !== 'SUPER_ADMIN') {
+  const roleUpper = String(user.role || '').toUpperCase();
+  if (roleUpper !== 'ADMIN' && roleUpper !== 'SUPER_ADMIN') {
     return res.status(403).json({ error: 'Access forbidden. Administrator privileges required.' });
   }
   next();
@@ -5163,6 +5216,14 @@ async function startServer() {
       return res.status(404).json({ error: 'API endpoint not found.' });
     });
   }
+
+  // Global JSON error handler (prevents Express HTML error pages on CORS/API errors)
+  app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    const status = Number(err?.status || err?.statusCode || 500);
+    const message = err?.message || 'Internal server error.';
+    if (res.headersSent) return;
+    return res.status(status).json({ error: message });
+  });
 
   app.listen(PORT, '0.0.0.0', () => {
     console.log(
