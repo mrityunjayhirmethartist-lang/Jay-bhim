@@ -59,13 +59,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setToken(null);
             setUser(null);
           }
-        } else {
+        } else if (res.status === 401 || res.status === 403) {
           localStorage.removeItem('rad_token');
           setToken(null);
           setUser(null);
         }
       } catch (err) {
-        console.error('Session verify failed', err);
+        console.error('Session verify failed (backend may be waking up):', err);
       } finally {
         setLoading(false);
       }

@@ -268,14 +268,25 @@ export const FinancialPage: React.FC = () => {
   // Threshold Calculation (₹100 min)
   const thresholdPercent = Math.min(100, Math.round((balance / 100) * 100));
 
-  // CSV Export Trigger
-  const handleDownloadStatement = (month?: string) => {
+  // CSV Export Trigger (sends Authorization Bearer header across Netlify -> Render)
+  const handleDownloadStatement = async (month?: string) => {
+    if (!token) return;
     const url = apiUrl(
       month
         ? `/api/dashboard/royalties/export?month=${encodeURIComponent(month)}`
         : '/api/dashboard/royalties/export'
     );
-    window.location.href = url;
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) return;
+    const blob = await res.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = `Rudraatma_Royalty_Statement_${month || 'All_Time'}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(blobUrl);
   };
 
   return (

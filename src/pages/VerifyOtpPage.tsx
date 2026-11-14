@@ -179,7 +179,7 @@ export const VerifyOtpPage: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ oldEmail: email.trim(), newEmail: cleanNewEmail })
       });
-      const data = await res.json();
+      const data = await parseJsonSafe(res);
 
       if (res.ok && data.success) {
         setEmail(cleanNewEmail);
@@ -198,8 +198,8 @@ export const VerifyOtpPage: React.FC = () => {
       } else {
         setChangeError(data.error || 'Failed to update email address.');
       }
-    } catch {
-      setChangeError('Network communication error while updating email.');
+    } catch (err: any) {
+      setChangeError(formatNetworkError(err, 'Network communication error while updating email.'));
     } finally {
       setChangeLoading(false);
     }

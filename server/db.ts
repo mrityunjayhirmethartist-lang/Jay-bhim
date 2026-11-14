@@ -3,7 +3,22 @@ import pg from 'pg';
 const { Pool } = pg;
 
 const isProduction = process.env.NODE_ENV === 'production';
-const databaseUrl = process.env.DATABASE_URL?.trim();
+const isRender = Boolean(
+  process.env.RENDER || process.env.RENDER_SERVICE_ID || process.env.RENDER_EXTERNAL_URL
+);
+const isCloudRun = Boolean(process.env.K_SERVICE || process.env.CLOUD_RUN_JOB);
+
+function extractDbHostname(connStr: string): string {
+  try {
+    return new URL(connStr).hostname.toLowerCase();
+  } catch {
+    return '';
+  }
+}
+
+function isRenderInternalHost(hostname: string): boolean {
+  return /^dpg-[a-z0-9-]+-a$/i.test(hostname);
+}
 
 let pool: pg.Pool | null = null;
 let dbEnabled = false;
@@ -21,45 +36,74 @@ export function getDbPool(): pg.Pool {
 
 /**
  * Initializes PostgreSQL connection pool and runs idempotent schema migrations + indexes.
- * In production (NODE_ENV=production), DATABASE_URL is strictly required — never silently falls back to memory.
+ * On Render production, DATABASE_URL is strictly required — never silently falls back to memory.
+ * On Google Cloud Run preview deployments, if DATABASE_URL uses a Render-internal VPC hostname (dpg-...-a),
+ * prefers EXTERNAL_DATABASE_URL or falls back safely so Cloud Run container startup does not crash.
  */
 export async function initDatabase(): Promise<void> {
-  if (!databaseUrl) {
-    if (isProduction) {
+  const primaryUrl = process.env.DATABASE_URL?.trim() || '';
+  const externalUrl = process.env.EXTERNAL_DATABASE_URL?.trim() || '';
+
+  let activeUrl = primaryUrl;
+  const primaryHost = primaryUrl ? extractDbHostname(primaryUrl) : '';
+
+  if (primaryUrl && isRenderInternalHost(primaryHost) && !isRender && externalUrl) {
+    console.warn(
+      `[Rudraatma DB] Primary DATABASE_URL uses Render-internal host (${primaryHost}) outside Render; using EXTERNAL_DATABASE_URL instead.`
+    );
+    activeUrl = externalUrl;
+  }
+
+  if (!activeUrl) {
+    if (isProduction && !isCloudRun) {
       throw new Error(
         '[FATAL] DATABASE_URL environment variable is required in production. Refusing to silently fall back to in-memory storage.'
       );
     }
     console.warn(
-      '[Rudraatma DB] DATABASE_URL not set in development mode. Running with in-memory storage (data will not persist across restarts).'
+      `[Rudraatma DB] DATABASE_URL not set (${isCloudRun ? 'Cloud Run preview' : 'development'}). Running with in-memory storage.`
+    );
+    return;
+  }
+
+  const activeHost = extractDbHostname(activeUrl);
+  if (isCloudRun && !isRender && isRenderInternalHost(activeHost)) {
+    console.warn(
+      `[Rudraatma DB] Skipping Render-internal PostgreSQL host (${activeHost}) on Google Cloud Run because dpg-*-a only resolves inside Render's private network. Set EXTERNAL_DATABASE_URL for persistent Cloud Run DB.`
     );
     return;
   }
 
   const useSsl =
     process.env.DATABASE_SSL === 'true' ||
-    databaseUrl.includes('render.com') ||
-    databaseUrl.includes('neon.tech') ||
-    databaseUrl.includes('supabase.co') ||
-    databaseUrl.includes('sslmode=require');
+    activeUrl.includes('render.com') ||
+    activeUrl.includes('neon.tech') ||
+    activeUrl.includes('supabase.co') ||
+    activeUrl.includes('sslmode=require');
 
   pool = new Pool({
-    connectionString: databaseUrl,
+    connectionString: activeUrl,
     ssl: useSsl ? { rejectUnauthorized: false } : undefined,
     max: 10,
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 10000
   });
 
+  pool.on('error', (err) => {
+    console.error('[Rudraatma DB] Unexpected PostgreSQL pool error:', err.message);
+  });
+
   try {
     await pool.query('SELECT 1');
     dbEnabled = true;
-    console.log('[Rudraatma DB] Connected to PostgreSQL successfully.');
+    console.log(`[Rudraatma DB] Connected to PostgreSQL (${activeHost || 'configured host'}) successfully.`);
   } catch (err: any) {
-    if (isProduction) {
+    if (isProduction && !(isCloudRun && !isRender)) {
       throw new Error(`[FATAL] Failed to connect to PostgreSQL in production: ${err.message}`);
     }
-    console.error('[Rudraatma DB] PostgreSQL connection failed in development:', err.message);
+    console.error(
+      `[Rudraatma DB] PostgreSQL connection failed (${isCloudRun ? 'Cloud Run preview' : 'development'}): ${err.message}`
+    );
     pool = null;
     dbEnabled = false;
     return;

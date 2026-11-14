@@ -102,18 +102,23 @@ export const LoginPage: React.FC = () => {
       const data = await parseJsonSafe(res);
 
       if (res.ok && data.success) {
-        if (data.requiresOtp) {
+        if (data.token && data.user && !data.requiresOtp) {
+          login(data.token, data.user);
+          const target =
+            data.redirectTo ||
+            (data.user.role === 'SUPER_ADMIN'
+              ? '/super-admin'
+              : redirectTarget.startsWith('/')
+                ? redirectTarget
+                : '/dashboard');
+          navigate(target);
+        } else if (data.requiresOtp) {
           // Transition to Step 2: 6-digit OTP verification
           setRequiresOtp(true);
           setOtpDigits(['', '', '', '', '', '']);
           setOtpError(null);
           setCooldown(data.cooldownSeconds || 60);
           setExpirySeconds(data.expiresInSeconds || 300);
-        } else if (data.token && data.user) {
-          // Fallback if session token provided directly
-          login(data.token, data.user);
-          const target = redirectTarget.startsWith('/') ? redirectTarget : '/dashboard';
-          navigate(target);
         }
       } else {
         if (data && data.needsVerification) {
@@ -264,7 +269,7 @@ export const LoginPage: React.FC = () => {
           confirmPassword
         })
       });
-      const data = await res.json();
+      const data = await parseJsonSafe(res);
 
       if (res.ok && data.success) {
         setResetSuccess(true);
@@ -278,26 +283,11 @@ export const LoginPage: React.FC = () => {
       } else {
         setForgotError(data.error || 'Password reset failed.');
       }
-    } catch {
-      setForgotError('Password reset failed due to a network error.');
+    } catch (err: any) {
+      setForgotError(formatNetworkError(err, 'Password reset failed due to a network error.'));
     } finally {
       setForgotLoading(false);
     }
-  };
-
-  // Quick Demo Account Pre-fills
-  const fillDemoArtist = () => {
-    setEmail('demo@rudraatmamusic.com');
-    setPassword('Password123!');
-    setRequiresOtp(false);
-    setError(null);
-  };
-
-  const fillAdmin = () => {
-    setEmail('admin@rudraatmamusic.com');
-    setPassword('AdminPass123!');
-    setRequiresOtp(false);
-    setError(null);
   };
 
   return (
@@ -448,30 +438,6 @@ export const LoginPage: React.FC = () => {
                     </div>
                   </div>
                 )}
-
-                {/* Quick Test Demo Helper */}
-                <div className="mb-6 p-3 rounded-xl bg-slate-900 border border-slate-800 text-[11px] space-y-2">
-                  <div className="text-slate-400 font-mono flex items-center justify-between">
-                    <span>Platform Pre-Seeded Accounts:</span>
-                    <span className="text-cyan-400">2FA Protected</span>
-                  </div>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={fillDemoArtist}
-                      className="flex-1 py-1.5 px-2 bg-blue-950/60 border border-blue-800/80 hover:bg-blue-900/60 text-blue-300 rounded font-medium transition-colors text-center"
-                    >
-                      Artist Demo
-                    </button>
-                    <button
-                      type="button"
-                      onClick={fillAdmin}
-                      className="flex-1 py-1.5 px-2 bg-emerald-950/60 border border-emerald-800/80 hover:bg-emerald-900/60 text-emerald-300 rounded font-medium transition-colors text-center"
-                    >
-                      Admin Desk
-                    </button>
-                  </div>
-                </div>
 
                 {error && (
                   <div className="mb-5 p-3 rounded-lg text-xs text-rose-300 bg-rose-950/40 border border-rose-800/80 flex items-center gap-2">

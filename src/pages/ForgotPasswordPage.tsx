@@ -118,12 +118,7 @@ export const ForgotPasswordPage: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email.trim() })
       });
-      let data: any = null;
-      try {
-        data = await res.json();
-      } catch {
-        throw new Error(`Server returned HTTP ${res.status}.`);
-      }
+      const data = await parseJsonSafe(res);
 
       if (res.ok && data.success) {
         setCooldown(data.cooldownSeconds || 60);
@@ -131,7 +126,7 @@ export const ForgotPasswordPage: React.FC = () => {
         setError(data?.error || 'Failed to resend code.');
       }
     } catch (err: any) {
-      setError(err?.message || 'Failed to resend code.');
+      setError(formatNetworkError(err, 'Failed to resend code.'));
     }
   };
 

@@ -4,6 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import bcrypt from 'bcryptjs';
 import multer from 'multer';
+import nodemailer from 'nodemailer';
 import { getDbPool, isDatabaseEnabled } from './db';
 import { saveUploadedMedia, getStoredMedia } from './storage';
 
@@ -146,15 +147,11 @@ export async function bootstrapSuperAdmin(deps: Pick<SuperAdminDeps, 'users' | '
     passwordHash = envHash;
   } else if (envPlain) {
     passwordHash = await bcrypt.hash(envPlain, 12);
-  } else if (!passwordHash && process.env.NODE_ENV !== 'production') {
-    // Development-only initial bootstrap credential when env var is omitted
-    passwordHash = await bcrypt.hash('RudraSuperAdmin@2026', 12);
-    console.log(`[SuperAdmin Bootstrap] Initialized development SUPER_ADMIN (${adminEmail}) via one-time bootstrap.`);
   }
 
   if (!passwordHash) {
     console.warn(
-      `[SuperAdmin Bootstrap] SUPER_ADMIN_PASSWORD or SUPER_ADMIN_PASSWORD_HASH is not set for ${adminEmail}. Set env vars or call POST /api/super-admin/bootstrap.`
+      `[SuperAdmin Bootstrap] SUPER_ADMIN_PASSWORD or SUPER_ADMIN_PASSWORD_HASH is not set for ${adminEmail}. Set env vars or call POST /api/super-admin/bootstrap with SUPER_ADMIN_BOOTSTRAP_SECRET.`
     );
     return;
   }
@@ -303,21 +300,7 @@ export function registerSuperAdminRoutes(app: express.Express, deps: SuperAdminD
       return res.status(401).json({ error: 'Invalid Super Admin credentials.' });
     }
 
-    // Optional Two-Factor Security PIN if enabled in Platform Settings
-    if (deps.platformSettings.adminTwoFactorEnabled && deps.platformSettings.adminTotpPinHash) {
-      if (!twoFactorPin) {
-        return res.status(200).json({
-          success: false,
-          requiresTwoFactor: true,
-          message: 'Two-factor security PIN is enabled for Super Admin.'
-        });
-      }
-      const pinValid = await bcrypt.compare(String(twoFactorPin), deps.platformSettings.adminTotpPinHash);
-      if (!pinValid) {
-        return res.status(401).json({ error: 'Invalid two-factor security PIN.' });
-      }
-    }
-
+    // Super Admin authenticates directly with verified credentials (never requires Email OTP or 2FA prompt)
     deps.failedLoginAttempts.delete(attemptKey);
 
     const sessionToken = 'sa_sess_' + crypto.randomBytes(28).toString('hex');
@@ -349,6 +332,48 @@ export function registerSuperAdminRoutes(app: express.Express, deps: SuperAdminD
         role: user.role
       }
     });
+  });
+
+  // Protected SMTP diagnostic check for Super Admin
+  app.post('/api/super-admin/test-smtp', requireSuperAdmin, async (_req, res) => {
+    const host = (process.env.SMTP_HOST || 'mail.rudraatmamusic.com').trim();
+    const port = Number(process.env.SMTP_PORT) || 465;
+    const isSecure = process.env.SMTP_SECURE ? process.env.SMTP_SECURE === 'true' : port === 465;
+    const user = (process.env.SMTP_USER || 'noreply@rudraatmamusic.com').trim();
+    const pass = (process.env.SMTP_PASS || process.env.SMTP_PASSWORD || '').trim();
+
+    if (!pass) {
+      return res.status(503).json({
+        connected: false,
+        host,
+        port,
+        user,
+        error: 'SMTP_PASS / SMTP_PASSWORD environment variable is not set.'
+      });
+    }
+
+    try {
+      const transporter = nodemailer.createTransport({
+        host,
+        port,
+        secure: isSecure,
+        ...(port === 587 && !isSecure ? { requireTLS: true } : {}),
+        auth: { user, pass },
+        connectionTimeout: 10000,
+        greetingTimeout: 10000
+      });
+      await transporter.verify();
+      return res.json({ connected: true, host, port, user, secure: isSecure });
+    } catch (err: any) {
+      return res.status(502).json({
+        connected: false,
+        host,
+        port,
+        user,
+        secure: isSecure,
+        error: err?.message || 'SMTP verification failed.'
+      });
+    }
   });
 
   // ======================== 2. OVERVIEW & CHARTS ========================
