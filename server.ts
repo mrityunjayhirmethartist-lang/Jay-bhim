@@ -4,7 +4,6 @@ import crypto from 'crypto';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
-import nodemailer from 'nodemailer';
 import multer from 'multer';
 import cors from 'cors';
 import bcrypt from 'bcryptjs';
@@ -48,6 +47,16 @@ import {
   enqueueAiReviewJob
 } from './server/ai/reviewQueue';
 import { registerAiRoutes } from './server/ai/routes';
+import {
+  resolveSmtpConfig,
+  getSmtpDiagnostics,
+  createSmtpTransporter,
+  logSmtpStartupDiagnostics,
+  OFFICIAL_DOMAIN,
+  OFFICIAL_SENDER_NAME,
+  OFFICIAL_COMPANY_EMAIL,
+  OFFICIAL_SUPPORT_EMAIL
+} from './server/smtpConfig';
 import {
   filterMonthlyRoyalties,
   generateRoyaltyCsv,
@@ -246,42 +255,25 @@ const artworkUpload = multer({
   }
 });
 
-// ======================== OFFICIAL HOSTING EMAIL CONFIGURATION ========================
-// Domain: rudraatmamusic.com
-// Official Sender: noreply@rudraatmamusic.com (Official transactional sender)
-// Official Company Email (Reply-To): rudraatmamusic@gmail.com
-// Inbound Support: support@rudraatmamusic.com
-export const OFFICIAL_DOMAIN = 'rudraatmamusic.com';
+// ======================== COMPANY TRANSACTIONAL EMAIL CONFIGURATION ========================
 export const OFFICIAL_SENDER_EMAIL = 'noreply@rudraatmamusic.com';
-export const OFFICIAL_COMPANY_EMAIL = 'rudraatmamusic@gmail.com';
-export const OFFICIAL_SENDER_NAME = 'Rudraatma Music';
-export const OFFICIAL_SUPPORT_EMAIL = 'support@rudraatmamusic.com';
-export const OFFICIAL_DEFAULT_HOST = 'mail.rudraatmamusic.com';
 
 // Email delivery helper with professional Music Distribution Platform branding
 async function sendEmailOtp(
   toEmail: string,
   code: string,
   purpose: 'signup' | 'login' | 'reset' = 'signup'
-): Promise<{ success: boolean; delivered: boolean; missingConfig?: boolean; error?: string; sender: string; messageId?: string }> {
-  let host = (process.env.SMTP_HOST || OFFICIAL_DEFAULT_HOST).trim();
-  if (host.includes('@')) {
-    if (host.toLowerCase().includes('gmail')) {
-      host = 'smtp.gmail.com';
-    } else {
-      host = OFFICIAL_DEFAULT_HOST;
-    }
-  }
-
-  const port = Number(process.env.SMTP_PORT) || 465;
-  // Port 465 is direct SSL (secure: true). Port 587 uses STARTTLS (secure: false, requireTLS: true).
-  const isSecure = process.env.SMTP_SECURE ? process.env.SMTP_SECURE === 'true' : port === 465;
-  const user = (process.env.SMTP_USER || OFFICIAL_SENDER_EMAIL).trim();
-  const pass = (process.env.SMTP_PASS || process.env.SMTP_PASSWORD || '').trim();
-
-  const rawFrom = (process.env.SMTP_FROM_EMAIL || process.env.SMTP_FROM || OFFICIAL_SENDER_EMAIL).trim();
-  const from = rawFrom.includes('<') ? rawFrom : `"${OFFICIAL_SENDER_NAME}" <${rawFrom}>`;
-  const replyTo = (process.env.SMTP_REPLY_TO || OFFICIAL_COMPANY_EMAIL).trim();
+): Promise<{
+  success: boolean;
+  delivered: boolean;
+  missingConfig?: boolean;
+  error?: string;
+  sender: string;
+  senderAddress: string;
+  messageId?: string;
+}> {
+  const smtp = resolveSmtpConfig();
+  const { host, port, rawFrom, fromHeader: from, replyTo } = smtp;
 
   const titles: Record<string, string> = {
     signup: 'Verify Your Artist Account Registration',
@@ -340,30 +332,22 @@ async function sendEmailOtp(
     </div>
   `;
 
-  if (!pass) {
+  if (!smtp.configured) {
     console.error(
-      `[Rudraatma SMTP] Email delivery aborted for ${toEmail} (${purpose}): SMTP_PASS / SMTP_PASSWORD is missing.`
+      `[Rudraatma SMTP] Email delivery aborted for ${toEmail} (${purpose}): missing [${smtp.missingVars.join(', ')}].`
     );
     return {
       success: false,
       delivered: false,
       missingConfig: true,
-      error: 'Email delivery is not configured on the server (missing SMTP_PASS / SMTP_PASSWORD). Contact support or configure SMTP credentials.',
-      sender: from
+      error: `Email delivery is not configured on the server (missing: ${smtp.missingVars.join(', ')}). Configure SMTP environment variables on Render.`,
+      sender: from,
+      senderAddress: rawFrom
     };
   }
 
   try {
-    const transporter = nodemailer.createTransport({
-      host,
-      port,
-      secure: isSecure,
-      ...(port === 587 && !isSecure ? { requireTLS: true } : {}),
-      auth: { user, pass },
-      connectionTimeout: 10000,
-      greetingTimeout: 10000,
-      socketTimeout: 12000
-    });
+    const transporter = createSmtpTransporter(smtp);
 
     const info = await transporter.sendMail({
       from,
@@ -377,28 +361,30 @@ async function sendEmailOtp(
     const rejectedCount = Array.isArray(info?.rejected) ? info.rejected.length : 0;
     const acceptedCount = Array.isArray(info?.accepted) ? info.accepted.length : 0;
     if (rejectedCount > 0 && acceptedCount === 0) {
-      console.error(`[Rudraatma SMTP] Recipient rejected for ${toEmail} (${purpose}) via ${host}:${port}.`);
+      console.error(`[Rudraatma SMTP] Recipient rejected for ${toEmail} (${purpose}) via ${host}:${port} (${smtp.tlsMode}).`);
       return {
         success: false,
         delivered: false,
         error: `SMTP server (${host}:${port}) rejected the recipient address (${toEmail}).`,
-        sender: from
+        sender: from,
+        senderAddress: rawFrom
       };
     }
 
     console.log(
-      `[Rudraatma SMTP] Delivered ${purpose} OTP email to ${toEmail} via ${host}:${port} (messageId=${info?.messageId || 'n/a'})`
+      `[Rudraatma SMTP] Delivered ${purpose} OTP email to ${toEmail} via ${host}:${port} (${smtp.tlsMode}, messageId=${info?.messageId || 'n/a'})`
     );
-    return { success: true, delivered: true, sender: from, messageId: info?.messageId };
+    return { success: true, delivered: true, sender: from, senderAddress: rawFrom, messageId: info?.messageId };
   } catch (err: any) {
     console.error(
-      `[Rudraatma SMTP] Delivery failed for ${toEmail} (${purpose}) via ${host}:${port}: ${err?.code || 'ERR'} - ${err?.message || 'Unknown SMTP error'}`
+      `[Rudraatma SMTP] Delivery failed for ${toEmail} (${purpose}) via ${host}:${port} (${smtp.tlsMode}): ${err?.code || 'ERR'} - ${err?.message || 'Unknown SMTP error'}`
     );
     return {
       success: false,
       delivered: false,
-      error: `Email delivery failed via SMTP (${host}:${port}): ${err?.message || 'Provider authentication or connection error.'}`,
-      sender: from
+      error: `Email delivery failed via SMTP (${host}:${port}, ${smtp.tlsMode}): ${err?.message || 'Provider authentication or connection error.'}`,
+      sender: from,
+      senderAddress: rawFrom
     };
   }
 }
@@ -1450,7 +1436,7 @@ app.post('/api/auth/register', authRateLimiter, async (req, res) => {
     success: true,
     message: `A 6-digit verification code has been dispatched to ${normalizedEmail} from ${emailResult.sender}.`,
     email: normalizedEmail,
-    senderEmail: OFFICIAL_SENDER_EMAIL,
+    senderEmail: emailResult.senderAddress,
     smtpDelivered: true,
     smtpConfigured: true,
     expiresInSeconds: 300,
@@ -1622,7 +1608,7 @@ app.post('/api/auth/change-registration-email', authRateLimiter, async (req, res
     success: true,
     email: normalizedNew,
     message: `Email address updated. A fresh 6-digit verification code has been dispatched to ${normalizedNew} from ${emailResult.sender}.`,
-    senderEmail: OFFICIAL_SENDER_EMAIL,
+    senderEmail: emailResult.senderAddress,
     replyTo: OFFICIAL_COMPANY_EMAIL,
     smtpDelivered: true,
     smtpConfigured: true,
@@ -1797,7 +1783,7 @@ app.post('/api/auth/login', authRateLimiter, async (req, res) => {
     success: true,
     requiresOtp: true,
     email: normalizedEmail,
-    senderEmail: OFFICIAL_SENDER_EMAIL,
+    senderEmail: emailResult.senderAddress,
     message: `Password verified. A 6-digit login authorization code has been dispatched to your registered email from ${emailResult.sender}.`,
     smtpDelivered: true,
     smtpConfigured: true,
@@ -1936,7 +1922,7 @@ app.post('/api/auth/resend-otp', authRateLimiter, async (req, res) => {
     success: true,
     message: `A fresh 6-digit ${targetType === 'login' ? 'login' : 'verification'} code has been dispatched to ${normalizedEmail} from ${emailResult.sender}.`,
     email: normalizedEmail,
-    senderEmail: OFFICIAL_SENDER_EMAIL,
+    senderEmail: emailResult.senderAddress,
     smtpDelivered: true,
     smtpConfigured: true,
     cooldownSeconds: 60,
@@ -2057,37 +2043,21 @@ app.post('/api/auth/reset-password', authRateLimiter, async (req, res) => {
   });
 });
 
-// Check hosting SMTP status safely without exposing passwords
+// Safe SMTP configuration diagnostics without exposing credentials
 app.get('/api/auth/smtp-status', (_req, res) => {
-  let host = (process.env.SMTP_HOST || OFFICIAL_DEFAULT_HOST).trim();
-  if (host.includes('@')) {
-    if (host.toLowerCase().includes('gmail')) {
-      host = 'smtp.gmail.com';
-    } else {
-      host = OFFICIAL_DEFAULT_HOST;
-    }
-  }
-
-  const port = Number(process.env.SMTP_PORT) || 465;
-  const user = (process.env.SMTP_USER || OFFICIAL_SENDER_EMAIL).trim();
-  const pass = (process.env.SMTP_PASS || process.env.SMTP_PASSWORD || '').trim();
-  const configured = Boolean(pass.length > 0);
-  const fromAddr = (process.env.SMTP_FROM_EMAIL || process.env.SMTP_FROM || OFFICIAL_SENDER_EMAIL).trim();
-  const from = fromAddr.includes('<') ? fromAddr : `"${OFFICIAL_SENDER_NAME}" <${fromAddr}>`;
+  const diag = getSmtpDiagnostics();
 
   return res.json({
-    configured,
+    ...diag,
     domain: OFFICIAL_DOMAIN,
-    senderEmail: fromAddr,
-    senderDisplay: from,
-    smtpHost: host,
-    smtpPort: port,
-    smtpUser: user,
-    replyTo: (process.env.SMTP_REPLY_TO || OFFICIAL_COMPANY_EMAIL).trim(),
+    senderEmail: diag.from,
+    senderDisplay: `"${OFFICIAL_SENDER_NAME}" <${diag.from}>`,
+    smtpHost: diag.host,
+    smtpPort: diag.port,
     supportEmail: OFFICIAL_SUPPORT_EMAIL,
-    instructions: configured
-      ? 'Official domain hosting email is configured. Active sender is ' + fromAddr
-      : 'Hosting SMTP password (SMTP_PASS or SMTP_PASSWORD) is required to deliver live emails.'
+    instructions: diag.configured
+      ? `SMTP configured via ${diag.host}:${diag.port} (${diag.tlsMode}). Active sender is ${diag.from}.`
+      : `SMTP configuration incomplete (missing: ${diag.missingVars.join(', ')}). Configure SMTP_HOST, SMTP_PORT, SMTP_USER, and SMTP_PASS / SMTP_PASSWORD.`
   });
 });
 
@@ -5347,6 +5317,7 @@ async function startServer() {
   await initDatabase();
   await hydrateFromDatabase();
   await bootstrapSuperAdmin({ users, dbUpsertUser });
+  logSmtpStartupDiagnostics();
 
   const isProduction = process.env.NODE_ENV === 'production';
   const isRender = Boolean(

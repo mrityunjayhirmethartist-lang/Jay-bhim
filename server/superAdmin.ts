@@ -4,9 +4,9 @@ import fs from 'fs';
 import path from 'path';
 import bcrypt from 'bcryptjs';
 import multer from 'multer';
-import nodemailer from 'nodemailer';
 import { getDbPool, isDatabaseEnabled } from './db';
 import { saveUploadedMedia, getStoredMedia } from './storage';
+import { resolveSmtpConfig, getSmtpDiagnostics, createSmtpTransporter } from './smtpConfig';
 
 export type AccountStatus = 'active' | 'suspended' | 'terminated';
 export type KycStatus = 'Not Submitted' | 'Pending' | 'Approved' | 'Rejected' | 'Reupload Required';
@@ -334,44 +334,31 @@ export function registerSuperAdminRoutes(app: express.Express, deps: SuperAdminD
     });
   });
 
-  // Protected SMTP diagnostic check for Super Admin
+  // Protected SMTP diagnostic check for Super Admin (never exposes passwords)
   app.post('/api/super-admin/test-smtp', requireSuperAdmin, async (_req, res) => {
-    const host = (process.env.SMTP_HOST || 'mail.rudraatmamusic.com').trim();
-    const port = Number(process.env.SMTP_PORT) || 465;
-    const isSecure = process.env.SMTP_SECURE ? process.env.SMTP_SECURE === 'true' : port === 465;
-    const user = (process.env.SMTP_USER || 'noreply@rudraatmamusic.com').trim();
-    const pass = (process.env.SMTP_PASS || process.env.SMTP_PASSWORD || '').trim();
+    const smtp = resolveSmtpConfig();
+    const diag = getSmtpDiagnostics(smtp);
 
-    if (!pass) {
+    if (!smtp.configured) {
       return res.status(503).json({
         connected: false,
-        host,
-        port,
-        user,
-        error: 'SMTP_PASS / SMTP_PASSWORD environment variable is not set.'
+        ...diag,
+        error: `SMTP configuration incomplete. Missing environment variable(s): ${smtp.missingVars.join(', ')}.`
       });
     }
 
     try {
-      const transporter = nodemailer.createTransport({
-        host,
-        port,
-        secure: isSecure,
-        ...(port === 587 && !isSecure ? { requireTLS: true } : {}),
-        auth: { user, pass },
-        connectionTimeout: 10000,
-        greetingTimeout: 10000
-      });
+      const transporter = createSmtpTransporter(smtp);
       await transporter.verify();
-      return res.json({ connected: true, host, port, user, secure: isSecure });
+      return res.json({
+        connected: true,
+        ...diag
+      });
     } catch (err: any) {
       return res.status(502).json({
         connected: false,
-        host,
-        port,
-        user,
-        secure: isSecure,
-        error: err?.message || 'SMTP verification failed.'
+        ...diag,
+        error: `SMTP verification failed (${smtp.host}:${smtp.port}, ${smtp.tlsMode}): ${err?.message || 'Connection or authentication error.'}`
       });
     }
   });
