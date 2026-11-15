@@ -48,6 +48,11 @@ import {
   enqueueAiReviewJob
 } from './server/ai/reviewQueue';
 import { registerAiRoutes } from './server/ai/routes';
+import {
+  filterMonthlyRoyalties,
+  generateRoyaltyCsv,
+  generateRoyaltyPdfBuffer
+} from './server/royaltyReportExport';
 
 dotenv.config();
 
@@ -3731,40 +3736,68 @@ app.post('/api/dashboard/payout', async (req, res) => {
   return res.json({ success: true, transaction: newTx, newBalance: dashboard.balance });
 });
 
-// Export Royalty CSV Statement
-app.get('/api/dashboard/royalties/export', (req, res) => {
+// Export Royalty Statement Summary (CSV or PDF)
+app.get('/api/dashboard/royalties/export', async (req, res) => {
   const user = getAuthenticatedUser(req);
   if (!user) return res.status(401).json({ error: 'Unauthorized.' });
 
+  const rawFormat = String(req.query.format || 'csv').trim().toLowerCase();
+  if (rawFormat !== 'csv' && rawFormat !== 'pdf') {
+    return res.status(400).json({ error: 'Unsupported export format. Allowed formats: csv, pdf.' });
+  }
+
   const dashboard = getUserDashboard(user.id);
-  const targetMonth = req.query.month as string;
+  const targetMonth = typeof req.query.month === 'string' ? req.query.month.trim() : '';
+  const fromMonth = typeof req.query.fromMonth === 'string' ? req.query.fromMonth.trim() : '';
+  const toMonth = typeof req.query.toMonth === 'string' ? req.query.toMonth.trim() : '';
+  const statusFilter = typeof req.query.status === 'string' ? req.query.status.trim() : 'All';
 
-  const records = targetMonth
-    ? dashboard.monthlyRoyalties.filter(m => m.month === targetMonth)
-    : dashboard.monthlyRoyalties;
+  const records = filterMonthlyRoyalties(dashboard.monthlyRoyalties || [], {
+    month: targetMonth || undefined,
+    fromMonth: fromMonth || undefined,
+    toMonth: toMonth || undefined,
+    status: statusFilter || undefined
+  });
 
-  const headers = ['Statement ID', 'Reporting Cycle', 'Status', 'Verified Streams', 'Gross Royalty (INR)', 'Artist Net Share (INR)', 'Spotify (INR)', 'Apple Music (INR)', 'YouTube Music (INR)', 'JioSaavn (INR)', 'Amazon Music (INR)', 'Other DSPs (INR)', 'Settlement Date'];
+  const scopeSlug = targetMonth
+    ? targetMonth
+    : fromMonth || toMonth
+      ? `${fromMonth || 'Start'}_to_${toMonth || 'Latest'}`
+      : 'All_Time';
+  const safeScopeSlug = scopeSlug.replace(/[^a-zA-Z0-9_-]/g, '_');
 
-  const rows = records.map(r => [
-    r.statementId,
-    r.monthLabel,
-    r.status,
-    r.streams,
-    r.grossRoyalty.toFixed(2),
-    r.netRoyalty.toFixed(2),
-    r.spotify.toFixed(2),
-    r.appleMusic.toFixed(2),
-    r.youtubeMusic.toFixed(2),
-    r.jioSaavn.toFixed(2),
-    r.amazonMusic.toFixed(2),
-    r.otherDSPs.toFixed(2),
-    r.payoutDate || 'In Clearance Pipeline'
-  ]);
+  if (rawFormat === 'pdf') {
+    try {
+      const scopeLabel = targetMonth
+        ? targetMonth
+        : fromMonth || toMonth
+          ? `${fromMonth || 'Start'} to ${toMonth || 'Latest'}`
+          : 'All Available Cycles';
+      const pdfBuffer = await generateRoyaltyPdfBuffer(records, dashboard.topTracks || [], {
+        artistName: user.fullName || 'Artist Account',
+        artistEmail: user.email,
+        scopeLabel,
+        statusFilter: statusFilter || 'All',
+        generatedAtIso: new Date().toISOString()
+      });
 
-  const csvContent = [headers.join(','), ...rows.map(row => row.map(val => `"${val}"`).join(','))].join('\n');
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="Rudraatma_Royalty_Summary_${safeScopeSlug}.pdf"`
+      );
+      return res.send(pdfBuffer);
+    } catch (err: any) {
+      return res.status(500).json({ error: err?.message || 'Failed to generate PDF royalty summary.' });
+    }
+  }
 
-  res.setHeader('Content-Type', 'text/csv');
-  res.setHeader('Content-Disposition', `attachment; filename="Rudraatma_Royalty_Statement_${targetMonth || 'All_Time'}.csv"`);
+  const csvContent = generateRoyaltyCsv(records);
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader(
+    'Content-Disposition',
+    `attachment; filename="Rudraatma_Royalty_Statement_${safeScopeSlug}.csv"`
+  );
   return res.send(csvContent);
 });
 

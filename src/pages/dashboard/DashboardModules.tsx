@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter } from '../../context/RouterContext';
 import { useAuth } from '../../context/AuthContext';
 import { DashboardLayout } from '../../components/dashboard/DashboardLayout';
-import { LabelItem, ArtistProfile, SupportTicket, SmartLink, SmartLinkStores, Release, OtherRequest, TransactionItem } from '../../types';
+import { LabelItem, ArtistProfile, SupportTicket, SmartLink, SmartLinkStores, Release, OtherRequest, TransactionItem, MonthlyRoyalty } from '../../types';
 import { PRICING_PLANS } from '../../data/pricingData';
-import { apiUrl } from '../../utils/api';
+import { apiUrl, parseJsonSafe, formatNetworkError } from '../../utils/api';
 import {
   Tag,
   Plus,
@@ -52,7 +52,11 @@ import {
   Link2,
   Sliders,
   Info,
-  CheckCheck
+  CheckCheck,
+  Filter,
+  ChevronDown,
+  ChevronUp,
+  TrendingUp
 } from 'lucide-react';
 
 // ======================== 1. MY LABELS PAGE ========================
@@ -576,85 +580,353 @@ export const ProfilePage: React.FC = () => {
 export const ReportsPage: React.FC = () => {
   const { token } = useAuth();
   const { navigate } = useRouter();
-  const [statements, setStatements] = useState<any[]>([]);
+  const [statements, setStatements] = useState<MonthlyRoyalty[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  // Filters & UI State
+  const [fromMonth, setFromMonth] = useState<string>('');
+  const [toMonth, setToMonth] = useState<string>('');
+  const [statusFilter, setStatusFilter] = useState<string>('All');
+  const [expandedMonth, setExpandedMonth] = useState<string | null>(null);
+
+  // Export Feedback State
+  const [exportingKey, setExportingKey] = useState<string | null>(null);
+  const [exportNotice, setExportNotice] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
 
   useEffect(() => {
     if (!token) return;
+    setLoading(true);
+    setLoadError(null);
     fetch(apiUrl('/api/dashboard/data'), { headers: { Authorization: `Bearer ${token}` } })
-      .then(res => res.json())
-      .then(d => {
+      .then(async (res) => {
+        const d = await parseJsonSafe(res);
+        if (!res.ok) throw new Error(d?.error || 'Failed to load royalty reports.');
         setStatements(d.monthlyRoyalties || []);
+      })
+      .catch((err: any) => {
+        setLoadError(formatNetworkError(err, 'Unable to load royalty reports.'));
       })
       .finally(() => setLoading(false));
   }, [token]);
 
-  const handleDownload = async (month?: string) => {
-    if (!token) return;
-    const url = apiUrl(
-      month
-        ? `/api/dashboard/royalties/export?month=${encodeURIComponent(month)}`
-        : '/api/dashboard/royalties/export'
+  const sortedMonths = useMemo(() => {
+    return statements
+      .slice()
+      .sort((a, b) => a.month.localeCompare(b.month));
+  }, [statements]);
+
+  const filteredStatements = useMemo(() => {
+    return sortedMonths.filter((item) => {
+      if (fromMonth && item.month < fromMonth) return false;
+      if (toMonth && item.month > toMonth) return false;
+      if (statusFilter !== 'All' && item.status !== statusFilter) return false;
+      return true;
+    });
+  }, [sortedMonths, fromMonth, toMonth, statusFilter]);
+
+  const summary = useMemo(() => {
+    const totals = filteredStatements.reduce(
+      (acc, r) => {
+        acc.streams += r.streams || 0;
+        acc.gross += r.grossRoyalty || 0;
+        acc.net += r.netRoyalty || 0;
+        if (r.status === 'Cleared') acc.cleared += r.netRoyalty || 0;
+        else acc.pending += r.netRoyalty || 0;
+        return acc;
+      },
+      { streams: 0, gross: 0, net: 0, cleared: 0, pending: 0 }
     );
-    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-    if (!res.ok) return;
-    const blob = await res.blob();
-    const blobUrl = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = blobUrl;
-    a.download = `Rudraatma_Royalty_Statement_${month || 'All_Time'}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(blobUrl);
+    const avgRpm = totals.streams > 0 ? (totals.net / totals.streams) * 1000 : 0;
+    return { ...totals, avgRpm };
+  }, [filteredStatements]);
+
+  const hasActiveFilter = Boolean(fromMonth || toMonth || statusFilter !== 'All');
+
+  const handleResetFilters = () => {
+    setFromMonth('');
+    setToMonth('');
+    setStatusFilter('All');
+  };
+
+  const handleExport = async (format: 'csv' | 'pdf', month?: string) => {
+    if (!token) return;
+    const key = `${format}:${month || 'summary'}`;
+    setExportingKey(key);
+    setExportNotice(null);
+
+    const params = new URLSearchParams();
+    params.set('format', format);
+    if (month) {
+      params.set('month', month);
+    } else {
+      if (fromMonth) params.set('fromMonth', fromMonth);
+      if (toMonth) params.set('toMonth', toMonth);
+      if (statusFilter && statusFilter !== 'All') params.set('status', statusFilter);
+    }
+
+    try {
+      const res = await fetch(apiUrl(`/api/dashboard/royalties/export?${params.toString()}`), {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (!res.ok) {
+        let errorMessage = `Export failed (HTTP ${res.status}).`;
+        try {
+          const errData = await parseJsonSafe(res);
+          if (errData?.error) errorMessage = errData.error;
+        } catch {
+          // Keep HTTP fallback error
+        }
+        setExportNotice({ type: 'err', text: errorMessage });
+        return;
+      }
+
+      const blob = await res.blob();
+      const scopeSlug = month
+        ? month
+        : fromMonth || toMonth
+          ? `${fromMonth || 'Start'}_to_${toMonth || 'Latest'}`
+          : 'All_Time';
+      const ext = format === 'pdf' ? 'pdf' : 'csv';
+      const prefix = format === 'pdf' ? 'Rudraatma_Royalty_Summary' : 'Rudraatma_Royalty_Statement';
+      const filename = `${prefix}_${scopeSlug}.${ext}`;
+
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(blobUrl);
+
+      setExportNotice({
+        type: 'ok',
+        text: `Downloaded ${filename} (${format.toUpperCase()}).`
+      });
+    } catch (err: any) {
+      setExportNotice({
+        type: 'err',
+        text: formatNetworkError(err, `Failed to export ${format.toUpperCase()} royalty summary.`)
+      });
+    } finally {
+      setExportingKey(null);
+    }
   };
 
   return (
     <DashboardLayout title="Reports">
       <div className="space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-white font-display">Royalty Statements & Stream Reports</h1>
-            <p className="text-xs text-slate-400">Quarterly reconciliation feeds processed directly from digital service providers</p>
+            <p className="text-xs text-slate-400">
+              Monthly DSP reconciliation statements with summary analytics and PDF / CSV exports
+            </p>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2.5">
             <button
               onClick={() => navigate('/dashboard/financial')}
               className="px-4 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-blue-400 hover:text-blue-300 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors"
             >
-              <span>View Visual Recharts Dashboard</span>
+              <TrendingUp className="w-3.5 h-3.5" />
+              <span>Visual Analytics</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
+
             <button
-              onClick={() => handleDownload()}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-semibold flex items-center gap-2 shadow-md shadow-blue-600/20 transition-all"
+              type="button"
+              disabled={loading || filteredStatements.length === 0 || exportingKey !== null}
+              onClick={() => handleExport('pdf')}
+              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-xl text-xs font-semibold flex items-center gap-2 shadow-md shadow-emerald-600/20 transition-all"
             >
-              <Download className="w-3.5 h-3.5" />
-              <span>Export All Statements (.CSV)</span>
+              {exportingKey === 'pdf:summary' ? (
+                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <FileText className="w-3.5 h-3.5" />
+              )}
+              <span>{exportingKey === 'pdf:summary' ? 'Generating PDF...' : 'Export Summary (.PDF)'}</span>
+            </button>
+
+            <button
+              type="button"
+              disabled={loading || filteredStatements.length === 0 || exportingKey !== null}
+              onClick={() => handleExport('csv')}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-xl text-xs font-semibold flex items-center gap-2 shadow-md shadow-blue-600/20 transition-all"
+            >
+              {exportingKey === 'csv:summary' ? (
+                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Download className="w-3.5 h-3.5" />
+              )}
+              <span>{exportingKey === 'csv:summary' ? 'Exporting CSV...' : 'Export Summary (.CSV)'}</span>
             </button>
           </div>
         </div>
 
-        <div className="p-6 rounded-2xl bg-[#090e1a] border border-slate-800 space-y-6">
-          <div className="flex items-center justify-between pb-4 border-b border-slate-800 text-xs">
-            <div className="flex items-center gap-3">
-              <span className="text-slate-400">Accounting Cycles:</span>
-              <span className="px-3 py-1 bg-slate-900 border border-slate-800 rounded font-mono text-white font-semibold">
-                2025 – 2026 Live Feeds
-              </span>
+        {loadError && (
+          <div className="p-3.5 rounded-xl bg-rose-950/50 border border-rose-800/80 text-xs text-rose-200 flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+            <span>{loadError}</span>
+          </div>
+        )}
+
+        {exportNotice && (
+          <div
+            className={`p-3.5 rounded-xl border text-xs flex items-center justify-between gap-3 ${
+              exportNotice.type === 'ok'
+                ? 'bg-emerald-950/50 border-emerald-800/70 text-emerald-200'
+                : 'bg-rose-950/50 border-rose-800/80 text-rose-200'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              {exportNotice.type === 'ok' ? (
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+              ) : (
+                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+              )}
+              <span>{exportNotice.text}</span>
             </div>
+            <button
+              type="button"
+              onClick={() => setExportNotice(null)}
+              className="text-slate-400 hover:text-white"
+              aria-label="Dismiss notice"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+
+        {/* Executive Summary Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="p-4 rounded-2xl bg-[#090e1a] border border-slate-800">
+            <div className="text-[11px] font-mono uppercase tracking-wider text-slate-400">Net Artist Earnings</div>
+            <div className="text-xl font-bold text-emerald-400 font-mono mt-1">
+              ₹{summary.net.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </div>
+            <div className="text-[11px] text-slate-400 mt-1">
+              Across {filteredStatements.length} selected month(s)
+            </div>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-[#090e1a] border border-slate-800">
+            <div className="text-[11px] font-mono uppercase tracking-wider text-slate-400">Gross Royalty Pool</div>
+            <div className="text-xl font-bold text-white font-mono mt-1">
+              ₹{summary.gross.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </div>
+            <div className="text-[11px] text-slate-400 mt-1">100% Artist Keep Accounting</div>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-[#090e1a] border border-slate-800">
+            <div className="text-[11px] font-mono uppercase tracking-wider text-slate-400">Verified Streams</div>
+            <div className="text-xl font-bold text-blue-400 font-mono mt-1">
+              {summary.streams.toLocaleString('en-IN')}
+            </div>
+            <div className="text-[11px] text-slate-400 mt-1">
+              Avg RPM: <span className="text-slate-200 font-mono">₹{summary.avgRpm.toFixed(2)}</span> / 1K streams
+            </div>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-[#090e1a] border border-slate-800">
+            <div className="text-[11px] font-mono uppercase tracking-wider text-slate-400">Cleared vs Pending</div>
+            <div className="text-xl font-bold text-amber-400 font-mono mt-1">
+              ₹{summary.cleared.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </div>
+            <div className="text-[11px] text-slate-400 mt-1">
+              In Clearance: <span className="text-slate-200 font-mono">₹{summary.pending.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Filters & Statements Table */}
+        <div className="p-6 rounded-2xl bg-[#090e1a] border border-slate-800 space-y-5">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-slate-800 text-xs">
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="text-slate-400 flex items-center gap-1.5 font-semibold">
+                <Filter className="w-3.5 h-3.5 text-blue-400" />
+                <span>Filter Summary:</span>
+              </span>
+
+              <div className="flex items-center gap-1.5">
+                <label className="text-slate-400 text-[11px]">From</label>
+                <select
+                  value={fromMonth}
+                  onChange={(e) => setFromMonth(e.target.value)}
+                  className="px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:border-blue-500"
+                >
+                  <option value="">All Start</option>
+                  {sortedMonths.map((m) => (
+                    <option key={`from-${m.month}`} value={m.month}>
+                      {m.monthLabel}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                <label className="text-slate-400 text-[11px]">To</label>
+                <select
+                  value={toMonth}
+                  onChange={(e) => setToMonth(e.target.value)}
+                  className="px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:border-blue-500"
+                >
+                  <option value="">All End</option>
+                  {sortedMonths.map((m) => (
+                    <option key={`to-${m.month}`} value={m.month}>
+                      {m.monthLabel}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                <label className="text-slate-400 text-[11px]">Status</label>
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:border-blue-500"
+                >
+                  <option value="All">All Statuses</option>
+                  <option value="Cleared">Cleared</option>
+                  <option value="In Clearance">In Clearance</option>
+                  <option value="Processing">Processing</option>
+                </select>
+              </div>
+
+              {hasActiveFilter && (
+                <button
+                  type="button"
+                  onClick={handleResetFilters}
+                  className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-[11px] font-medium transition-colors"
+                >
+                  Reset
+                </button>
+              )}
+            </div>
+
             <span className="text-slate-400 font-mono text-[11px]">
-              {statements.length} verified monthly periods
+              Showing {filteredStatements.length} of {statements.length} monthly cycle(s)
             </span>
           </div>
 
-          {statements.length === 0 ? (
+          {loading ? (
+            <div className="py-12 text-center text-xs font-mono text-slate-400 flex items-center justify-center gap-2">
+              <RefreshCw className="w-4 h-4 animate-spin text-blue-400" />
+              <span>Loading royalty statements...</span>
+            </div>
+          ) : filteredStatements.length === 0 ? (
             <div className="py-16 text-center bg-slate-950/60 rounded-xl border border-slate-800/80 space-y-3">
               <FileText className="w-10 h-10 text-slate-600 mx-auto" />
-              <div className="text-sm font-semibold text-slate-300">No finalized royalty statements yet</div>
+              <div className="text-sm font-semibold text-slate-300">
+                {statements.length === 0 ? 'No finalized royalty statements yet' : 'No statements match the selected filters'}
+              </div>
               <p className="text-xs text-slate-400 max-w-md mx-auto leading-relaxed">
-                Partner platforms report streaming calculations on a 60-to-90 day reconciliation lag. Statements will populate here once verified by our accounting desk.
+                {statements.length === 0
+                  ? 'Partner platforms report streaming calculations on a 60-to-90 day reconciliation lag. Statements will populate here once verified by our accounting desk.'
+                  : 'Adjust or reset the date range and settlement status filters above to view and export monthly royalty summaries.'}
               </p>
             </div>
           ) : (
@@ -668,35 +940,134 @@ export const ReportsPage: React.FC = () => {
                     <th className="pb-3">Verified Plays</th>
                     <th className="pb-3">Gross (₹)</th>
                     <th className="pb-3">Net Artist (₹)</th>
-                    <th className="pb-3 text-right">Action</th>
+                    <th className="pb-3">DSP Split</th>
+                    <th className="pb-3 text-right">Export Summary</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/60 text-slate-300">
-                  {statements.map((s) => (
-                    <tr key={s.statementId} className="hover:bg-slate-800/30 transition-colors">
-                      <td className="py-3 font-mono text-[11px] text-blue-400 font-semibold">{s.statementId}</td>
-                      <td className="py-3 font-medium text-white">{s.monthLabel}</td>
-                      <td className="py-3">
-                        <span className={`px-2 py-0.5 rounded text-[11px] font-semibold ${
-                          s.status === 'Cleared' ? 'bg-emerald-950 text-emerald-400 border border-emerald-800/80' : 'bg-amber-950 text-amber-400 border border-amber-800/80'
-                        }`}>
-                          {s.status}
-                        </span>
-                      </td>
-                      <td className="py-3 font-mono text-[11px]">{s.streams.toLocaleString('en-IN')}</td>
-                      <td className="py-3 font-mono text-slate-300">₹{s.grossRoyalty.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                      <td className="py-3 font-mono font-bold text-emerald-400">₹{s.netRoyalty.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                      <td className="py-3 text-right">
-                        <button
-                          onClick={() => handleDownload(s.month)}
-                          className="px-3 py-1 bg-slate-900 hover:bg-slate-800 text-blue-400 hover:text-blue-300 border border-slate-800 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 transition-colors"
-                        >
-                          <Download className="w-3 h-3" />
-                          <span>CSV</span>
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                  {filteredStatements.map((s) => {
+                    const isExpanded = expandedMonth === s.month;
+                    const rowTotalDsp =
+                      (s.spotify || 0) +
+                      (s.appleMusic || 0) +
+                      (s.youtubeMusic || 0) +
+                      (s.jioSaavn || 0) +
+                      (s.amazonMusic || 0) +
+                      (s.otherDSPs || 0) ||
+                      s.netRoyalty ||
+                      1;
+                    const dspEntries = [
+                      { label: 'Spotify', value: s.spotify || 0, bar: 'bg-emerald-500' },
+                      { label: 'Apple Music', value: s.appleMusic || 0, bar: 'bg-rose-500' },
+                      { label: 'YouTube Music', value: s.youtubeMusic || 0, bar: 'bg-red-500' },
+                      { label: 'JioSaavn', value: s.jioSaavn || 0, bar: 'bg-cyan-500' },
+                      { label: 'Amazon Music', value: s.amazonMusic || 0, bar: 'bg-amber-500' },
+                      { label: 'Other DSPs', value: s.otherDSPs || 0, bar: 'bg-violet-500' }
+                    ];
+
+                    return (
+                      <React.Fragment key={s.statementId}>
+                        <tr className="hover:bg-slate-800/30 transition-colors">
+                          <td className="py-3 font-mono text-[11px] text-blue-400 font-semibold">{s.statementId}</td>
+                          <td className="py-3 font-medium text-white">{s.monthLabel}</td>
+                          <td className="py-3">
+                            <span
+                              className={`px-2 py-0.5 rounded text-[11px] font-semibold ${
+                                s.status === 'Cleared'
+                                  ? 'bg-emerald-950 text-emerald-400 border border-emerald-800/80'
+                                  : 'bg-amber-950 text-amber-400 border border-amber-800/80'
+                              }`}
+                            >
+                              {s.status}
+                            </span>
+                          </td>
+                          <td className="py-3 font-mono text-[11px]">{s.streams.toLocaleString('en-IN')}</td>
+                          <td className="py-3 font-mono text-slate-300">
+                            ₹{s.grossRoyalty.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className="py-3 font-mono font-bold text-emerald-400">
+                            ₹{s.netRoyalty.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className="py-3">
+                            <button
+                              type="button"
+                              onClick={() => setExpandedMonth(isExpanded ? null : s.month)}
+                              className="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-[11px] text-slate-300 inline-flex items-center gap-1 transition-colors"
+                            >
+                              <span>{isExpanded ? 'Hide' : 'View'}</span>
+                              {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                            </button>
+                          </td>
+                          <td className="py-3 text-right">
+                            <div className="inline-flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                disabled={exportingKey !== null}
+                                onClick={() => handleExport('pdf', s.month)}
+                                className="px-2.5 py-1 bg-emerald-950/70 hover:bg-emerald-900/80 text-emerald-300 border border-emerald-800/70 rounded-lg text-[11px] font-semibold inline-flex items-center gap-1 transition-colors disabled:opacity-50"
+                                title={`Download ${s.monthLabel} summary as PDF`}
+                              >
+                                {exportingKey === `pdf:${s.month}` ? (
+                                  <RefreshCw className="w-3 h-3 animate-spin" />
+                                ) : (
+                                  <FileText className="w-3 h-3" />
+                                )}
+                                <span>PDF</span>
+                              </button>
+                              <button
+                                type="button"
+                                disabled={exportingKey !== null}
+                                onClick={() => handleExport('csv', s.month)}
+                                className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-blue-400 hover:text-blue-300 border border-slate-800 rounded-lg text-[11px] font-semibold inline-flex items-center gap-1 transition-colors disabled:opacity-50"
+                                title={`Download ${s.monthLabel} statement as CSV`}
+                              >
+                                {exportingKey === `csv:${s.month}` ? (
+                                  <RefreshCw className="w-3 h-3 animate-spin" />
+                                ) : (
+                                  <Download className="w-3 h-3" />
+                                )}
+                                <span>CSV</span>
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                        {isExpanded && (
+                          <tr className="bg-slate-950/70">
+                            <td colSpan={8} className="p-4 border-t border-slate-800/80">
+                              <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                                <span className="text-[11px] font-mono uppercase tracking-wider text-slate-400">
+                                  DSP Revenue Breakdown · {s.monthLabel} ({s.statementId})
+                                </span>
+                                <span className="text-[11px] text-slate-400">
+                                  Settlement Date: <strong className="text-slate-200 font-mono">{s.payoutDate || 'In Clearance Pipeline'}</strong>
+                                </span>
+                              </div>
+                              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
+                                {dspEntries.map((dsp) => {
+                                  const pct = ((dsp.value / rowTotalDsp) * 100).toFixed(1);
+                                  return (
+                                    <div
+                                      key={dsp.label}
+                                      className="p-2.5 rounded-xl bg-[#090e1a] border border-slate-800/90 space-y-1.5"
+                                    >
+                                      <div className="text-[11px] text-slate-400 truncate">{dsp.label}</div>
+                                      <div className="text-xs font-mono font-bold text-white">
+                                        ₹{dsp.value.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                      </div>
+                                      <div className="w-full h-1 rounded-full bg-slate-800 overflow-hidden">
+                                        <div className={`h-full ${dsp.bar}`} style={{ width: `${Math.min(100, Number(pct))}%` }} />
+                                      </div>
+                                      <div className="text-[10px] font-mono text-slate-400">{pct}% share</div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
