@@ -6,7 +6,7 @@ import bcrypt from 'bcryptjs';
 import multer from 'multer';
 import { getDbPool, isDatabaseEnabled } from './db';
 import { saveUploadedMedia, getStoredMedia } from './storage';
-import { resolveSmtpConfig, getSmtpDiagnostics, createSmtpTransporter } from './smtpConfig';
+import { verifyAppsScriptNetworkReadiness } from './appsScriptEmail';
 
 export type AccountStatus = 'active' | 'suspended' | 'terminated';
 export type KycStatus = 'Not Submitted' | 'Pending' | 'Approved' | 'Rejected' | 'Reupload Required';
@@ -334,33 +334,30 @@ export function registerSuperAdminRoutes(app: express.Express, deps: SuperAdminD
     });
   });
 
-  // Protected SMTP diagnostic check for Super Admin (never exposes passwords)
+  // Protected email relay diagnostic check for Super Admin (never exposes GOOGLE_SCRIPT_URL or GOOGLE_SCRIPT_SECRET)
   app.post('/api/super-admin/test-smtp', requireSuperAdmin, async (_req, res) => {
-    const smtp = resolveSmtpConfig();
-    const diag = getSmtpDiagnostics(smtp);
+    const result = await verifyAppsScriptNetworkReadiness();
 
-    if (!smtp.configured) {
+    if (result.missingConfig) {
       return res.status(503).json({
         connected: false,
-        ...diag,
-        error: `SMTP configuration incomplete. Missing environment variable(s): ${smtp.missingVars.join(', ')}.`
+        ...result.diagnostics,
+        error: result.error
       });
     }
 
-    try {
-      const transporter = createSmtpTransporter(smtp);
-      await transporter.verify();
-      return res.json({
-        connected: true,
-        ...diag
-      });
-    } catch (err: any) {
+    if (!result.connected) {
       return res.status(502).json({
         connected: false,
-        ...diag,
-        error: `SMTP verification failed (${smtp.host}:${smtp.port}, ${smtp.tlsMode}): ${err?.message || 'Connection or authentication error.'}`
+        ...result.diagnostics,
+        error: result.error
       });
     }
+
+    return res.json({
+      connected: true,
+      ...result.diagnostics
+    });
   });
 
   // ======================== 2. OVERVIEW & CHARTS ========================

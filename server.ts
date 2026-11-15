@@ -48,15 +48,14 @@ import {
 } from './server/ai/reviewQueue';
 import { registerAiRoutes } from './server/ai/routes';
 import {
-  resolveSmtpConfig,
-  getSmtpDiagnostics,
-  createSmtpTransporter,
-  logSmtpStartupDiagnostics,
+  getSafeEmailDiagnostics,
+  logEmailStartupDiagnostics,
+  sendAppsScriptOtpEmail,
   OFFICIAL_DOMAIN,
   OFFICIAL_SENDER_NAME,
   OFFICIAL_COMPANY_EMAIL,
   OFFICIAL_SUPPORT_EMAIL
-} from './server/smtpConfig';
+} from './server/appsScriptEmail';
 import {
   filterMonthlyRoyalties,
   generateRoyaltyCsv,
@@ -258,7 +257,7 @@ const artworkUpload = multer({
 // ======================== COMPANY TRANSACTIONAL EMAIL CONFIGURATION ========================
 export const OFFICIAL_SENDER_EMAIL = 'noreply@rudraatmamusic.com';
 
-// Email delivery helper with professional Music Distribution Platform branding
+// Email delivery helper via Google Apps Script MailApp Web App (server-to-server HTTPS POST)
 async function sendEmailOtp(
   toEmail: string,
   code: string,
@@ -270,123 +269,21 @@ async function sendEmailOtp(
   error?: string;
   sender: string;
   senderAddress: string;
-  messageId?: string;
 }> {
-  const smtp = resolveSmtpConfig();
-  const { host, port, rawFrom, fromHeader: from, replyTo } = smtp;
+  const result = await sendAppsScriptOtpEmail({
+    email: toEmail,
+    otp: code,
+    purpose
+  });
 
-  const titles: Record<string, string> = {
-    signup: 'Verify Your Artist Account Registration',
-    login: 'Two-Factor Login Authorization Code',
-    reset: 'Password Reset Authorization Code'
+  return {
+    success: result.success,
+    delivered: result.delivered,
+    missingConfig: result.missingConfig,
+    error: result.error,
+    sender: result.sender,
+    senderAddress: result.senderAddress
   };
-
-  const descriptions: Record<string, string> = {
-    signup: 'Thank you for registering with Rudraatma Music. Use the following 6-digit verification code to activate your artist distribution account:',
-    login: 'A secure login attempt was initiated for your Rudraatma Music account. Enter the 6-digit one-time passcode below to verify your identity and open your dashboard:',
-    reset: 'A password reset was requested for your Rudraatma Music account. Use the following 6-digit code to authorize setting a new password:'
-  };
-
-  const subjects: Record<string, string> = {
-    signup: `Your Rudraatma Music Verification Code: ${code}`,
-    login: `Your Rudraatma Music Login Code: ${code}`,
-    reset: `Your Rudraatma Music Password Reset Code: ${code}`
-  };
-
-  const htmlContent = `
-    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #070b14; color: #f8fafc; padding: 40px 20px; max-width: 600px; margin: 0 auto; border-radius: 16px; border: 1px solid #1e293b;">
-      <div style="text-align: center; margin-bottom: 28px;">
-        <h1 style="color: #ffffff; font-size: 26px; font-weight: 800; letter-spacing: -0.5px; margin: 0;">RUDRAATMA MUSIC</h1>
-        <p style="color: #f59e0b; font-size: 11px; letter-spacing: 2.5px; text-transform: uppercase; font-weight: 700; margin-top: 6px;">Music Distribution & Global Royalty Platform</p>
-      </div>
-
-      <div style="background-color: #0b1329; padding: 32px 24px; border-radius: 12px; border: 1px solid #1e293b; text-align: center;">
-        <h2 style="font-size: 18px; font-weight: 700; color: #ffffff; margin-top: 0; margin-bottom: 12px;">${titles[purpose] || 'Verification Code'}</h2>
-        <p style="font-size: 14px; line-height: 1.6; color: #94a3b8; margin-bottom: 24px;">
-          ${descriptions[purpose] || 'Use the following 6-digit verification code:'}
-        </p>
-
-        <div style="background: linear-gradient(180deg, rgba(2, 132, 199, 0.12) 0%, rgba(3, 105, 161, 0.22) 100%); border: 1.5px solid #0284c7; padding: 16px 28px; border-radius: 12px; display: inline-block; margin: 0 auto;">
-          <span style="font-size: 40px; font-weight: 800; letter-spacing: 12px; color: #38bdf8; font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;">${code}</span>
-        </div>
-
-        <div style="margin-top: 26px; padding-top: 20px; border-top: 1px solid #1e293b; text-align: left;">
-          <p style="font-size: 12px; color: #cbd5e1; margin: 6px 0;">
-            <strong style="color: #f59e0b;">⏱️ Expiration:</strong> This code expires strictly in <strong style="color: #ffffff;">5 minutes</strong>.
-          </p>
-          <p style="font-size: 12px; color: #cbd5e1; margin: 6px 0;">
-            <strong style="color: #38bdf8;">📧 Official Sender:</strong> Sent from <strong style="color: #ffffff;">${rawFrom}</strong> (${OFFICIAL_DOMAIN})
-          </p>
-          <p style="font-size: 12px; color: #cbd5e1; margin: 6px 0;">
-            <strong style="color: #ef4444;">🔒 Security Notice:</strong> Never share this code with anyone. Rudraatma Music staff will never ask for your verification code.
-          </p>
-        </div>
-      </div>
-
-      <div style="text-align: center; margin-top: 28px; font-size: 11px; color: #64748b; line-height: 1.5;">
-        <p style="margin: 4px 0;">Dispatched to <span style="color: #94a3b8;">${toEmail}</span></p>
-        <p style="margin: 4px 0;">Official Company Contact &bull; <a href="mailto:${OFFICIAL_COMPANY_EMAIL}" style="color: #38bdf8; text-decoration: none;">${OFFICIAL_COMPANY_EMAIL}</a></p>
-        <p style="margin: 4px 0;">Support Desk &bull; <a href="mailto:${OFFICIAL_SUPPORT_EMAIL}" style="color: #38bdf8; text-decoration: none;">${OFFICIAL_SUPPORT_EMAIL}</a></p>
-        <p style="margin-top: 12px; color: #475569;">&copy; ${new Date().getFullYear()} Rudraatma Music. All rights reserved.</p>
-      </div>
-    </div>
-  `;
-
-  if (!smtp.configured) {
-    console.error(
-      `[Rudraatma SMTP] Email delivery aborted for ${toEmail} (${purpose}): missing [${smtp.missingVars.join(', ')}].`
-    );
-    return {
-      success: false,
-      delivered: false,
-      missingConfig: true,
-      error: `Email delivery is not configured on the server (missing: ${smtp.missingVars.join(', ')}). Configure SMTP environment variables on Render.`,
-      sender: from,
-      senderAddress: rawFrom
-    };
-  }
-
-  try {
-    const transporter = createSmtpTransporter(smtp);
-
-    const info = await transporter.sendMail({
-      from,
-      to: toEmail,
-      replyTo,
-      subject: subjects[purpose] || `Your Rudraatma Music Verification Code`,
-      text: `Rudraatma Music - ${titles[purpose] || 'Verification'}\n\nYour 6-digit code is: ${code}\n\nThis verification code expires in 5 minutes.\nOfficial sender: ${rawFrom}\nReply-To / Company Email: ${replyTo}\nNever share this code with anyone.\n\nBest regards,\nRudraatma Music Distribution Team\n${OFFICIAL_COMPANY_EMAIL}`,
-      html: htmlContent
-    });
-
-    const rejectedCount = Array.isArray(info?.rejected) ? info.rejected.length : 0;
-    const acceptedCount = Array.isArray(info?.accepted) ? info.accepted.length : 0;
-    if (rejectedCount > 0 && acceptedCount === 0) {
-      console.error(`[Rudraatma SMTP] Recipient rejected for ${toEmail} (${purpose}) via ${host}:${port} (${smtp.tlsMode}).`);
-      return {
-        success: false,
-        delivered: false,
-        error: `SMTP server (${host}:${port}) rejected the recipient address (${toEmail}).`,
-        sender: from,
-        senderAddress: rawFrom
-      };
-    }
-
-    console.log(
-      `[Rudraatma SMTP] Delivered ${purpose} OTP email to ${toEmail} via ${host}:${port} (${smtp.tlsMode}, messageId=${info?.messageId || 'n/a'})`
-    );
-    return { success: true, delivered: true, sender: from, senderAddress: rawFrom, messageId: info?.messageId };
-  } catch (err: any) {
-    console.error(
-      `[Rudraatma SMTP] Delivery failed for ${toEmail} (${purpose}) via ${host}:${port} (${smtp.tlsMode}): ${err?.code || 'ERR'} - ${err?.message || 'Unknown SMTP error'}`
-    );
-    return {
-      success: false,
-      delivered: false,
-      error: `Email delivery failed via SMTP (${host}:${port}, ${smtp.tlsMode}): ${err?.message || 'Provider authentication or connection error.'}`,
-      sender: from,
-      senderAddress: rawFrom
-    };
-  }
 }
 
 function hashString(str: string): string {
@@ -2043,23 +1940,23 @@ app.post('/api/auth/reset-password', authRateLimiter, async (req, res) => {
   });
 });
 
-// Safe SMTP configuration diagnostics without exposing credentials
-app.get('/api/auth/smtp-status', (_req, res) => {
-  const diag = getSmtpDiagnostics();
+// Safe email relay configuration diagnostics (never exposes GOOGLE_SCRIPT_URL or GOOGLE_SCRIPT_SECRET)
+const emailStatusHandler: express.RequestHandler = (_req, res) => {
+  const diag = getSafeEmailDiagnostics();
 
   return res.json({
     ...diag,
     domain: OFFICIAL_DOMAIN,
-    senderEmail: diag.from,
-    senderDisplay: `"${OFFICIAL_SENDER_NAME}" <${diag.from}>`,
-    smtpHost: diag.host,
-    smtpPort: diag.port,
+    senderDisplay: `"${OFFICIAL_SENDER_NAME}" <${diag.senderEmail}>`,
     supportEmail: OFFICIAL_SUPPORT_EMAIL,
     instructions: diag.configured
-      ? `SMTP configured via ${diag.host}:${diag.port} (${diag.tlsMode}). Active sender is ${diag.from}.`
-      : `SMTP configuration incomplete (missing: ${diag.missingVars.join(', ')}). Configure SMTP_HOST, SMTP_PORT, SMTP_USER, and SMTP_PASS / SMTP_PASSWORD.`
+      ? `Email delivery configured via Google Apps Script MailApp (HTTPS POST). Active sender is ${diag.senderEmail}.`
+      : `Email delivery configuration incomplete (missing: ${diag.missingVars.join(', ')}). Configure GOOGLE_SCRIPT_URL and GOOGLE_SCRIPT_SECRET on Render.`
   });
-});
+};
+
+app.get('/api/auth/smtp-status', emailStatusHandler);
+app.get('/api/auth/email-status', emailStatusHandler);
 
 app.get('/api/auth/session', (req, res) => {
   const user = getAuthenticatedUser(req);
@@ -5317,7 +5214,7 @@ async function startServer() {
   await initDatabase();
   await hydrateFromDatabase();
   await bootstrapSuperAdmin({ users, dbUpsertUser });
-  logSmtpStartupDiagnostics();
+  logEmailStartupDiagnostics();
 
   const isProduction = process.env.NODE_ENV === 'production';
   const isRender = Boolean(
