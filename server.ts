@@ -1316,7 +1316,7 @@ app.post('/api/auth/register', authRateLimiter, async (req, res) => {
   signupOtps.set(normalizedEmail, otpData);
   await dbSaveOtp(otpData);
 
-  // Dispatch real email via official hosting SMTP
+  // Dispatch signup OTP via Google Apps Script MailApp HTTPS relay
   const emailResult = await sendEmailOtp(normalizedEmail, otpCode, 'signup');
   if (!emailResult.delivered) {
     signupOtps.delete(normalizedEmail);
@@ -1661,7 +1661,7 @@ app.post('/api/auth/login', authRateLimiter, async (req, res) => {
   loginOtps.set(normalizedEmail, loginOtpRecord);
   await dbSaveOtp(loginOtpRecord);
 
-  // Dispatch 2FA Login OTP via official hosting SMTP
+  // Dispatch 2FA Login OTP via Google Apps Script MailApp HTTPS relay
   const emailResult = await sendEmailOtp(normalizedEmail, loginCode, 'login');
   if (!emailResult.delivered) {
     loginOtps.delete(normalizedEmail);
@@ -5166,7 +5166,7 @@ async function recordAudit(
   await dbSaveAuditLog(entry);
 }
 
-// Register official Gmail API v1 routes (strictly separated from company transactional SMTP)
+// Register official Gmail API v1 routes (strictly separated from company transactional OTP relay)
 registerGmailRoutes(app, {
   getAuthenticatedUser,
   userGmailConnections,

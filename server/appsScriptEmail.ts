@@ -80,12 +80,17 @@ function redactSensitiveText(text: string, url: string, secret: string): string 
   return sanitized;
 }
 
+function stripOuterQuotes(value?: string): string {
+  const trimmed = (value || '').trim();
+  return trimmed.replace(/^(['"])([\s\S]*)\1$/, '$2').trim();
+}
+
 export function resolveAppsScriptEmailConfig(): ResolvedAppsScriptEmailConfig {
   const warnings: string[] = [];
   const missingVars: string[] = [];
 
-  const rawUrl = (process.env.GOOGLE_SCRIPT_URL || '').trim();
-  const secret = (process.env.GOOGLE_SCRIPT_SECRET || '').trim();
+  const rawUrl = stripOuterQuotes(process.env.GOOGLE_SCRIPT_URL);
+  const secret = stripOuterQuotes(process.env.GOOGLE_SCRIPT_SECRET);
   const timeoutMs = resolveRequestTimeoutMs();
 
   let validHttpsUrl = false;
