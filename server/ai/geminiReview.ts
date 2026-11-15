@@ -33,25 +33,25 @@ export async function testGeminiConnection(): Promise<{ connected: boolean; mode
   if (!ai) {
     return {
       connected: false,
-      model: 'gemini-3.8-flash',
+      model: 'gemini-4-hydrogen',
       message: 'GEMINI_API_KEY is not configured.'
     };
   }
   try {
     const resp = await ai.models.generateContent({
-      model: 'gemini-3.8-flash',
+      model: 'gemini-4-hydrogen',
       contents: 'Reply with the single word: OK'
     });
     const text = (resp.text || '').trim();
     return {
       connected: Boolean(text),
-      model: 'gemini-3.8-flash',
+      model: 'gemini-4-hydrogen',
       message: text ? 'Connected to Gemini API successfully.' : 'Empty response from Gemini API.'
     };
   } catch (err: any) {
     return {
       connected: false,
-      model: 'gemini-3.8-flash',
+      model: 'gemini-4-hydrogen',
       message: err.message || 'Gemini API connection test failed.'
     };
   }
@@ -73,7 +73,7 @@ export async function runGeminiComplianceReview(params: {
   if (!params.enabled) {
     return {
       status: 'DISABLED',
-      model: 'gemini-3.8-flash',
+      model: 'gemini-4-hydrogen',
       copyrightRiskExplanation: 'Gemini AI analysis is disabled in AI Service Settings.',
       metadataAccuracyReport: 'Skipped (Gemini disabled).',
       missingInformationReport: 'Skipped (Gemini disabled).',
@@ -89,7 +89,7 @@ export async function runGeminiComplianceReview(params: {
   if (!ai) {
     return {
       status: 'NOT_CONFIGURED',
-      model: 'gemini-3.8-flash',
+      model: 'gemini-4-hydrogen',
       copyrightRiskExplanation: 'GEMINI_API_KEY is not configured on the backend. Manual review is required.',
       metadataAccuracyReport: 'Pending manual review (Gemini not configured).',
       missingInformationReport: 'Pending manual review.',
@@ -181,7 +181,7 @@ ${JSON.stringify(evidenceSummary, null, 2)}
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-3.8-flash',
+      model: 'gemini-4-hydrogen',
       contents,
       config: {
         responseMimeType: 'application/json',
@@ -215,7 +215,7 @@ ${JSON.stringify(evidenceSummary, null, 2)}
     const parsed = JSON.parse(response.text || '{}');
     return {
       status: 'COMPLETED',
-      model: 'gemini-3.8-flash',
+      model: 'gemini-4-hydrogen',
       copyrightRiskExplanation: parsed.copyrightRiskExplanation || 'Analysis completed.',
       metadataAccuracyReport: parsed.metadataAccuracyReport || 'No metadata issues detected.',
       missingInformationReport: parsed.missingInformationReport || 'No missing fields detected.',
@@ -228,7 +228,7 @@ ${JSON.stringify(evidenceSummary, null, 2)}
   } catch (err: any) {
     return {
       status: 'UNAVAILABLE',
-      model: 'gemini-3.8-flash',
+      model: 'gemini-4-hydrogen',
       copyrightRiskExplanation: `Gemini AI analysis unavailable (${err.message || 'API error'}). Manual review required.`,
       metadataAccuracyReport: 'Unavailable — manual review required.',
       missingInformationReport: 'Unavailable — manual review required.',

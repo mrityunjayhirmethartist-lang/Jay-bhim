@@ -49,6 +49,7 @@ export interface AiServiceSettings {
   confidenceThreshold: number;
   maxAudioFileSizeMB: number;
   jobConcurrency: number;
+  activeModel: string;
 }
 
 export const DEFAULT_AI_SETTINGS: AiServiceSettings = {
@@ -63,7 +64,8 @@ export const DEFAULT_AI_SETTINGS: AiServiceSettings = {
   autoRejectionEnabled: process.env.AI_AUTO_REJECTION_ENABLED === 'true',
   confidenceThreshold: Number(process.env.AI_REVIEW_CONFIDENCE_THRESHOLD || 95),
   maxAudioFileSizeMB: 150,
-  jobConcurrency: 2
+  jobConcurrency: 2,
+  activeModel: process.env.GEMINI_MODEL || 'gemini-4-hydrogen'
 };
 
 export interface AiReviewJob {

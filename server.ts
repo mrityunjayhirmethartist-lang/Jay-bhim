@@ -39,6 +39,7 @@ import {
   DEFAULT_PLATFORM_SETTINGS,
   PlatformSettings
 } from './server/superAdmin';
+import { registerCommandCenterRoutes, recordAdminSessionMeta } from './server/commandCenter';
 import {
   DEFAULT_AI_SETTINGS,
   AiServiceSettings,
@@ -700,31 +701,35 @@ export const PLAN_CATALOG: Record<string, PlanDefinition> = {
   }
 };
 
-// Seed Users
+// Dev-only Test/Demo Seed Users (explicitly flagged isTestUser so production KPIs isolate them)
 const demoUserId = 'usr_demo_8821';
-users.set('demo@rudraatmamusic.com', {
-  id: demoUserId,
-  fullName: 'Aarav Mehta',
-  email: 'demo@rudraatmamusic.com',
-  country: 'India',
-  passwordHash: bcrypt.hashSync('Password123!', 10),
-  role: 'artist',
-  isActive: true,
-  selectedPlanId: 'growth-monthly',
-  createdAt: '2026-01-10T08:00:00.000Z'
-});
-
 const adminUserId = 'usr_admin_001';
-users.set('admin@rudraatmamusic.com', {
-  id: adminUserId,
-  fullName: 'Rudra Admin Desk',
-  email: 'admin@rudraatmamusic.com',
-  country: 'India',
-  passwordHash: bcrypt.hashSync('AdminPass123!', 10),
-  role: 'admin',
-  isActive: true,
-  createdAt: '2025-12-01T00:00:00.000Z'
-});
+if (process.env.NODE_ENV !== 'production') {
+  users.set('demo@rudraatmamusic.com', {
+    id: demoUserId,
+    fullName: 'Aarav Mehta (Demo)',
+    email: 'demo@rudraatmamusic.com',
+    country: 'India',
+    passwordHash: bcrypt.hashSync('Password123!', 10),
+    role: 'artist',
+    isActive: true,
+    isTestUser: true,
+    selectedPlanId: 'growth-monthly',
+    createdAt: '2026-01-10T08:00:00.000Z'
+  } as any);
+
+  users.set('admin@rudraatmamusic.com', {
+    id: adminUserId,
+    fullName: 'Rudra Admin Desk (Demo)',
+    email: 'admin@rudraatmamusic.com',
+    country: 'India',
+    passwordHash: bcrypt.hashSync('AdminPass123!', 10),
+    role: 'admin',
+    isActive: true,
+    isTestUser: true,
+    createdAt: '2025-12-01T00:00:00.000Z'
+  } as any);
+}
 
 // Royalty Analytics Data Schemas
 export interface MonthlyRoyaltyData {
@@ -1606,6 +1611,7 @@ app.post('/api/auth/login', authRateLimiter, async (req, res) => {
       expiresAt: Date.now() + 12 * 60 * 60 * 1000
     };
     sessions.set(sessionToken, sessionRecord);
+    recordAdminSessionMeta(sessionToken, user, req.ip);
     await dbSaveSession(sessionRecord);
     await recordAudit(
       user.email,
@@ -4863,25 +4869,8 @@ async function hydrateFromDatabase() {
   if (!isDatabaseEnabled()) return;
   const pool = getDbPool();
 
-  // 1. Ensure seeded demo & admin accounts exist in PostgreSQL if table is empty / missing them
-  for (const seedUser of users.values()) {
-    await pool.query(
-      `INSERT INTO users (id, full_name, email, country, password_hash, role, is_active, selected_plan_id, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-       ON CONFLICT (email) DO NOTHING`,
-      [
-        seedUser.id,
-        seedUser.fullName,
-        seedUser.email,
-        seedUser.country,
-        seedUser.passwordHash,
-        seedUser.role,
-        seedUser.isActive,
-        seedUser.selectedPlanId || null,
-        seedUser.createdAt
-      ]
-    );
-  }
+  // Preserve any local dev-only test accounts in memory cleanly without writing fake seeds into production PostgreSQL
+  const devSeedBackup = process.env.NODE_ENV !== 'production' ? Array.from(users.entries()) : [];
 
   // 2. Load all users
   const userRows = await pool.query('SELECT * FROM users');
@@ -4901,6 +4890,11 @@ async function hydrateFromDatabase() {
       selectedPlanId: row.selected_plan_id || undefined,
       createdAt: new Date(row.created_at).toISOString()
     });
+  }
+  for (const [email, seedUser] of devSeedBackup) {
+    if (!users.has(email)) {
+      users.set(email, seedUser);
+    }
   }
 
   // 3. Load non-expired OTP codes
@@ -5175,7 +5169,7 @@ registerGmailRoutes(app, {
 });
 
 // Register Super Admin & KYC/Profile routes
-registerSuperAdminRoutes(app, {
+const superAdminDeps = {
   users,
   sessions,
   failedLoginAttempts,
@@ -5199,7 +5193,11 @@ registerSuperAdminRoutes(app, {
   dbSaveNotification,
   dbSavePlatformSetting,
   localKycDir
-});
+};
+registerSuperAdminRoutes(app, superAdminDeps);
+
+// Register Super Admin Command Center 2.0 routes (Intelligence, Owner Approvals, AI Assistant, Reports, Session)
+registerCommandCenterRoutes(app, superAdminDeps, aiContext);
 
 // Register Rudraatma AI Music Intelligence & Copyright Risk Detection routes
 registerAiRoutes(app, {

@@ -6,7 +6,14 @@ import bcrypt from 'bcryptjs';
 import multer from 'multer';
 import { getDbPool, isDatabaseEnabled } from './db';
 import { saveUploadedMedia, getStoredMedia } from './storage';
-import { verifyAppsScriptNetworkReadiness } from './appsScriptEmail';
+import { verifyAppsScriptNetworkReadiness, getSafeEmailDiagnostics } from './appsScriptEmail';
+import {
+  loadLivePlatformSnapshot,
+  recordAdminSessionMeta,
+  touchAdminSessionMeta,
+  extractBearerToken,
+  isTestOrDemoUser
+} from './commandCenter';
 
 export type AccountStatus = 'active' | 'suspended' | 'terminated';
 export type KycStatus = 'Not Submitted' | 'Pending' | 'Approved' | 'Rejected' | 'Reupload Required';
@@ -197,6 +204,7 @@ export function registerSuperAdminRoutes(app: express.Express, deps: SuperAdminD
     if (user.accountStatus === 'suspended' || user.accountStatus === 'terminated') {
       return res.status(403).json({ error: 'Super Admin account is inactive.' });
     }
+    touchAdminSessionMeta(extractBearerToken(req));
     (req as any).superAdmin = user;
     next();
   }
@@ -310,6 +318,7 @@ export function registerSuperAdminRoutes(app: express.Express, deps: SuperAdminD
       expiresAt: Date.now() + 12 * 60 * 60 * 1000 // 12-hour executive session
     };
     deps.sessions.set(sessionToken, sessionRecord);
+    recordAdminSessionMeta(sessionToken, user, req.ip);
     await deps.dbSaveSession(sessionRecord);
 
     await deps.recordAudit(
@@ -362,26 +371,37 @@ export function registerSuperAdminRoutes(app: express.Express, deps: SuperAdminD
 
   // ======================== 2. OVERVIEW & CHARTS ========================
 
-  app.get('/api/super-admin/overview', requireSuperAdmin, (_req, res) => {
-    const allUsers = Array.from(deps.users.values()).filter(u => u.role !== 'SUPER_ADMIN');
-    const allReleases: any[] = [];
-    let activeSubscriptions = 0;
-
-    for (const u of allUsers) {
-      const dash = deps.userDashboards.get(u.id);
-      if (dash) {
-        for (const r of dash.releases || []) {
-          allReleases.push(r);
+  app.get('/api/super-admin/overview', requireSuperAdmin, async (req, res) => {
+    const includeTest = req.query.includeTest === 'true';
+    const emptyAiCtx = {
+      aiJobs: new Map(),
+      aiResults: new Map(),
+      releaseAppeals: [],
+      aiAuditLogs: []
+    };
+    const snapshot = await loadLivePlatformSnapshot(deps, emptyAiCtx, { includeTest });
+    if (!snapshot.ok) {
+      return res.status(503).json({
+        dataUnavailable: true,
+        error: snapshot.error || 'Database unavailable for analytics.',
+        _integrity: {
+          dataSource: snapshot.dataSource,
+          connectionStatus: snapshot.connectionStatus,
+          lastSyncedAt: snapshot.lastSyncedAt,
+          latencyMs: snapshot.latencyMs,
+          excludedTestCounts: snapshot.excludedTestCounts
         }
-        if (dash.subscription?.status === 'active') {
-          activeSubscriptions++;
-        }
-      }
+      });
     }
 
-    const orders = Array.from(deps.razorpayOrders.values());
-    const successfulOrders = orders.filter(o => o.status === 'paid');
-    const failedOrders = orders.filter(o => o.status === 'failed' || o.status === 'cancelled');
+    const allUsers = snapshot.users;
+    const allReleases = snapshot.releases;
+    const activeSubscriptions = snapshot.subscriptions.filter(s => s.status === 'active').length;
+    const orders = snapshot.orders;
+    const successfulOrders = snapshot.paidOrders;
+    const failedOrders = snapshot.failedOrders;
+    const refundedOrders = snapshot.refundedOrders;
+    const pendingOrders = snapshot.pendingOrders;
     const totalRevenue = successfulOrders.reduce((sum, o) => sum + Number(o.amount || 0), 0);
 
     const kpis = {
@@ -393,17 +413,22 @@ export function registerSuperAdminRoutes(app: express.Express, deps: SuperAdminD
       suspendedUsers: allUsers.filter(u => u.accountStatus === 'suspended').length,
       terminatedAccounts: allUsers.filter(u => u.accountStatus === 'terminated').length,
       totalReleases: allReleases.length,
+      draftReleases: allReleases.filter(r => r.status === 'Draft').length,
       pendingReleaseReviews: allReleases.filter(r => r.status === 'Submitted' || r.status === 'Under Review').length,
-      approvedReleases: allReleases.filter(r => r.status === 'Approved' || r.status === 'Delivered' || r.status === 'Live').length,
+      approvedReleases: allReleases.filter(r => r.status === 'Approved').length,
+      publishedReleases: allReleases.filter(r => r.status === 'Live' || r.status === 'Published' || r.status === 'Delivered').length,
       rejectedReleases: allReleases.filter(r => r.status === 'Rejected' || r.status === 'Action Required').length,
+      takedownRequests: snapshot.takedownRequests.length,
       activeSubscriptions,
       totalPayments: orders.length,
       successfulPayments: successfulOrders.length,
+      pendingPayments: pendingOrders.length,
       failedPayments: failedOrders.length,
+      refundedPayments: refundedOrders.length,
       totalRevenue
     };
 
-    // Build chart data (last 6 months)
+    // Build real DB-backed 6-month trend (strictly 0 when empty — never synthetic)
     const now = new Date();
     const months: Array<{ key: string; label: string }> = [];
     for (let i = 5; i >= 0; i--) {
@@ -432,49 +457,67 @@ export function registerSuperAdminRoutes(app: express.Express, deps: SuperAdminD
     });
 
     const releaseStatusBreakdown = [
-      { name: 'Approved / Live', value: kpis.approvedReleases, color: '#d4af37' },
+      { name: 'Published / Live', value: kpis.publishedReleases, color: '#10b981' },
+      { name: 'Approved', value: kpis.approvedReleases, color: '#d4af37' },
       { name: 'Pending Review', value: kpis.pendingReleaseReviews, color: '#f59e0b' },
       { name: 'Rejected / Action Req', value: kpis.rejectedReleases, color: '#ef4444' },
-      { name: 'Draft', value: allReleases.filter(r => r.status === 'Draft').length, color: '#64748b' }
+      { name: 'Draft', value: kpis.draftReleases, color: '#64748b' }
     ];
 
-    // 7-day platform activity
     const platformActivity = [];
     for (let i = 6; i >= 0; i--) {
       const d = new Date(Date.now() - i * 86400000);
       const dayKey = d.toISOString().slice(0, 10);
       const dayLabel = d.toLocaleDateString('en-US', { weekday: 'short' });
-      const adminActions = deps.auditLogs.filter(l => (l.timestamp || '').slice(0, 10) === dayKey).length;
+      const adminActions = snapshot.auditLogs.filter(l => (l.timestamp || '').slice(0, 10) === dayKey).length;
       const releases = allReleases.filter(r => (r.submittedAt || '').slice(0, 10) === dayKey).length;
-      const payments = orders.filter(o => (o.createdAt || '').slice(0, 10) === dayKey).length;
+      const payments = successfulOrders.filter(o => (o.paidAt || o.createdAt || '').slice(0, 10) === dayKey).length;
       platformActivity.push({ day: dayLabel, adminActions, releases, payments });
     }
 
     return res.json({
+      dataUnavailable: false,
       kpis,
       charts: {
         userGrowth,
         revenueTrend,
         releaseStatusBreakdown,
         platformActivity
+      },
+      _integrity: {
+        dataSource: snapshot.dataSource,
+        connectionStatus: snapshot.connectionStatus,
+        lastSyncedAt: snapshot.lastSyncedAt,
+        latencyMs: snapshot.latencyMs,
+        includeTest: snapshot.includeTest,
+        excludedTestCounts: snapshot.excludedTestCounts
       }
     });
   });
 
   // ======================== 3 & 5. USER MANAGEMENT & TERMINATION ========================
 
-  app.get('/api/super-admin/users', requireSuperAdmin, (req, res) => {
+  app.get('/api/super-admin/users', requireSuperAdmin, async (req, res) => {
     const q = String(req.query.q || '').trim().toLowerCase();
     const statusFilter = String(req.query.status || 'all').toLowerCase();
     const kycFilter = String(req.query.kyc || 'all').toLowerCase();
     const dateFrom = String(req.query.dateFrom || '').trim();
     const dateTo = String(req.query.dateTo || '').trim();
+    const includeTest = req.query.includeTest === 'true';
 
-    const list = Array.from(deps.users.values())
-      .filter(u => u.role !== 'SUPER_ADMIN')
+    const snapshot = await loadLivePlatformSnapshot(
+      deps,
+      { aiJobs: new Map(), aiResults: new Map(), releaseAppeals: [], aiAuditLogs: [] },
+      { includeTest }
+    );
+    if (!snapshot.ok) {
+      return res.status(503).json({ dataUnavailable: true, error: snapshot.error });
+    }
+
+    const list = snapshot.users
       .map(u => {
-        const dash = deps.userDashboards.get(u.id);
-        const orders = Array.from(deps.razorpayOrders.values()).filter(o => o.userId === u.id);
+        const dash = snapshot.dashboards.get(u.id);
+        const orders = snapshot.orders.filter(o => o.userId === u.id);
         return {
           id: u.id,
           fullName: u.fullName,
@@ -482,6 +525,7 @@ export function registerSuperAdminRoutes(app: express.Express, deps: SuperAdminD
           country: u.country,
           role: u.role,
           isActive: u.isActive,
+          isTestRecord: Boolean(u.isTestRecord || isTestOrDemoUser(u)),
           accountStatus: (u.accountStatus || 'active') as AccountStatus,
           statusReason: u.statusReason || '',
           createdAt: u.createdAt,
@@ -508,7 +552,16 @@ export function registerSuperAdminRoutes(app: express.Express, deps: SuperAdminD
       })
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-    return res.json({ users: list, total: list.length });
+    return res.json({
+      users: list,
+      total: list.length,
+      _integrity: {
+        dataSource: snapshot.dataSource,
+        connectionStatus: snapshot.connectionStatus,
+        lastSyncedAt: snapshot.lastSyncedAt,
+        excludedTestCounts: snapshot.excludedTestCounts
+      }
+    });
   });
 
   app.get('/api/super-admin/users/:userId', requireSuperAdmin, (req, res) => {
@@ -599,17 +652,27 @@ export function registerSuperAdminRoutes(app: express.Express, deps: SuperAdminD
 
   // ======================== 4. KYC APPROVAL MANAGEMENT ========================
 
-  app.get('/api/super-admin/kyc', requireSuperAdmin, (req, res) => {
+  app.get('/api/super-admin/kyc', requireSuperAdmin, async (req, res) => {
     const statusFilter = String(req.query.status || 'all').toLowerCase();
+    const includeTest = req.query.includeTest === 'true';
 
-    const records = Array.from(deps.users.values())
-      .filter(u => u.role !== 'SUPER_ADMIN')
+    const snapshot = await loadLivePlatformSnapshot(
+      deps,
+      { aiJobs: new Map(), aiResults: new Map(), releaseAppeals: [], aiAuditLogs: [] },
+      { includeTest }
+    );
+    if (!snapshot.ok) {
+      return res.status(503).json({ dataUnavailable: true, error: snapshot.error });
+    }
+
+    const records = snapshot.users
       .map(u => ({
         userId: u.id,
         fullName: u.fullName,
         email: u.email,
         country: u.country,
         accountStatus: u.accountStatus || 'active',
+        isTestRecord: Boolean(u.isTestRecord),
         profileCompletion: computeProfileCompletion(u),
         kyc: u.kyc || { status: 'Not Submitted', servicesUnlocked: false }
       }))
@@ -622,7 +685,15 @@ export function registerSuperAdminRoutes(app: express.Express, deps: SuperAdminD
         return (order[a.kyc.status] ?? 5) - (order[b.kyc.status] ?? 5);
       });
 
-    return res.json({ records });
+    return res.json({
+      records,
+      _integrity: {
+        dataSource: snapshot.dataSource,
+        connectionStatus: snapshot.connectionStatus,
+        lastSyncedAt: snapshot.lastSyncedAt,
+        excludedTestCounts: snapshot.excludedTestCounts
+      }
+    });
   });
 
   app.post('/api/super-admin/kyc/:userId/review', requireSuperAdmin, async (req, res) => {
@@ -733,27 +804,29 @@ export function registerSuperAdminRoutes(app: express.Express, deps: SuperAdminD
 
   // ======================== 6. RELEASE MANAGEMENT ========================
 
-  app.get('/api/super-admin/releases', requireSuperAdmin, (req, res) => {
+  app.get('/api/super-admin/releases', requireSuperAdmin, async (req, res) => {
     const statusFilter = String(req.query.status || 'all').toLowerCase();
     const q = String(req.query.q || '').trim().toLowerCase();
+    const includeTest = req.query.includeTest === 'true';
 
-    const releases: any[] = [];
-    for (const u of deps.users.values()) {
-      if (u.role === 'SUPER_ADMIN') continue;
-      const dash = deps.userDashboards.get(u.id);
-      for (const r of dash?.releases || []) {
-        releases.push({
-          ...r,
-          ownerName: u.fullName,
-          ownerEmail: u.email,
-          ownerAccountStatus: u.accountStatus || 'active'
-        });
-      }
+    const snapshot = await loadLivePlatformSnapshot(
+      deps,
+      { aiJobs: new Map(), aiResults: new Map(), releaseAppeals: [], aiAuditLogs: [] },
+      { includeTest }
+    );
+    if (!snapshot.ok) {
+      return res.status(503).json({ dataUnavailable: true, error: snapshot.error });
     }
 
-    const filtered = releases
+    const filtered = snapshot.releases
       .filter(r => {
-        if (statusFilter !== 'all' && r.status.toLowerCase() !== statusFilter) return false;
+        if (statusFilter === 'pending') {
+          if (r.status !== 'Submitted' && r.status !== 'Under Review') return false;
+        } else if (statusFilter === 'published') {
+          if (r.status !== 'Live' && r.status !== 'Published' && r.status !== 'Delivered') return false;
+        } else if (statusFilter !== 'all' && r.status.toLowerCase() !== statusFilter) {
+          return false;
+        }
         if (
           q &&
           !r.title.toLowerCase().includes(q) &&
@@ -765,9 +838,18 @@ export function registerSuperAdminRoutes(app: express.Express, deps: SuperAdminD
         }
         return true;
       })
-      .sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
+      .sort((a, b) => new Date(b.submittedAt || 0).getTime() - new Date(a.submittedAt || 0).getTime());
 
-    return res.json({ releases: filtered });
+    return res.json({
+      releases: filtered,
+      takedownRequests: snapshot.takedownRequests,
+      _integrity: {
+        dataSource: snapshot.dataSource,
+        connectionStatus: snapshot.connectionStatus,
+        lastSyncedAt: snapshot.lastSyncedAt,
+        excludedTestCounts: snapshot.excludedTestCounts
+      }
+    });
   });
 
   app.post('/api/super-admin/releases/:id/review', requireSuperAdmin, async (req, res) => {
@@ -775,8 +857,8 @@ export function registerSuperAdminRoutes(app: express.Express, deps: SuperAdminD
     const { id } = req.params;
     const { action, reason, notes } = req.body || {};
 
-    if (!['approve', 'reject', 'request_corrections'].includes(action)) {
-      return res.status(400).json({ error: 'Action must be approve, reject, or request_corrections.' });
+    if (!['approve', 'reject', 'request_corrections', 'publish'].includes(action)) {
+      return res.status(400).json({ error: 'Action must be approve, publish, reject, or request_corrections.' });
     }
     if ((action === 'reject' || action === 'request_corrections') && (!reason || !String(reason).trim())) {
       return res.status(400).json({ error: 'A clear reason is required when rejecting or requesting corrections.' });
@@ -811,6 +893,13 @@ export function registerSuperAdminRoutes(app: express.Express, deps: SuperAdminD
       foundRelease.status = 'Approved';
       foundRelease.adminRejectReason = undefined;
       foundRelease.adminChangesRequired = undefined;
+    } else if (action === 'publish') {
+      foundRelease.status = 'Live';
+      foundRelease.publishedAt = new Date().toISOString();
+      foundRelease.adminRejectReason = undefined;
+      foundRelease.adminChangesRequired = undefined;
+      notifTitle = 'Release Published Live!';
+      notifMessage = `Your release "${foundRelease.title}" is now marked Live by Rudraatma Super Admin.`;
     } else if (action === 'reject') {
       foundRelease.status = 'Rejected';
       foundRelease.adminRejectReason = String(reason).trim();
@@ -857,8 +946,18 @@ export function registerSuperAdminRoutes(app: express.Express, deps: SuperAdminD
 
   // ======================== 7. SUBSCRIPTION & PAYMENT MANAGEMENT ========================
 
-  app.get('/api/super-admin/payments', requireSuperAdmin, (_req, res) => {
-    const orders = Array.from(deps.razorpayOrders.values())
+  app.get('/api/super-admin/payments', requireSuperAdmin, async (req, res) => {
+    const includeTest = req.query.includeTest === 'true';
+    const snapshot = await loadLivePlatformSnapshot(
+      deps,
+      { aiJobs: new Map(), aiResults: new Map(), releaseAppeals: [], aiAuditLogs: [] },
+      { includeTest }
+    );
+    if (!snapshot.ok) {
+      return res.status(503).json({ dataUnavailable: true, error: snapshot.error });
+    }
+
+    const orders = snapshot.orders
       .map(o => ({
         orderId: o.orderId,
         userId: o.userId,
@@ -876,36 +975,30 @@ export function registerSuperAdminRoutes(app: express.Express, deps: SuperAdminD
         paidAt: o.paidAt || '',
         refundedAt: o.refundedAt || '',
         refundReason: o.refundReason || '',
-        isTestMode: Boolean(o.isTestMode)
+        isTestMode: Boolean(o.isTestMode || o.isTestRecord)
       }))
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-    const subscriptions: any[] = [];
-    for (const u of deps.users.values()) {
-      if (u.role === 'SUPER_ADMIN') continue;
-      const dash = deps.userDashboards.get(u.id);
-      if (dash?.subscription) {
-        subscriptions.push({
-          userId: u.id,
-          userEmail: u.email,
-          userName: u.fullName,
-          ...dash.subscription
-        });
-      }
-    }
-
-    const totalRevenue = orders.filter(o => o.status === 'paid').reduce((s, o) => s + Number(o.amount || 0), 0);
+    const paidOrders = orders.filter(o => o.status === 'paid');
+    const totalRevenue = paidOrders.reduce((s, o) => s + Number(o.amount || 0), 0);
     const failedCount = orders.filter(o => o.status === 'failed' || o.status === 'cancelled').length;
 
     return res.json({
       orders,
-      subscriptions,
+      subscriptions: snapshot.subscriptions,
       summary: {
         totalOrders: orders.length,
-        paidOrders: orders.filter(o => o.status === 'paid').length,
+        paidOrders: paidOrders.length,
+        pendingOrders: orders.filter(o => o.status === 'created' || o.status === 'pending').length,
         failedOrders: failedCount,
         refundedOrders: orders.filter(o => o.status === 'refunded').length,
         totalRevenue
+      },
+      _integrity: {
+        dataSource: snapshot.dataSource,
+        connectionStatus: snapshot.connectionStatus,
+        lastSyncedAt: snapshot.lastSyncedAt,
+        excludedTestCounts: snapshot.excludedTestCounts
       }
     });
   });
@@ -1044,19 +1137,28 @@ export function registerSuperAdminRoutes(app: express.Express, deps: SuperAdminD
 
   // ======================== 9. ADMIN ACTIVITY & SECURITY AUDIT LOG ========================
 
-  app.get('/api/super-admin/audit-logs', requireSuperAdmin, (req, res) => {
+  app.get('/api/super-admin/audit-logs', requireSuperAdmin, async (req, res) => {
     const q = String(req.query.q || '').trim().toLowerCase();
     const actionFilter = String(req.query.action || 'all').toLowerCase();
 
-    const logs = [...deps.auditLogs]
+    const snapshot = await loadLivePlatformSnapshot(
+      deps,
+      { aiJobs: new Map(), aiResults: new Map(), releaseAppeals: [], aiAuditLogs: [] },
+      { includeTest: true }
+    );
+    if (!snapshot.ok) {
+      return res.status(503).json({ dataUnavailable: true, error: snapshot.error });
+    }
+
+    const logs = [...snapshot.auditLogs]
       .reverse()
       .filter(l => {
-        if (actionFilter !== 'all' && !l.action.toLowerCase().includes(actionFilter)) return false;
+        if (actionFilter !== 'all' && !String(l.action || '').toLowerCase().includes(actionFilter)) return false;
         if (
           q &&
-          !l.actorEmail.toLowerCase().includes(q) &&
-          !l.action.toLowerCase().includes(q) &&
-          !l.details.toLowerCase().includes(q)
+          !String(l.actorEmail || '').toLowerCase().includes(q) &&
+          !String(l.action || '').toLowerCase().includes(q) &&
+          !String(l.details || '').toLowerCase().includes(q)
         ) {
           return false;
         }
@@ -1064,12 +1166,20 @@ export function registerSuperAdminRoutes(app: express.Express, deps: SuperAdminD
       })
       .slice(0, 300);
 
-    return res.json({ logs });
+    return res.json({
+      logs,
+      _integrity: {
+        dataSource: snapshot.dataSource,
+        connectionStatus: snapshot.connectionStatus,
+        lastSyncedAt: snapshot.lastSyncedAt
+      }
+    });
   });
 
   // ======================== 10. PLATFORM SETTINGS & BROADCASTS ========================
 
   app.get('/api/super-admin/settings', requireSuperAdmin, (_req, res) => {
+    const emailConfig = getSafeEmailDiagnostics();
     const safeSettings = {
       ...deps.platformSettings,
       adminTotpPinHash: undefined,
@@ -1077,7 +1187,13 @@ export function registerSuperAdminRoutes(app: express.Express, deps: SuperAdminD
     };
     return res.json({
       settings: safeSettings,
-      plans: Object.values(deps.PLAN_CATALOG)
+      plans: Object.values(deps.PLAN_CATALOG),
+      emailConfig,
+      gatewayConfig: {
+        razorpayKeyConfigured: Boolean(process.env.RAZORPAY_KEY_ID?.trim()),
+        razorpaySecretConfigured: Boolean(process.env.RAZORPAY_KEY_SECRET?.trim()),
+        webhookSecretConfigured: Boolean(process.env.RAZORPAY_WEBHOOK_SECRET?.trim())
+      }
     });
   });
 

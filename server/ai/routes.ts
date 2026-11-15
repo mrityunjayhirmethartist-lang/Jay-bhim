@@ -7,6 +7,7 @@ import { isDatabaseEnabled, getDbPool, dbSaveAiServiceSetting, dbSaveReleaseAppe
 import { saveUploadedMedia, getStoredMedia, getStorageProviderName } from '../storage';
 import { checkFfmpegBinary, checkChromaprintBinary } from './audioEngine';
 import { testGeminiConnection } from './geminiReview';
+import { isTestOrDemoUser } from '../commandCenter';
 import {
   AiQueueContext,
   enqueueAiReviewJob,
@@ -310,9 +311,19 @@ export function registerAiRoutes(
 
   // ======================== SUPER ADMIN AI CONTROL CENTER ========================
 
-  app.get('/api/super-admin/ai/overview', requireSuperAdmin, (_req, res) => {
-    const results = Array.from(ctx.aiResults.values());
-    const jobs = Array.from(ctx.aiJobs.values());
+  app.get('/api/super-admin/ai/overview', requireSuperAdmin, (req, res) => {
+    const includeTest = req.query.includeTest === 'true';
+    const testUserIds = new Set(
+      Array.from(ctx.users.values())
+        .filter(u => isTestOrDemoUser(u))
+        .map(u => u.id)
+    );
+    const results = Array.from(ctx.aiResults.values()).filter(
+      r => includeTest || !testUserIds.has(r.userId)
+    );
+    const jobs = Array.from(ctx.aiJobs.values()).filter(
+      j => includeTest || !testUserIds.has(j.userId)
+    );
 
     let completedDurations = 0;
     let completedCount = 0;
@@ -344,10 +355,12 @@ export function registerAiRoutes(
   app.get('/api/super-admin/ai/reviews', requireSuperAdmin, (req, res) => {
     const riskFilter = String(req.query.risk || 'all').toUpperCase();
     const q = String(req.query.q || '').trim().toLowerCase();
+    const includeTest = req.query.includeTest === 'true';
 
     const items: any[] = [];
     for (const u of ctx.users.values()) {
       if (u.role === 'SUPER_ADMIN') continue;
+      if (!includeTest && isTestOrDemoUser(u)) continue;
       const dash = ctx.userDashboards.get(u.id);
       for (const rel of dash?.releases || []) {
         const aiRes = ctx.aiResults.get(rel.id);
@@ -636,6 +649,12 @@ export function registerAiRoutes(
     }
     if (typeof body.jobConcurrency === 'number') {
       ctx.aiSettings.jobConcurrency = Math.max(1, Math.min(5, body.jobConcurrency));
+    }
+    if (
+      typeof body.activeModel === 'string' &&
+      ['gemini-4-hydrogen', 'gemini-3.8-flash', 'gemini-2.5-flash'].includes(body.activeModel)
+    ) {
+      ctx.aiSettings.activeModel = body.activeModel;
     }
 
     await dbSaveAiServiceSetting('ai_service_settings', ctx.aiSettings);

@@ -342,6 +342,34 @@ async function runMigrations(): Promise<void> {
       reviewed_at TIMESTAMPTZ
     );
     CREATE INDEX IF NOT EXISTS idx_appeals_release ON release_appeals (release_id);
+
+    CREATE TABLE IF NOT EXISTS admin_approval_requests (
+      id TEXT PRIMARY KEY,
+      action_type TEXT NOT NULL,
+      target_type TEXT NOT NULL,
+      target_id TEXT,
+      title TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'PENDING_OWNER_APPROVAL',
+      data JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_admin_approvals_status ON admin_approval_requests (status);
+
+    CREATE TABLE IF NOT EXISTS ai_usage_logs (
+      id TEXT PRIMARY KEY,
+      source TEXT NOT NULL,
+      model TEXT NOT NULL,
+      prompt_tokens INTEGER NOT NULL DEFAULT 0,
+      completion_tokens INTEGER NOT NULL DEFAULT 0,
+      total_tokens INTEGER NOT NULL DEFAULT 0,
+      latency_ms INTEGER NOT NULL DEFAULT 0,
+      status TEXT NOT NULL,
+      error_message TEXT,
+      actor_email TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_ai_usage_created ON ai_usage_logs (created_at DESC);
   `);
 
   console.log('[Rudraatma DB] PostgreSQL migrations and indexes verified.');
@@ -705,4 +733,91 @@ export async function dbSaveReleaseAppeal(appeal: Record<string, any>): Promise<
     ]
   );
 }
+
+export async function dbSaveAdminApproval(reqItem: Record<string, any>): Promise<void> {
+  if (!pool) return;
+  await pool.query(
+    `INSERT INTO admin_approval_requests (id, action_type, target_type, target_id, title, status, data, created_at, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, NOW())
+     ON CONFLICT (id) DO UPDATE SET
+       status = EXCLUDED.status,
+       data = EXCLUDED.data,
+       updated_at = NOW()`,
+    [
+      reqItem.id,
+      reqItem.actionType,
+      reqItem.targetType,
+      reqItem.targetId || null,
+      reqItem.title,
+      reqItem.status,
+      JSON.stringify(reqItem),
+      reqItem.createdAt || new Date().toISOString()
+    ]
+  );
+}
+
+export async function dbGetAdminApprovals(limit = 100): Promise<any[]> {
+  if (!pool) return [];
+  const res = await pool.query(
+    'SELECT data FROM admin_approval_requests ORDER BY created_at DESC LIMIT $1',
+    [limit]
+  );
+  return res.rows.map(r => r.data);
+}
+
+export async function dbSaveAiUsageLog(log: {
+  id: string;
+  source: string;
+  model: string;
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  latencyMs: number;
+  status: string;
+  errorMessage?: string;
+  actorEmail?: string;
+  createdAt?: string;
+}): Promise<void> {
+  if (!pool) return;
+  await pool.query(
+    `INSERT INTO ai_usage_logs (id, source, model, prompt_tokens, completion_tokens, total_tokens, latency_ms, status, error_message, actor_email, created_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+     ON CONFLICT (id) DO NOTHING`,
+    [
+      log.id,
+      log.source,
+      log.model,
+      log.promptTokens || 0,
+      log.completionTokens || 0,
+      log.totalTokens || 0,
+      log.latencyMs || 0,
+      log.status,
+      log.errorMessage || null,
+      log.actorEmail || null,
+      log.createdAt || new Date().toISOString()
+    ]
+  );
+}
+
+export async function dbGetAiUsageLogs(limit = 200): Promise<any[]> {
+  if (!pool) return [];
+  const res = await pool.query(
+    'SELECT id, source, model, prompt_tokens, completion_tokens, total_tokens, latency_ms, status, error_message, actor_email, created_at FROM ai_usage_logs ORDER BY created_at DESC LIMIT $1',
+    [limit]
+  );
+  return res.rows.map(r => ({
+    id: r.id,
+    source: r.source,
+    model: r.model,
+    promptTokens: Number(r.prompt_tokens || 0),
+    completionTokens: Number(r.completion_tokens || 0),
+    totalTokens: Number(r.total_tokens || 0),
+    latencyMs: Number(r.latency_ms || 0),
+    status: r.status,
+    errorMessage: r.error_message || undefined,
+    actorEmail: r.actor_email || undefined,
+    createdAt: new Date(r.created_at).toISOString()
+  }));
+}
+
 
