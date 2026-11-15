@@ -29,7 +29,10 @@ import {
   dbSaveGmailConnection,
   dbDeleteGmailConnection,
   dbSavePlatformSetting,
-  dbGetAllPlatformSettings
+  dbGetAllPlatformSettings,
+  dbSaveLedgerEntry,
+  dbSavePayoutRequest,
+  dbSyncAndListPromotions
 } from './server/db';
 import { registerGmailRoutes, UserGmailConnection } from './server/gmail';
 import { saveUploadedMedia, getStoredMedia, getStorageProviderName } from './server/storage';
@@ -40,6 +43,14 @@ import {
   PlatformSettings
 } from './server/superAdmin';
 import { registerCommandCenterRoutes, recordAdminSessionMeta } from './server/commandCenter';
+import {
+  registerArtistOnboardingAndFinanceRoutes,
+  evaluateReleaseUploadEligibility,
+  computeRealFinancialSummary,
+  computeArtistProfileCompletion,
+  type ArtistProfilePayload,
+  type ArtistProfileStatus
+} from './server/artistOnboardingAndFinance';
 import {
   DEFAULT_AI_SETTINGS,
   AiServiceSettings,
@@ -74,12 +85,14 @@ const artworkUploadDir = path.join(__dirname, 'uploads', 'artwork');
 const localKycDir = path.join(__dirname, 'uploads', 'kyc');
 const localLyricsDir = path.join(__dirname, 'uploads', 'lyrics');
 const localEvidenceDir = path.join(__dirname, 'uploads', 'evidence');
+const localProfileDir = path.join(__dirname, 'uploads', 'profiles');
 if (process.env.NODE_ENV !== 'production') {
   fs.mkdirSync(audioUploadDir, { recursive: true });
   fs.mkdirSync(artworkUploadDir, { recursive: true });
   fs.mkdirSync(localKycDir, { recursive: true });
   fs.mkdirSync(localLyricsDir, { recursive: true });
   fs.mkdirSync(localEvidenceDir, { recursive: true });
+  fs.mkdirSync(localProfileDir, { recursive: true });
 }
 
 const app = express();
@@ -325,9 +338,12 @@ export interface StoredUser {
   passwordHash: string;
   role: 'artist' | 'label_manager' | 'admin' | 'SUPER_ADMIN';
   isActive: boolean;
+  isTestUser?: boolean;
   accountStatus?: 'active' | 'suspended' | 'terminated';
   statusReason?: string;
   kyc?: any;
+  artistProfile?: ArtistProfilePayload;
+  artistProfileStatus?: ArtistProfileStatus;
   selectedPlanId?: string;
   createdAt: string;
 }
@@ -498,6 +514,8 @@ export interface UserSubscriptionInfo {
   revocationReason?: string;
   paymentStatus?: string;
   daysRemaining?: number;
+  isPromotional?: boolean;
+  promoSlotNumber?: number;
 }
 
 const razorpayOrders: Map<string, RazorpayOrderRecord> = new Map();
@@ -698,6 +716,26 @@ export const PLAN_CATALOG: Record<string, PlanDefinition> = {
       'Custom pre-save landing pages & tracking links',
       'Dedicated priority artist desk'
     ]
+  },
+  'promo-first-10-monthly': {
+    id: 'promo-first-10-monthly',
+    name: 'First 10 Artists Complimentary Plan',
+    type: 'monthly',
+    priceINR: 0,
+    amountPaise: 0,
+    billingText: '1-Month Complimentary',
+    allowance: 'Up to 5 release submissions for 1 month',
+    description: 'Complimentary 1-month distribution access exclusively for the first 10 Super Admin approved verified artists.',
+    isSubscription: true,
+    validityDays: 30,
+    enabled: false,
+    features: [
+      '100% complimentary 1-month release access (Zero charges)',
+      'Up to 5 release submissions included during promotional month',
+      'Free automated ISRC & UPC barcode generation',
+      '100% artist royalties retention on cleared DSP statements',
+      'No automatic renewal or hidden billing after 1 month'
+    ]
   }
 };
 
@@ -800,63 +838,64 @@ interface UserDashboardData {
 
 const userDashboards: Map<string, UserDashboardData> = new Map();
 
-// Initialize Demo User Data
-userDashboards.set(demoUserId, {
-  labels: [
-    { id: 'lbl-101', name: 'Rudra Sounds Records', code: 'RSR-01', status: 'Approved', catalogCount: 2, date: '2026-01-15' },
-    { id: 'lbl-102', name: 'Aarav Music Works', code: 'AMW-02', status: 'Approved', catalogCount: 1, date: '2026-02-10' }
-  ],
-  releases: [
-    {
-      id: 'rel-201',
-      userId: demoUserId,
-      title: 'Midnight Ragas in Blue',
-      artist: 'Aarav Mehta',
-      label: 'Rudra Sounds Records',
-      upc: '8901234567891',
-      type: 'Single',
-      status: 'Approved',
-      language: 'Hindi',
-      primaryGenre: 'Fusion / Ambient',
-      releaseDate: '2026-03-01',
-      tracks: [
-        { trackNumber: 1, title: 'Midnight Ragas in Blue', isrc: 'IN-RUD-26-0001', primaryArtist: 'Aarav Mehta', composer: 'Aarav Mehta', lyricist: 'Traditional', explicit: false }
-      ],
-      copyrightOwner: 'Rudra Sounds Records',
-      copyrightYear: 2026,
-      recordingOwner: 'Aarav Mehta',
-      territories: 'Worldwide',
-      rightsConfirmed: true,
-      submittedAt: '2026-02-10T14:30:00.000Z',
-      lastReviewedAt: '2026-02-12T16:00:00.000Z',
-      adminReviewNotes: 'Audio verified (24-bit 48kHz WAV). Clean mastering. Artwork 3000x3000px passes all QC specs.'
-    },
-    {
-      id: 'rel-202',
-      userId: demoUserId,
-      title: 'Urban Monsoon EP',
-      artist: 'Aarav Mehta ft. Neha',
-      label: 'Aarav Music Works',
-      upc: '8901234567892',
-      type: 'EP',
-      status: 'Under Review',
-      language: 'Hindi',
-      primaryGenre: 'Contemporary Indian',
-      releaseDate: '2026-04-20',
-      tracks: [
-        { trackNumber: 1, title: 'Rain Clouds Awakening', isrc: 'IN-RUD-26-0002', primaryArtist: 'Aarav Mehta', composer: 'Aarav Mehta', lyricist: 'Aarav Mehta', explicit: false },
-        { trackNumber: 2, title: 'Streets in Chai Mist', isrc: 'IN-RUD-26-0003', primaryArtist: 'Aarav Mehta', composer: 'Aarav Mehta', lyricist: 'Neha V.', explicit: false },
-        { trackNumber: 3, title: 'Thunderclap Horizon', isrc: 'IN-RUD-26-0004', primaryArtist: 'Aarav Mehta', composer: 'Aarav Mehta', lyricist: 'Aarav Mehta', explicit: false },
-        { trackNumber: 4, title: 'Evening Petrichor', isrc: 'IN-RUD-26-0005', primaryArtist: 'Aarav Mehta', composer: 'Aarav Mehta', lyricist: 'Neha V.', explicit: false }
-      ],
-      copyrightOwner: 'Aarav Music Works',
-      copyrightYear: 2026,
-      recordingOwner: 'Aarav Mehta',
-      territories: 'Worldwide',
-      rightsConfirmed: true,
-      submittedAt: '2026-03-20T10:00:00.000Z'
-    }
-  ],
+// Dev-only demo user dashboard data (strictly isolated to non-production dev environments)
+if (process.env.NODE_ENV !== 'production') {
+  userDashboards.set(demoUserId, {
+    labels: [
+      { id: 'lbl-101', name: 'Rudra Sounds Records', code: 'RSR-01', status: 'Approved', catalogCount: 2, date: '2026-01-15' },
+      { id: 'lbl-102', name: 'Aarav Music Works', code: 'AMW-02', status: 'Approved', catalogCount: 1, date: '2026-02-10' }
+    ],
+    releases: [
+      {
+        id: 'rel-201',
+        userId: demoUserId,
+        title: 'Midnight Ragas in Blue',
+        artist: 'Aarav Mehta',
+        label: 'Rudra Sounds Records',
+        upc: '8901234567891',
+        type: 'Single',
+        status: 'Approved',
+        language: 'Hindi',
+        primaryGenre: 'Fusion / Ambient',
+        releaseDate: '2026-03-01',
+        tracks: [
+          { trackNumber: 1, title: 'Midnight Ragas in Blue', isrc: 'IN-RUD-26-0001', primaryArtist: 'Aarav Mehta', composer: 'Aarav Mehta', lyricist: 'Traditional', explicit: false }
+        ],
+        copyrightOwner: 'Rudra Sounds Records',
+        copyrightYear: 2026,
+        recordingOwner: 'Aarav Mehta',
+        territories: 'Worldwide',
+        rightsConfirmed: true,
+        submittedAt: '2026-02-10T14:30:00.000Z',
+        lastReviewedAt: '2026-02-12T16:00:00.000Z',
+        adminReviewNotes: 'Audio verified (24-bit 48kHz WAV). Clean mastering. Artwork 3000x3000px passes all QC specs.'
+      },
+      {
+        id: 'rel-202',
+        userId: demoUserId,
+        title: 'Urban Monsoon EP',
+        artist: 'Aarav Mehta ft. Neha',
+        label: 'Aarav Music Works',
+        upc: '8901234567892',
+        type: 'EP',
+        status: 'Under Review',
+        language: 'Hindi',
+        primaryGenre: 'Contemporary Indian',
+        releaseDate: '2026-04-20',
+        tracks: [
+          { trackNumber: 1, title: 'Rain Clouds Awakening', isrc: 'IN-RUD-26-0002', primaryArtist: 'Aarav Mehta', composer: 'Aarav Mehta', lyricist: 'Aarav Mehta', explicit: false },
+          { trackNumber: 2, title: 'Streets in Chai Mist', isrc: 'IN-RUD-26-0003', primaryArtist: 'Aarav Mehta', composer: 'Aarav Mehta', lyricist: 'Neha V.', explicit: false },
+          { trackNumber: 3, title: 'Thunderclap Horizon', isrc: 'IN-RUD-26-0004', primaryArtist: 'Aarav Mehta', composer: 'Aarav Mehta', lyricist: 'Aarav Mehta', explicit: false },
+          { trackNumber: 4, title: 'Evening Petrichor', isrc: 'IN-RUD-26-0005', primaryArtist: 'Aarav Mehta', composer: 'Aarav Mehta', lyricist: 'Neha V.', explicit: false }
+        ],
+        copyrightOwner: 'Aarav Music Works',
+        copyrightYear: 2026,
+        recordingOwner: 'Aarav Mehta',
+        territories: 'Worldwide',
+        rightsConfirmed: true,
+        submittedAt: '2026-03-20T10:00:00.000Z'
+      }
+    ],
   artists: [
     { id: 'art-301', name: 'Aarav Mehta', primaryGenre: 'Contemporary Fusion / Ambient', spotifyId: '4Xaarav9021', releasesCount: 2 },
     { id: 'art-302', name: 'Neha V.', primaryGenre: 'Classical Vocal', releasesCount: 1 }
@@ -1070,75 +1109,24 @@ userDashboards.set(demoUserId, {
     { id: 'trk-3', title: 'Streets in Chai Mist', artist: 'Aarav Mehta ft. Neha', streams: 198200, royalties: 9710, topPlatform: 'YouTube Music' },
     { id: 'trk-4', title: 'Thunderclap Horizon', artist: 'Aarav Mehta', streams: 104000, royalties: 4400, topPlatform: 'JioSaavn' }
   ]
-});
+  });
 
-// Helper to initialize realistic monthly royalties for new users
-function generateInitialRoyaltiesForUser(artistName: string): {
-  monthlyRoyalties: MonthlyRoyaltyData[];
-  dspBreakdown: DspRoyaltyShareData[];
-  topTracks: TrackRoyaltyData[];
-} {
-  const months = [
-    { m: '2025-11', label: 'Nov 2025', streams: 14200, gross: 1120, status: 'Cleared' as const },
-    { m: '2025-12', label: 'Dec 2025', streams: 28500, gross: 2350, status: 'Cleared' as const },
-    { m: '2026-01', label: 'Jan 2026', streams: 45200, gross: 3840, status: 'Cleared' as const },
-    { m: '2026-02', label: 'Feb 2026', streams: 62100, gross: 5390, status: 'Cleared' as const },
-    { m: '2026-03', label: 'Mar 2026', streams: 81400, gross: 7120, status: 'In Clearance' as const },
-    { m: '2026-04', label: 'Apr 2026', streams: 96800, gross: 8450, status: 'Processing' as const }
-  ];
-
-  const monthlyRoyalties: MonthlyRoyaltyData[] = months.map(item => ({
-    month: item.m,
-    monthLabel: item.label,
-    grossRoyalty: item.gross,
-    netRoyalty: item.gross,
-    streams: item.streams,
-    spotify: Math.round(item.gross * 0.35 * 100) / 100,
-    appleMusic: Math.round(item.gross * 0.28 * 100) / 100,
-    youtubeMusic: Math.round(item.gross * 0.18 * 100) / 100,
-    jioSaavn: Math.round(item.gross * 0.10 * 100) / 100,
-    amazonMusic: Math.round(item.gross * 0.05 * 100) / 100,
-    otherDSPs: Math.round(item.gross * 0.04 * 100) / 100,
-    status: item.status,
-    statementId: `STMT-${item.m}-${Math.floor(100 + Math.random() * 900)}`,
-    payoutDate: item.status === 'Cleared' ? `${item.m}-20` : undefined
-  }));
-
-  const totalGross = monthlyRoyalties.reduce((acc, m) => acc + m.grossRoyalty, 0);
-  const totalStreams = monthlyRoyalties.reduce((acc, m) => acc + m.streams, 0);
-
-  const dspBreakdown: DspRoyaltyShareData[] = [
-    { name: 'Spotify', royalties: Math.round(totalGross * 0.35), streams: Math.round(totalStreams * 0.36), percentage: 35.0, color: '#10b981' },
-    { name: 'Apple Music', royalties: Math.round(totalGross * 0.28), streams: Math.round(totalStreams * 0.22), percentage: 28.0, color: '#f43f5e' },
-    { name: 'YouTube Music & Content ID', royalties: Math.round(totalGross * 0.18), streams: Math.round(totalStreams * 0.24), percentage: 18.0, color: '#ef4444' },
-    { name: 'JioSaavn', royalties: Math.round(totalGross * 0.10), streams: Math.round(totalStreams * 0.11), percentage: 10.0, color: '#06b6d4' },
-    { name: 'Amazon Music', royalties: Math.round(totalGross * 0.05), streams: Math.round(totalStreams * 0.04), percentage: 5.0, color: '#f59e0b' },
-    { name: 'Wynk & Other DSPs', royalties: Math.round(totalGross * 0.04), streams: Math.round(totalStreams * 0.03), percentage: 4.0, color: '#8b5cf6' }
-  ];
-
-  const topTracks: TrackRoyaltyData[] = [
-    { id: 'trk-1', title: 'Debut Single (Official Audio)', artist: artistName, streams: Math.round(totalStreams * 0.65), royalties: Math.round(totalGross * 0.65), topPlatform: 'Spotify' },
-    { id: 'trk-2', title: 'Acoustic Reprise', artist: artistName, streams: Math.round(totalStreams * 0.35), royalties: Math.round(totalGross * 0.35), topPlatform: 'Apple Music' }
-  ];
-
-  return { monthlyRoyalties, dspBreakdown, topTracks };
+  // Dev-only sample notification
+  const initialNotificationId = 'notif_init_001';
+  notifications.set(initialNotificationId, {
+    id: initialNotificationId,
+    recipient_user_id: demoUserId,
+    release_id: 'rel-201',
+    notification_type: 'approved',
+    title: 'Congratulations!',
+    message: 'Your song has been approved! Your release has passed our review. You can check its status and view the next steps in your dashboard.',
+    admin_reason: 'Audio quality and metadata approved.',
+    release_title: 'Midnight Ragas in Blue',
+    artist_name: 'Aarav Mehta',
+    created_at: new Date(Date.now() - 4 * 3600 * 1000).toISOString(),
+    expires_at: Date.now() + (48 - 4) * 3600 * 1000
+  });
 }
-
-// Seed an initial approval notification for demo user (created 4 hours ago)
-const initialNotificationId = 'notif_init_001';
-notifications.set(initialNotificationId, {
-  id: initialNotificationId,
-  recipient_user_id: demoUserId,
-  release_id: 'rel-201',
-  notification_type: 'approved',
-  title: 'Congratulations!',
-  message: 'Your song has been approved! Your release has passed our review. You can check its status and view the next steps in your dashboard.',
-  admin_reason: 'Audio quality and metadata approved.',
-  release_title: 'Midnight Ragas in Blue',
-  artist_name: 'Aarav Mehta',
-  created_at: new Date(Date.now() - 4 * 3600 * 1000).toISOString(),
-  expires_at: Date.now() + (48 - 4) * 3600 * 1000 // expires in 44 hours
-});
 
 // Helper for session token
 function getAuthenticatedUser(req: express.Request): StoredUser | null {
@@ -1167,40 +1155,7 @@ function getAuthenticatedUser(req: express.Request): StoredUser | null {
 
 function getUserDashboard(userId: string): UserDashboardData {
   if (!userDashboards.has(userId)) {
-    const defaultData = generateInitialRoyaltiesForUser('Artist');
-    const isDemo = userId === demoUserId;
-    const initialPlanId = isDemo ? 'growth-monthly' : 'growth-monthly';
-    const plan = PLAN_CATALOG[initialPlanId] || PLAN_CATALOG['growth-monthly'];
-
-    const initialSubscription: UserSubscriptionInfo = isDemo
-      ? {
-          status: 'active',
-          planId: 'growth-monthly',
-          planName: 'Growth Monthly',
-          billingFrequency: 'monthly',
-          startedAt: '2026-02-01T00:00:00.000Z',
-          renewsAt: new Date(Date.now() + 25 * 86400000).toISOString().split('T')[0],
-          expiresAt: new Date(Date.now() + 25 * 86400000).toISOString(),
-          orderId: 'order_demo_1001',
-          paymentId: 'pay_demo_984120',
-          amount: 200,
-          autoRenew: true,
-          paymentStatus: 'Verified & Paid',
-          daysRemaining: 25
-        }
-      : {
-          status: 'pending',
-          planId: plan.id,
-          planName: plan.name,
-          billingFrequency: plan.type,
-          startedAt: new Date().toISOString(),
-          amount: plan.priceINR,
-          autoRenew: plan.isSubscription,
-          orderId: '',
-          paymentStatus: 'Pending Payment',
-          daysRemaining: 0
-        };
-
+    // Strictly zeroed real-data initialization (ZERO fake balances, royalties, plans, or transactions)
     userDashboards.set(userId, {
       labels: [],
       releases: [],
@@ -1208,39 +1163,31 @@ function getUserDashboard(userId: string): UserDashboardData {
       tickets: [],
       smartLinks: [],
       requests: [],
-      transactions: [
-        {
-          id: 'tx-init-' + Date.now().toString().slice(-5),
-          type: 'Credit',
-          amount: 520.00,
-          description: 'Streaming Royalty Credit (Cleared)',
-          status: 'Completed',
-          reference: 'ROY-INIT-01',
-          date: new Date().toISOString().split('T')[0]
-        }
-      ],
-      balance: 520.00,
-      lastPayout: 0.00,
-      planId: initialPlanId,
-      subscription: initialSubscription,
+      transactions: [],
+      balance: 0,
+      lastPayout: 0,
+      planId: '',
+      subscription: undefined,
       teamMembers: [],
-      monthlyRoyalties: defaultData.monthlyRoyalties,
-      dspBreakdown: defaultData.dspBreakdown,
-      topTracks: defaultData.topTracks
+      monthlyRoyalties: [],
+      dspBreakdown: [],
+      topTracks: []
     });
   }
 
   const dashboard = userDashboards.get(userId)!;
 
-  // Enforce automatic expiration check
+  // Enforce automatic expiration check on active subscriptions (paid or promotional)
   if (dashboard.subscription && (dashboard.subscription.status === 'active' || dashboard.subscription.status === 'cancelled')) {
     const exp = dashboard.subscription.expiresAt || dashboard.subscription.renewsAt;
     if (exp) {
       const expTime = new Date(exp).getTime();
-      if (expTime < Date.now()) {
+      if (expTime <= Date.now()) {
         dashboard.subscription.status = 'expired';
+        dashboard.subscription.daysRemaining = 0;
+      } else {
+        dashboard.subscription.daysRemaining = Math.max(1, Math.ceil((expTime - Date.now()) / (1000 * 3600 * 24)));
       }
-      dashboard.subscription.daysRemaining = Math.max(0, Math.ceil((expTime - Date.now()) / (1000 * 3600 * 24)));
     }
   }
 
@@ -1967,6 +1914,7 @@ app.get('/api/auth/email-status', emailStatusHandler);
 app.get('/api/auth/session', (req, res) => {
   const user = getAuthenticatedUser(req);
   if (!user) return res.status(401).json({ authenticated: false });
+  const profCompletion = computeArtistProfileCompletion(user.artistProfile);
 
   return res.json({
     authenticated: true,
@@ -1976,7 +1924,11 @@ app.get('/api/auth/session', (req, res) => {
       email: user.email,
       country: user.country,
       role: user.role,
-      selectedPlanId: user.selectedPlanId
+      isActive: user.isActive,
+      selectedPlanId: user.selectedPlanId,
+      artistProfileStatus: user.artistProfileStatus || 'Incomplete',
+      profileCompletion: profCompletion.completionPercent,
+      artistProfile: user.artistProfile || undefined
     }
   });
 });
@@ -3058,22 +3010,64 @@ app.post('/api/checkout/verify-payment', (req, res) => {
 
 // ======================== DASHBOARD API ========================
 
-app.get('/api/dashboard/data', (req, res) => {
+app.get('/api/dashboard/data', async (req, res) => {
   const user = getAuthenticatedUser(req);
   if (!user) {
     return res.status(401).json({ error: 'Unauthorized. Please log in.' });
   }
 
   const data = getUserDashboard(user.id);
+  await dbSyncAndListPromotions().catch(() => []);
+  const eligibility = evaluateReleaseUploadEligibility(user, data, PLAN_CATALOG);
+
+  // Strict real ledger & statement verification for all non-dev-demo users
+  const isDevDemo = process.env.NODE_ENV !== 'production' && user.id === demoUserId;
+  let realFinance = null as any;
+  if (!isDevDemo) {
+    realFinance = await computeRealFinancialSummary(user.id);
+    if (realFinance.dataUnavailable) {
+      return res.status(503).json({
+        error: 'Data Unavailable: Unable to query verified financial ledger.',
+        dataUnavailable: true
+      });
+    }
+  }
+
+  const promotions = await dbSyncAndListPromotions().catch(() => []);
+  const userPromo = promotions.find(p => p.userId === user.id || p.userEmail === user.email);
+
   return res.json({
     user: {
       id: user.id,
       fullName: user.fullName,
       email: user.email,
       country: user.country,
-      role: user.role
+      role: user.role,
+      isActive: user.isActive,
+      artistProfileStatus: user.artistProfileStatus || 'Incomplete',
+      artistProfile: user.artistProfile || undefined
     },
-    ...data
+    ...data,
+    balance: isDevDemo ? data.balance : realFinance.clearedBalance,
+    lastPayout: isDevDemo ? data.lastPayout : realFinance.lastPayout,
+    pendingRoyalties: isDevDemo ? 0 : realFinance.pendingRoyalties,
+    projectedRoyalties: isDevDemo ? 0 : realFinance.projectedRoyalties,
+    totalNetRoyalties: isDevDemo
+      ? data.monthlyRoyalties.reduce((a, b) => a + b.netRoyalty, 0)
+      : realFinance.totalNetRoyalties,
+    hasFinancialRecords: isDevDemo ? true : realFinance.hasFinancialRecords,
+    monthlyRoyalties: isDevDemo ? data.monthlyRoyalties : realFinance.monthlyRoyalties,
+    dspBreakdown: isDevDemo ? data.dspBreakdown : realFinance.dspBreakdown,
+    topTracks: isDevDemo ? data.topTracks : realFinance.topTracks,
+    transactions: isDevDemo ? data.transactions : realFinance.transactions,
+    payouts: isDevDemo ? [] : realFinance.payouts,
+    eligibility,
+    promotionalProgram: {
+      totalSlots: 10,
+      slotsUsed: promotions.length,
+      slotsRemaining: Math.max(0, 10 - promotions.length),
+      userAllocation: userPromo || null
+    }
   });
 });
 
@@ -3085,12 +3079,12 @@ app.get('/api/dashboard/releases/:id', (req, res) => {
   const dashboard = getUserDashboard(user.id);
   const release = dashboard.releases.find(r => r.id === req.params.id);
 
-  if (!release && user.role !== 'admin') {
+  if (!release && user.role !== 'admin' && user.role !== 'SUPER_ADMIN') {
     return res.status(404).json({ error: 'Release not found or unauthorized.' });
   }
 
   // Admin access fallback
-  if (!release && user.role === 'admin') {
+  if (!release && (user.role === 'admin' || user.role === 'SUPER_ADMIN')) {
     const found = findReleaseById(req.params.id);
     if (!found) return res.status(404).json({ error: 'Release not found.' });
     return res.json({ release: found.release });
@@ -3103,6 +3097,15 @@ app.get('/api/dashboard/releases/:id', (req, res) => {
 app.post('/api/dashboard/upload/audio', (req, res) => {
   const user = getAuthenticatedUser(req);
   if (!user) return res.status(401).json({ error: 'Unauthorized.' });
+
+  const dashboard = getUserDashboard(user.id);
+  const eligibility = evaluateReleaseUploadEligibility(user, dashboard, PLAN_CATALOG);
+  if (!eligibility.eligible) {
+    return res.status(403).json({
+      error: eligibility.blockingMessage || 'Release upload is currently locked until onboarding and subscription requirements are met.',
+      eligibility
+    });
+  }
 
   audioUpload.single('audioFile')(req, res, async (err: any) => {
     if (err) {
@@ -3141,6 +3144,15 @@ app.post('/api/dashboard/upload/audio', (req, res) => {
 app.post('/api/dashboard/upload/artwork', (req, res) => {
   const user = getAuthenticatedUser(req);
   if (!user) return res.status(401).json({ error: 'Unauthorized.' });
+
+  const dashboard = getUserDashboard(user.id);
+  const eligibility = evaluateReleaseUploadEligibility(user, dashboard, PLAN_CATALOG);
+  if (!eligibility.eligible) {
+    return res.status(403).json({
+      error: eligibility.blockingMessage || 'Artwork upload is currently locked until onboarding and subscription requirements are met.',
+      eligibility
+    });
+  }
 
   artworkUpload.single('artworkFile')(req, res, async (err: any) => {
     if (err) {
@@ -3213,20 +3225,14 @@ app.post('/api/dashboard/releases', async (req, res) => {
     return res.status(400).json({ error: 'Rights ownership declaration is required.' });
   }
 
-  if (
-    targetStatus === 'Submitted' &&
-    user.role !== 'SUPER_ADMIN' &&
-    user.role !== 'admin' &&
-    user.id !== demoUserId &&
-    platformSettings.platformPolicies?.kycMandatoryForDistribution &&
-    user.kyc?.status !== 'Approved'
-  ) {
+  const dashboard = getUserDashboard(user.id);
+  const eligibility = evaluateReleaseUploadEligibility(user, dashboard, PLAN_CATALOG);
+  if (!eligibility.eligible) {
     return res.status(403).json({
-      error: 'KYC verification must be approved before submitting releases for distribution. Complete your KYC under Profile & KYC.'
+      error: eligibility.blockingMessage || 'Release submission requires a verified email, 100% approved Artist Profile, and an active distribution plan.',
+      eligibility
     });
   }
-
-  const dashboard = getUserDashboard(user.id);
   const releaseId = 'rel-' + (dashboard.releases.length + 301) + '-' + Date.now().toString().slice(-4);
 
   const formattedTracks: ReleaseTrack[] = Array.isArray(tracks) && tracks.length > 0
@@ -3578,35 +3584,75 @@ app.post('/api/dashboard/other-requests', async (req, res) => {
   return res.json({ success: true, request: newReq });
 });
 
-// Payout Request
+// Payout Request (strictly backed by cleared financial ledger balance; never marks uncompleted payouts as Completed)
 app.post('/api/dashboard/payout', async (req, res) => {
   const user = getAuthenticatedUser(req);
   if (!user) return res.status(401).json({ error: 'Unauthorized.' });
+
+  const summary = await computeRealFinancialSummary(user.id);
+  if (summary.dataUnavailable) {
+    return res.status(503).json({ error: 'Data Unavailable: Financial ledger offline.', dataUnavailable: true });
+  }
 
   const dashboard = getUserDashboard(user.id);
   const { amount, method, details } = req.body;
   const payoutAmount = Number(amount);
 
-  if (payoutAmount <= 0 || payoutAmount > dashboard.balance) {
+  if (!Number.isFinite(payoutAmount) || payoutAmount < 100) {
+    return res.status(400).json({ error: 'Minimum payout threshold is ₹100.00.' });
+  }
+  if (payoutAmount > summary.clearedBalance) {
     return res.status(400).json({ error: 'Requested payout exceeds cleared available balance.' });
   }
 
-  dashboard.balance -= payoutAmount;
-  dashboard.lastPayout = payoutAmount;
+  const refCode = 'PAY-' + Math.floor(100000 + Math.random() * 900000);
+  const payoutId = 'po_' + Date.now() + '_' + crypto.randomBytes(2).toString('hex');
+  const nowIso = new Date().toISOString();
 
-  const newTx = {
-    id: 'tx-' + Date.now().toString().slice(-6),
-    type: 'Payout' as const,
-    amount: payoutAmount,
-    description: `Payout Request (${method || 'Bank Transfer'}) - ${details || 'Processing'}`,
-    status: 'Processing' as const,
-    reference: 'PAY-' + Math.floor(100000 + Math.random() * 900000),
-    date: new Date().toISOString().split('T')[0]
-  };
+  await dbSavePayoutRequest({
+    id: payoutId,
+    userId: user.id,
+    amountINR: payoutAmount,
+    method: String(method || 'Bank Transfer (IMPS)'),
+    details: String(details || '').trim(),
+    reference: refCode,
+    status: 'Pending',
+    createdAt: nowIso
+  });
 
-  dashboard.transactions.unshift(newTx);
+  await dbSaveLedgerEntry({
+    id: 'led_po_' + Date.now().toString().slice(-6),
+    userId: user.id,
+    entryType: 'PAYOUT_PENDING',
+    amountINR: payoutAmount,
+    status: 'PENDING',
+    referenceId: refCode,
+    description: `Payout Request (${method || 'Bank Transfer'}) - ${details || 'Pending Settlement'}`,
+    source: 'artist_payout_request',
+    createdBy: user.email,
+    createdAt: nowIso
+  });
+
+  const updatedSummary = await computeRealFinancialSummary(user.id);
+  dashboard.balance = updatedSummary.clearedBalance;
+  dashboard.lastPayout = updatedSummary.lastPayout;
+  dashboard.transactions = updatedSummary.transactions;
   await dbSaveDashboard(user.id, dashboard);
-  return res.json({ success: true, transaction: newTx, newBalance: dashboard.balance });
+
+  return res.json({
+    success: true,
+    transaction: {
+      id: payoutId,
+      type: 'Payout' as const,
+      amount: payoutAmount,
+      description: `Payout Request (${method || 'Bank Transfer'}) - ${details || 'Pending Settlement'}`,
+      status: 'Processing' as const,
+      reference: refCode,
+      date: nowIso.split('T')[0]
+    },
+    newBalance: updatedSummary.clearedBalance,
+    lastPayout: updatedSummary.lastPayout
+  });
 });
 
 // Export Royalty Statement Summary (CSV or PDF)
@@ -3620,12 +3666,18 @@ app.get('/api/dashboard/royalties/export', async (req, res) => {
   }
 
   const dashboard = getUserDashboard(user.id);
+  const isDevDemo = process.env.NODE_ENV !== 'production' && user.id === demoUserId;
+  const realFinance = isDevDemo ? null : await computeRealFinancialSummary(user.id);
+  if (realFinance?.dataUnavailable) {
+    return res.status(503).json({ error: 'Data Unavailable: Unable to query verified royalty statements.', dataUnavailable: true });
+  }
+  const sourceRoyalties = isDevDemo ? (dashboard.monthlyRoyalties || []) : (realFinance?.monthlyRoyalties || []);
   const targetMonth = typeof req.query.month === 'string' ? req.query.month.trim() : '';
   const fromMonth = typeof req.query.fromMonth === 'string' ? req.query.fromMonth.trim() : '';
   const toMonth = typeof req.query.toMonth === 'string' ? req.query.toMonth.trim() : '';
   const statusFilter = typeof req.query.status === 'string' ? req.query.status.trim() : 'All';
 
-  const records = filterMonthlyRoyalties(dashboard.monthlyRoyalties || [], {
+  const records = filterMonthlyRoyalties(sourceRoyalties, {
     month: targetMonth || undefined,
     fromMonth: fromMonth || undefined,
     toMonth: toMonth || undefined,
@@ -3675,11 +3727,18 @@ app.get('/api/dashboard/royalties/export', async (req, res) => {
 });
 
 // Machine Learning Revenue Forecast Endpoint
-app.get('/api/dashboard/royalties/forecast', (req, res) => {
+app.get('/api/dashboard/royalties/forecast', async (req, res) => {
   const user = getAuthenticatedUser(req);
   if (!user) return res.status(401).json({ error: 'Unauthorized.' });
 
   const dashboard = getUserDashboard(user.id);
+  const isDevDemo = process.env.NODE_ENV !== 'production' && user.id === demoUserId;
+  const realFinance = isDevDemo ? null : await computeRealFinancialSummary(user.id);
+  if (realFinance?.dataUnavailable) {
+    return res.status(503).json({ error: 'Data Unavailable: Unable to query verified royalty statements.', dataUnavailable: true });
+  }
+  const sourceRoyalties = isDevDemo ? (dashboard.monthlyRoyalties || []) : (realFinance?.monthlyRoyalties || []);
+
   const rawModel = req.query.model as string;
   const modelType: ForecastModelType =
     rawModel === 'holt_winters' || rawModel === 'linear_regression' || rawModel === 'polynomial'
@@ -3698,7 +3757,7 @@ app.get('/api/dashboard/royalties/forecast', (req, res) => {
   const playlistTraction = req.query.playlistTraction === 'true' || req.query.playlistPlacements === '1';
 
   try {
-    const forecast = generateRoyaltyForecast(dashboard.monthlyRoyalties, {
+    const forecast = generateRoyaltyForecast(sourceRoyalties, {
       modelType,
       scenario,
       confidenceLevel,
@@ -4887,6 +4946,8 @@ async function hydrateFromDatabase() {
       accountStatus: row.account_status || 'active',
       statusReason: row.status_reason || undefined,
       kyc: row.kyc_data || undefined,
+      artistProfile: row.artist_profile_data || undefined,
+      artistProfileStatus: row.artist_profile_status || 'Incomplete',
       selectedPlanId: row.selected_plan_id || undefined,
       createdAt: new Date(row.created_at).toISOString()
     });
@@ -5198,6 +5259,22 @@ registerSuperAdminRoutes(app, superAdminDeps);
 
 // Register Super Admin Command Center 2.0 routes (Intelligence, Owner Approvals, AI Assistant, Reports, Session)
 registerCommandCenterRoutes(app, superAdminDeps, aiContext);
+
+// Register Artist Onboarding, First-10 Promotional Program, Release Gating & Real Financial Ledger routes
+registerArtistOnboardingAndFinanceRoutes(app, {
+  users,
+  userDashboards,
+  PLAN_CATALOG,
+  notifications,
+  auditLogs,
+  getAuthenticatedUser,
+  getUserDashboard,
+  dbUpsertUser,
+  dbSaveDashboard,
+  dbSaveNotification,
+  recordAudit,
+  localProfileDir
+});
 
 // Register Rudraatma AI Music Intelligence & Copyright Risk Detection routes
 registerAiRoutes(app, {

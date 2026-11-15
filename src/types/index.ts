@@ -1,11 +1,76 @@
+export type ArtistProfileStatus =
+  | 'Incomplete'
+  | 'Submitted'
+  | 'Under Review'
+  | 'Approved'
+  | 'Rejected'
+  | 'Changes Requested';
+
+export interface ArtistProfileForm {
+  legalName: string;
+  displayName: string;
+  artistType: 'Individual Artist' | 'Label' | '';
+  country: string;
+  stateRegion: string;
+  city: string;
+  contactEmail: string;
+  phoneNumber: string;
+  musicGenre: string;
+  biography: string;
+  profileImageUrl: string;
+  profileImageFileId?: string;
+  spotifyUrl?: string;
+  youtubeUrl?: string;
+  otherDspUrls?: string;
+  submittedAt?: string;
+  reviewedAt?: string;
+  reviewedBy?: string;
+  reviewNotes?: string;
+  updatedAt?: string;
+}
+
+export interface UploadEligibilityReport {
+  eligible: boolean;
+  blockingCode: string | null;
+  blockingMessage: string | null;
+  profileStatus: ArtistProfileStatus;
+  profileCompletion: number;
+  missingProfileFields: string[];
+  reviewNotes?: string;
+  subscriptionStatus: string;
+  planId: string | null;
+  planName: string | null;
+  isPromotional: boolean;
+  promoSlotNumber?: number;
+  daysRemaining: number;
+  expiresAt?: string;
+  quota: {
+    limit: number | null;
+    used: number;
+    remaining: number | null;
+  };
+  checks: {
+    authenticated: boolean;
+    emailVerified: boolean;
+    profileCompleted: boolean;
+    profileApproved: boolean;
+    subscriptionActive: boolean;
+    withinPlanQuota: boolean;
+  };
+}
+
 export interface User {
   id: string;
   fullName: string;
   email: string;
   country: string;
   role: 'artist' | 'label_manager' | 'admin' | 'SUPER_ADMIN';
+  isActive?: boolean;
   accountStatus?: 'active' | 'suspended' | 'terminated';
   selectedPlanId?: string;
+  artistProfileStatus?: ArtistProfileStatus;
+  profileCompletion?: number;
+  artistProfile?: ArtistProfileForm;
 }
 
 export interface PricingPlan {

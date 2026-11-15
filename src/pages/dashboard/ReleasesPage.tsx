@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from '../../context/RouterContext';
 import { useAuth } from '../../context/AuthContext';
 import { DashboardLayout } from '../../components/dashboard/DashboardLayout';
-import { Release, ReleaseTrack } from '../../types';
+import { Release, ReleaseTrack, UploadEligibilityReport } from '../../types';
 import { apiUrl } from '../../utils/api';
 import { ReleaseAiTracker } from '../../components/dashboard/ReleaseAiTracker';
 import {
@@ -55,6 +55,8 @@ export const ReleasesPage: React.FC = () => {
 
   const [releases, setReleases] = useState<Release[]>([]);
   const [loading, setLoading] = useState(true);
+  const [eligibility, setEligibility] = useState<UploadEligibilityReport | null>(null);
+  const [dataUnavailable, setDataUnavailable] = useState(false);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('All');
 
@@ -134,13 +136,22 @@ export const ReleasesPage: React.FC = () => {
   useEffect(() => {
     const fetchReleases = async () => {
       if (!token) return;
+      setDataUnavailable(false);
       try {
-        const res = await fetch(apiUrl('/api/dashboard/data'), {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        if (res.ok) {
-          const data = await res.json();
+        const [dataRes, eligRes] = await Promise.all([
+          fetch(apiUrl('/api/dashboard/data'), { headers: { Authorization: `Bearer ${token}` } }),
+          fetch(apiUrl('/api/dashboard/upload-eligibility'), { headers: { Authorization: `Bearer ${token}` } })
+        ]);
+        if (dataRes.status === 503) {
+          setDataUnavailable(true);
+        } else if (dataRes.ok) {
+          const data = await dataRes.json();
           setReleases(data.releases || []);
+          if (data.eligibility) setEligibility(data.eligibility);
+        }
+        if (eligRes.ok) {
+          const eligData = await eligRes.json();
+          if (eligData.eligibility) setEligibility(eligData.eligibility);
         }
       } catch (err) {
         console.error(err);
@@ -362,9 +373,12 @@ export const ReleasesPage: React.FC = () => {
       if (res.ok && data.success) {
         setSubmissionSuccess({ id: data.release.id, status: 'Draft' });
         setReleases(prev => [data.release, ...prev]);
+      } else {
+        setSubmitError(data.error || 'Failed to save draft.');
       }
     } catch (err) {
       console.error(err);
+      setSubmitError('Network error while saving draft.');
     } finally {
       setSavingDraft(false);
     }
@@ -400,7 +414,7 @@ export const ReleasesPage: React.FC = () => {
           primaryGenre,
           secondaryGenre,
           releaseDate,
-          artworkUrl: artworkUrl || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=800&q=80',
+          artworkUrl: artworkUrl || '',
           lyrics,
           lyricsFileUrl,
           copyrightOwner,
@@ -456,9 +470,12 @@ export const ReleasesPage: React.FC = () => {
       if (res.ok && data.success) {
         setSubmissionSuccess({ id: data.release.id, status: 'Submitted' });
         setReleases(prev => [data.release, ...prev]);
+      } else {
+        setSubmitError(data.error || 'Release submission rejected by server.');
       }
     } catch (err) {
       console.error(err);
+      setSubmitError('Network error while submitting release.');
     } finally {
       setSubmitting(false);
     }
@@ -614,8 +631,8 @@ export const ReleasesPage: React.FC = () => {
               <button
                 type="button"
                 onClick={handleSaveDraft}
-                disabled={savingDraft}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium border border-slate-700 transition-colors"
+                disabled={savingDraft || (eligibility !== null && !eligibility.eligible)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-200 rounded-lg text-xs font-medium border border-slate-700 transition-colors whitespace-nowrap"
               >
                 <Save className="w-3.5 h-3.5" />
                 <span>{savingDraft ? 'Saving Draft...' : 'Save as Draft'}</span>
@@ -633,6 +650,66 @@ export const ReleasesPage: React.FC = () => {
             </div>
           </div>
 
+          {submitError && (
+            <div className="p-4 rounded-xl bg-rose-950/60 border border-rose-800 text-xs text-rose-200 flex items-center gap-2.5">
+              <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+              <span>{submitError}</span>
+            </div>
+          )}
+
+          {eligibility && !eligibility.eligible ? (
+            <div className="p-7 sm:p-9 rounded-2xl bg-[#090e1a] border border-amber-500/40 shadow-xl space-y-5">
+              <div className="flex items-start gap-3.5">
+                <div className="w-11 h-11 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-400 flex items-center justify-center shrink-0">
+                  <ShieldCheck className="w-5 h-5" />
+                </div>
+                <div className="space-y-1.5">
+                  <h2 className="text-lg font-bold text-white font-display">Release Upload Locked</h2>
+                  <p className="text-xs text-amber-200 leading-relaxed">{eligibility.blockingMessage}</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs pt-2">
+                <div className="p-3.5 rounded-xl bg-slate-900/70 border border-slate-800 flex items-center justify-between">
+                  <span className="text-slate-400">Profile Status</span>
+                  <span className="font-mono font-semibold text-white">{eligibility.profileStatus}</span>
+                </div>
+                <div className="p-3.5 rounded-xl bg-slate-900/70 border border-slate-800 flex items-center justify-between">
+                  <span className="text-slate-400">Profile Completion</span>
+                  <span className="font-mono font-semibold text-amber-400 tabular-nums">{eligibility.profileCompletion}%</span>
+                </div>
+                <div className="p-3.5 rounded-xl bg-slate-900/70 border border-slate-800 flex items-center justify-between">
+                  <span className="text-slate-400">Email Verified</span>
+                  <span className="font-mono font-semibold text-white">{eligibility.checks.emailVerified ? 'Yes' : 'No'}</span>
+                </div>
+                <div className="p-3.5 rounded-xl bg-slate-900/70 border border-slate-800 flex items-center justify-between">
+                  <span className="text-slate-400">Subscription / Promo</span>
+                  <span className="font-mono font-semibold text-white">
+                    {eligibility.checks.subscriptionActive ? 'Active' : 'Inactive / None'}
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => navigate('/dashboard/profile')}
+                  className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold whitespace-nowrap"
+                >
+                  {eligibility.profileStatus === 'Approved' ? 'View Artist Profile' : 'Complete / Update Artist Profile'}
+                </button>
+                {!eligibility.checks.subscriptionActive && (
+                  <button
+                    type="button"
+                    onClick={() => navigate('/dashboard/subscription')}
+                    className="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold whitespace-nowrap"
+                  >
+                    View Plans & Subscription
+                  </button>
+                )}
+              </div>
+            </div>
+          ) : (
           <div className="p-7 sm:p-9 rounded-2xl bg-[#090e1a] border border-slate-800 shadow-xl">
             {submissionSuccess ? (
               <div className="py-8 text-center space-y-4">
@@ -1491,6 +1568,7 @@ export const ReleasesPage: React.FC = () => {
               </form>
             )}
           </div>
+          )}
 
           {/* Interactive DSP Preview Modal */}
           {previewModalOpen && (
@@ -1565,12 +1643,34 @@ export const ReleasesPage: React.FC = () => {
             </div>
             <button
               onClick={() => navigate('/dashboard/releases/new')}
-              className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-semibold shadow-lg shadow-blue-600/20"
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-semibold shadow-lg shadow-blue-600/20 whitespace-nowrap"
             >
               <Plus className="w-4 h-4" />
               <span>Submit New Release</span>
             </button>
           </div>
+
+          {dataUnavailable && (
+            <div className="p-4 rounded-xl bg-rose-950/60 border border-rose-800 text-xs text-rose-200">
+              Data Unavailable: Unable to load releases catalog from database.
+            </div>
+          )}
+
+          {eligibility && !eligibility.eligible && (
+            <div className="p-4 rounded-xl bg-amber-950/40 border border-amber-700/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+              <div className="flex items-start gap-2.5 text-amber-200">
+                <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                <span>{eligibility.blockingMessage}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => navigate('/dashboard/profile')}
+                className="px-3 py-1.5 rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-200 font-semibold whitespace-nowrap"
+              >
+                Update Profile
+              </button>
+            </div>
+          )}
 
           {/* Search & Filter */}
           <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">

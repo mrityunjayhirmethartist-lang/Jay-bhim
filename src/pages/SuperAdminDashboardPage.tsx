@@ -48,6 +48,12 @@ import {
   ExecutiveSessionModal
 } from '../components/admin/CommandCenterViews';
 import {
+  ArtistOnboardingPanel,
+  PromotionalProgramPanel,
+  FinancialGovernancePanel,
+  InfrastructurePanel
+} from '../components/admin/OnboardingFinancePanels';
+import {
   ADMIN_NAV_CATEGORIES,
   type AdminTab,
   type DataIntegrityMeta,
@@ -925,8 +931,23 @@ export const SuperAdminDashboardPage: React.FC = () => {
           />
         )}
 
-        {/* ==================== 4. USER MANAGEMENT ==================== */}
+        {/* ==================== 4. USER MANAGEMENT & ARTIST ONBOARDING ==================== */}
         {activeTab === 'users' && (
+          [
+            'artist-onboarding',
+            'incomplete-profiles',
+            'pending-profile-reviews',
+            'approved-artists',
+            'rejected-profiles'
+          ].includes(activeSubmenu) ? (
+            <ArtistOnboardingPanel
+              token={token}
+              includeTest={includeTest}
+              activeSubmenu={activeSubmenu}
+              showToast={showToast}
+              onProposeOwnerApproval={prop => setPendingProposal(prop)}
+            />
+          ) : (
           <div className="space-y-4">
             <div className="p-4 rounded-2xl bg-[#0b0c10] border border-slate-800/90 flex flex-wrap items-center gap-3">
               <div className="relative flex-1 min-w-[220px]">
@@ -1122,6 +1143,7 @@ export const SuperAdminDashboardPage: React.FC = () => {
               )}
             </div>
           </div>
+          )
         )}
 
         {/* ==================== 5. KYC VERIFICATION ==================== */}
@@ -1364,6 +1386,20 @@ export const SuperAdminDashboardPage: React.FC = () => {
 
             {activeSubmenu === 'revenue-reports' ? (
               <ExecutiveReportsPanel token={token} includeTest={includeTest} showToast={showToast} />
+            ) : activeSubmenu === 'promotional-program' ? (
+              <PromotionalProgramPanel
+                token={token}
+                includeTest={includeTest}
+                showToast={showToast}
+                onProposeOwnerApproval={prop => setPendingProposal(prop)}
+              />
+            ) : activeSubmenu === 'financial-governance' ? (
+              <FinancialGovernancePanel
+                token={token}
+                includeTest={includeTest}
+                showToast={showToast}
+                onProposeOwnerApproval={prop => setPendingProposal(prop)}
+              />
             ) : (
               <>
                 <div className="rounded-2xl bg-[#0b0c10] border border-slate-800/90 overflow-x-auto">
@@ -1662,7 +1698,10 @@ export const SuperAdminDashboardPage: React.FC = () => {
         )}
 
         {/* ==================== 10. PLATFORM SETTINGS & INTEGRATIONS ==================== */}
-        {activeTab === 'settings' && settings && (
+        {activeTab === 'settings' && activeSubmenu === 'infrastructure-scalability' && (
+          <InfrastructurePanel token={token} showToast={showToast} />
+        )}
+        {activeTab === 'settings' && activeSubmenu !== 'infrastructure-scalability' && settings && (
           <div className="space-y-6">
             {/* Diagnostics Row for Email Relay & Gateway */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
@@ -1919,7 +1958,7 @@ export const SuperAdminDashboardPage: React.FC = () => {
         }}
       />
 
-      {/* Persistent Floating Bottom-Right AI Executive Assistant */}
+      {/* Persistent Floating Bottom-Right Rudra AI Assistant */}
       <AiExecutiveAssistant
         token={token}
         activeTab={activeTab}

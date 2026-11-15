@@ -67,6 +67,11 @@ export const ADMIN_NAV_CATEGORIES: NavCategory[] = [
     shortLabel: 'Users',
     submenus: [
       { id: 'all-users', label: 'All Users' },
+      { id: 'artist-onboarding', label: 'Artist Onboarding Queue' },
+      { id: 'incomplete-profiles', label: 'Incomplete Profiles' },
+      { id: 'pending-profile-reviews', label: 'Pending Profile Reviews' },
+      { id: 'approved-artists', label: 'Approved Artists' },
+      { id: 'rejected-profiles', label: 'Rejected / Changes Requested' },
       { id: 'artist-accounts', label: 'Artist Accounts' },
       { id: 'new-registrations', label: 'New Registrations' },
       { id: 'suspended-accounts', label: 'Suspended Accounts' },
@@ -105,6 +110,8 @@ export const ADMIN_NAV_CATEGORIES: NavCategory[] = [
     shortLabel: 'Payments',
     submenus: [
       { id: 'payment-overview', label: 'Payment Overview' },
+      { id: 'promotional-program', label: 'First 10 Free Artists Program' },
+      { id: 'financial-governance', label: 'Financial Governance & Statements' },
       { id: 'transactions', label: 'Transactions' },
       { id: 'failed-payments', label: 'Failed Payments' },
       { id: 'refund-requests', label: 'Refund Requests' },
@@ -144,6 +151,7 @@ export const ADMIN_NAV_CATEGORIES: NavCategory[] = [
     shortLabel: 'Settings',
     submenus: [
       { id: 'general-settings', label: 'General Settings' },
+      { id: 'infrastructure-scalability', label: 'Infrastructure & Backups' },
       { id: 'branding', label: 'Branding' },
       { id: 'email-configuration', label: 'Email Configuration' },
       { id: 'smtp-status', label: 'SMTP Status' },
@@ -183,7 +191,13 @@ export interface OwnerApprovalProposalInput {
     | 'USER_REACTIVATE'
     | 'PAYMENT_REFUND'
     | 'SETTINGS_UPDATE'
-    | 'AI_SETTINGS_UPDATE';
+    | 'AI_SETTINGS_UPDATE'
+    | 'PROFILE_APPROVE'
+    | 'PROFILE_REJECT'
+    | 'PROFILE_REQUEST_CHANGES'
+    | 'PROMO_REVOKE'
+    | 'PAYOUT_COMPLETE'
+    | 'PAYOUT_REJECT';
   targetType: string;
   targetId: string;
   title: string;

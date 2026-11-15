@@ -328,3 +328,117 @@ export async function sendAppsScriptOtpEmail(params: {
     clearTimeout(timer);
   }
 }
+
+export async function sendArtistNotificationEmail(params: {
+  email: string;
+  subject: string;
+  title: string;
+  body: string;
+  purpose: 'profile_approved' | 'profile_rejected' | 'profile_changes_requested' | 'promo_activated' | 'payout_update';
+}): Promise<AppsScriptEmailResult> {
+  const { dbQueueEmailJob } = await import('./db');
+  const jobId = `mail_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const normalizedEmail = params.email.trim().toLowerCase();
+  const config = resolveAppsScriptEmailConfig();
+  const senderDisplay = `"${OFFICIAL_SENDER_NAME}" <${config.senderEmail}>`;
+
+  await dbQueueEmailJob({
+    id: jobId,
+    recipientEmail: normalizedEmail,
+    subject: params.subject,
+    purpose: params.purpose,
+    payload: { title: params.title, bodyPreview: params.body.slice(0, 240) },
+    status: 'QUEUED'
+  }).catch(() => {});
+
+  if (!config.configured) {
+    const errText = `Email relay unconfigured (missing: ${config.missingVars.join(', ')}). Queued in email_queue.`;
+    await dbQueueEmailJob({
+      id: jobId,
+      recipientEmail: normalizedEmail,
+      subject: params.subject,
+      purpose: params.purpose,
+      payload: { title: params.title },
+      status: 'FAILED',
+      lastError: errText
+    }).catch(() => {});
+    return {
+      success: false,
+      delivered: false,
+      missingConfig: true,
+      error: errText,
+      sender: senderDisplay,
+      senderAddress: config.senderEmail
+    };
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), config.timeoutMs);
+  const startedAt = Date.now();
+  try {
+    const response = await fetch(config.url, {
+      method: 'POST',
+      redirect: 'follow',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({
+        secret: config.secret,
+        email: normalizedEmail,
+        subject: params.subject,
+        title: params.title,
+        message: params.body,
+        type: 'notification',
+        purpose: params.purpose
+      }),
+      signal: controller.signal
+    });
+    const latencyMs = Date.now() - startedAt;
+    const rawBody = await response.text();
+    let parsed: any = null;
+    try {
+      parsed = rawBody ? JSON.parse(rawBody) : null;
+    } catch {
+      parsed = null;
+    }
+    const ok = Boolean(response.ok && parsed && typeof parsed === 'object' && parsed.success === true);
+    await dbQueueEmailJob({
+      id: jobId,
+      recipientEmail: normalizedEmail,
+      subject: params.subject,
+      purpose: params.purpose,
+      payload: { title: params.title },
+      status: ok ? 'SENT' : 'FAILED',
+      lastError: ok ? undefined : `Relay status ${response.status}`
+    }).catch(() => {});
+    return {
+      success: ok,
+      delivered: ok,
+      error: ok ? undefined : `Notification email relay status ${response.status}`,
+      sender: senderDisplay,
+      senderAddress: config.senderEmail,
+      latencyMs
+    };
+  } catch (err: any) {
+    const latencyMs = Date.now() - startedAt;
+    const safeReason = redactSensitiveText(String(err?.message || 'Relay request failed'), config.url, config.secret);
+    await dbQueueEmailJob({
+      id: jobId,
+      recipientEmail: normalizedEmail,
+      subject: params.subject,
+      purpose: params.purpose,
+      payload: { title: params.title },
+      status: 'FAILED',
+      lastError: safeReason
+    }).catch(() => {});
+    return {
+      success: false,
+      delivered: false,
+      error: safeReason,
+      sender: senderDisplay,
+      senderAddress: config.senderEmail,
+      latencyMs
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+

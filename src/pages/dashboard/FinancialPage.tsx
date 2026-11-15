@@ -138,11 +138,14 @@ export const FinancialPage: React.FC = () => {
   // Dashboard Data State
   const [balance, setBalance] = useState<number>(0);
   const [lastPayout, setLastPayout] = useState<number>(0);
+  const [pendingRoyalties, setPendingRoyalties] = useState<number>(0);
+  const [projectedRoyalties, setProjectedRoyalties] = useState<number>(0);
   const [transactions, setTransactions] = useState<TransactionItem[]>([]);
   const [monthlyRoyalties, setMonthlyRoyalties] = useState<MonthlyRoyalty[]>([]);
   const [dspBreakdown, setDspBreakdown] = useState<DspRoyaltyShare[]>([]);
   const [topTracks, setTopTracks] = useState<TrackRoyalty[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [dataUnavailable, setDataUnavailable] = useState<boolean>(false);
 
   // Active Tab: 'trends' | 'forecast' | 'dsp' | 'statements' | 'payout'
   const [activeTab, setActiveTab] = useState<'trends' | 'forecast' | 'dsp' | 'statements' | 'payout'>('trends');
@@ -162,21 +165,29 @@ export const FinancialPage: React.FC = () => {
   // Fetch Dashboard Data
   const fetchData = async () => {
     if (!token) return;
+    setDataUnavailable(false);
     try {
       const res = await fetch(apiUrl('/api/dashboard/data'), {
         headers: { Authorization: `Bearer ${token}` }
       });
+      const d = await res.json().catch(() => ({}));
+      if (res.status === 503 || d.dataUnavailable) {
+        setDataUnavailable(true);
+        return;
+      }
       if (res.ok) {
-        const d = await res.json();
-        setBalance(d.balance ?? 0);
-        setLastPayout(d.lastPayout ?? 0);
+        setBalance(Number(d.balance ?? 0));
+        setLastPayout(Number(d.lastPayout ?? 0));
+        setPendingRoyalties(Number(d.pendingRoyalties ?? 0));
+        setProjectedRoyalties(Number(d.projectedRoyalties ?? 0));
         setTransactions(d.transactions || []);
         setMonthlyRoyalties(d.monthlyRoyalties || []);
         setDspBreakdown(d.dspBreakdown || []);
         setTopTracks(d.topTracks || []);
       }
     } catch (err) {
-      console.error('Failed to load financial telemetry', err);
+      console.error('Failed to load financial ledger', err);
+      setDataUnavailable(true);
     } finally {
       setLoading(false);
     }
@@ -245,9 +256,11 @@ export const FinancialPage: React.FC = () => {
     return monthlyRoyalties;
   }, [monthlyRoyalties, timeRange]);
 
-  // Aggregate KPIs
+  // Aggregate KPIs (strictly cleared royalties vs pending/projected)
   const totalLifetimeRoyalties = useMemo(() => {
-    return monthlyRoyalties.reduce((acc, m) => acc + (m.netRoyalty || 0), 0);
+    return monthlyRoyalties
+      .filter(m => m.status === 'Cleared')
+      .reduce((acc, m) => acc + (m.netRoyalty || 0), 0);
   }, [monthlyRoyalties]);
 
   const totalLifetimeStreams = useMemo(() => {
@@ -255,10 +268,11 @@ export const FinancialPage: React.FC = () => {
   }, [monthlyRoyalties]);
 
   const pendingClearanceRoyalties = useMemo(() => {
+    if (pendingRoyalties > 0) return pendingRoyalties;
     return monthlyRoyalties
       .filter(m => m.status === 'In Clearance' || m.status === 'Processing')
       .reduce((acc, m) => acc + (m.netRoyalty || 0), 0);
-  }, [monthlyRoyalties]);
+  }, [monthlyRoyalties, pendingRoyalties]);
 
   const avgLifetimeRPM = useMemo(() => {
     if (totalLifetimeStreams === 0) return 0;
@@ -329,11 +343,22 @@ export const FinancialPage: React.FC = () => {
           </div>
         </div>
 
+        {dataUnavailable && (
+          <div className="p-4 rounded-2xl bg-rose-950/60 border border-rose-800 text-xs text-rose-200 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+              <span>Data Unavailable: Unable to query verified financial ledger from PostgreSQL.</span>
+            </div>
+            <button onClick={fetchData} className="px-3 py-1 rounded bg-rose-900 hover:bg-rose-800 text-white font-semibold">
+              Retry
+            </button>
+          </div>
+        )}
+
         {/* 5 Primary Financial Telemetry Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           {/* 1: Available Wallet Balance */}
-          <div className="p-5 rounded-2xl bg-gradient-to-br from-[#0b1424] to-[#090e1a] border border-emerald-900/40 relative overflow-hidden flex flex-col justify-between">
-            <div className="absolute -top-10 -right-10 w-28 h-28 bg-emerald-500/10 rounded-full blur-2xl pointer-events-none" />
+          <div className="p-5 rounded-2xl bg-[#090e1a] border border-emerald-900/40 flex flex-col justify-between">
             <div>
               <div className="flex items-center justify-between text-slate-400 mb-2">
                 <span className="text-xs font-medium">Cleared Available Balance</span>
@@ -345,17 +370,17 @@ export const FinancialPage: React.FC = () => {
             </div>
             <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-[11px]">
               <span className="text-slate-400">Withdrawal status:</span>
-              <span className={`font-semibold ${balance >= 100 ? 'text-emerald-400' : 'text-amber-400'}`}>
-                {balance >= 100 ? 'Eligible for Payout' : 'Under Threshold'}
+              <span className={`font-semibold ${balance >= 100 ? 'text-emerald-400' : 'text-slate-400'}`}>
+                {balance >= 100 ? 'Eligible' : balance > 0 ? 'Under ₹100 min' : 'No cleared funds'}
               </span>
             </div>
           </div>
 
-          {/* 2: Lifetime Cleared Royalties */}
+          {/* 2: Lifetime Verified Net Royalties */}
           <div className="p-5 rounded-2xl bg-[#090e1a] border border-slate-800 flex flex-col justify-between">
             <div>
               <div className="flex items-center justify-between text-slate-400 mb-2">
-                <span className="text-xs font-medium">Lifetime Gross Royalties</span>
+                <span className="text-xs font-medium">Verified Net Royalties</span>
                 <TrendingUp className="w-4 h-4 text-blue-400" />
               </div>
               <div className="text-2xl sm:text-3xl font-bold font-mono text-white tabular-nums">
@@ -363,18 +388,16 @@ export const FinancialPage: React.FC = () => {
               </div>
             </div>
             <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400">
-              <span>Across all partner DSPs</span>
-              <span className="text-emerald-400 font-mono flex items-center gap-0.5">
-                <ArrowUpRight className="w-3 h-3" /> +18.4%
-              </span>
+              <span>Verified statements:</span>
+              <span className="font-mono text-slate-200 tabular-nums">{monthlyRoyalties.length}</span>
             </div>
           </div>
 
-          {/* 3: In-Flight DSP Reconciliation (60-90 Day Pipeline) */}
+          {/* 3: Pending vs Projected Royalties */}
           <div className="p-5 rounded-2xl bg-[#090e1a] border border-slate-800 flex flex-col justify-between">
             <div>
               <div className="flex items-center justify-between text-slate-400 mb-2">
-                <span className="text-xs font-medium">DSP Clearing Pipeline</span>
+                <span className="text-xs font-medium">Pending / Projected</span>
                 <Clock className="w-4 h-4 text-amber-400" />
               </div>
               <div className="text-2xl sm:text-3xl font-bold font-mono text-amber-400 tabular-nums">
@@ -382,8 +405,8 @@ export const FinancialPage: React.FC = () => {
               </div>
             </div>
             <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400">
-              <span>60–90 day reconciliation lag</span>
-              <span className="text-amber-300 font-medium">In Transit</span>
+              <span>Projected estimate:</span>
+              <span className="font-mono text-slate-300 tabular-nums">₹{projectedRoyalties.toFixed(2)}</span>
             </div>
           </div>
 
@@ -404,7 +427,7 @@ export const FinancialPage: React.FC = () => {
             </div>
             <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400">
               <span>Avg RPM:</span>
-              <span className="font-mono text-white font-semibold">₹{avgLifetimeRPM.toFixed(2)} / 1k</span>
+              <span className="font-mono text-white font-semibold tabular-nums">₹{avgLifetimeRPM.toFixed(2)} / 1k</span>
             </div>
           </div>
 
@@ -412,7 +435,7 @@ export const FinancialPage: React.FC = () => {
           <div className="p-5 rounded-2xl bg-[#090e1a] border border-slate-800 flex flex-col justify-between">
             <div>
               <div className="flex items-center justify-between text-slate-400 mb-2">
-                <span className="text-xs font-medium">Last Settled Payout</span>
+                <span className="text-xs font-medium">Last Completed Payout</span>
                 <CreditCard className="w-4 h-4 text-cyan-400" />
               </div>
               <div className="text-2xl sm:text-3xl font-bold font-mono text-white tabular-nums">
@@ -422,7 +445,7 @@ export const FinancialPage: React.FC = () => {
             <div className="mt-4 pt-3 border-t border-slate-800/80 space-y-1">
               <div className="flex items-center justify-between text-[10px] text-slate-400">
                 <span>Threshold (₹100 min):</span>
-                <span className="font-mono text-emerald-400">{thresholdPercent}%</span>
+                <span className="font-mono text-emerald-400 tabular-nums">{thresholdPercent}%</span>
               </div>
               <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
                 <div
@@ -437,11 +460,11 @@ export const FinancialPage: React.FC = () => {
         {/* Navigation Tabs */}
         <div className="flex items-center gap-2 border-b border-slate-800 overflow-x-auto pb-px">
           {[
-            { id: 'trends', label: 'Monthly Trends (Recharts)', icon: BarChart3 },
+            { id: 'trends', label: 'Monthly Trends', icon: BarChart3 },
             { id: 'forecast', label: 'ML Royalty Forecast', icon: Sparkles },
-            { id: 'dsp', label: 'DSP Platform Breakdown', icon: PieIcon },
-            { id: 'statements', label: 'Monthly Statements', icon: FileSpreadsheet },
-            { id: 'payout', label: 'Payout & Bank Settlement', icon: Wallet }
+            { id: 'dsp', label: 'DSP Breakdown', icon: PieIcon },
+            { id: 'statements', label: 'Verified Statements', icon: FileSpreadsheet },
+            { id: 'payout', label: 'Payout & Settlement', icon: Wallet }
           ].map(tab => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -465,11 +488,20 @@ export const FinancialPage: React.FC = () => {
         {/* TAB 1: VISUAL RECHARTS MONTHLY ROYALTY TRENDS DASHBOARD */}
         {activeTab === 'trends' && (
           <div className="space-y-6">
-            {/* ML Royalty Forecast Teaser Banner */}
-            <div className="p-4 rounded-2xl bg-gradient-to-r from-blue-950/50 via-slate-900 to-indigo-950/40 border border-blue-900/40 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            {monthlyRoyalties.length === 0 ? (
+              <div className="p-10 rounded-2xl bg-[#090e1a] border border-slate-800 text-center space-y-2">
+                <FileSpreadsheet className="w-9 h-9 text-slate-600 mx-auto" />
+                <div className="text-sm font-semibold text-white">No financial records yet</div>
+                <p className="text-xs text-slate-400 max-w-md mx-auto">
+                  No verified royalty statements are available yet. Cleared royalties, pending DSP statements, and payouts will appear here once recorded.
+                </p>
+              </div>
+            ) : (
+            <>
+            <div className="p-4 rounded-2xl bg-[#090e1a] border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="flex items-center gap-3.5">
                 <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center shrink-0">
-                  <Sparkles className="w-5 h-5 text-cyan-400 animate-pulse" />
+                  <Sparkles className="w-5 h-5 text-cyan-400" />
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
@@ -957,6 +989,8 @@ export const FinancialPage: React.FC = () => {
                 </div>
               </div>
             </div>
+            </>
+            )}
           </div>
         )}
 

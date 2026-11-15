@@ -7,11 +7,20 @@ import {
   dbSaveAdminApproval,
   dbGetAdminApprovals,
   dbSaveAiUsageLog,
-  dbGetAiUsageLogs
+  dbGetAiUsageLogs,
+  dbRevokePromotionSlot,
+  dbGetPayoutRequests,
+  dbSavePayoutRequest,
+  dbGetLedgerEntries,
+  dbSaveLedgerEntry
 } from './db';
 import { getSafeEmailDiagnostics } from './appsScriptEmail';
 import { checkFfmpegBinary, checkChromaprintBinary } from './ai/audioEngine';
 import { getStorageProviderName } from './storage';
+import {
+  executeArtistProfileReviewAction,
+  computeRealFinancialSummary
+} from './artistOnboardingAndFinance';
 import type { SuperAdminDeps } from './superAdmin';
 
 export interface AdminSessionMeta {
@@ -512,7 +521,7 @@ export async function buildPlatformIntelligence(
   if (hasGeminiKey) {
     working.push(`Gemini API Configured (${aiCtx.aiSettings?.activeModel || 'gemini-4-hydrogen'})`);
   } else {
-    needsConfiguration.push('GEMINI_API_KEY missing — AI Executive Assistant and Release Compliance run in deterministic fallback mode');
+    needsConfiguration.push('GEMINI_API_KEY missing — Rudra AI and Release Compliance run in deterministic fallback mode');
     nextSteps.push({
       id: 'gemini_config',
       order: orderCounter++,
@@ -1096,7 +1105,13 @@ export function registerCommandCenterRoutes(
     'USER_REACTIVATE',
     'PAYMENT_REFUND',
     'SETTINGS_UPDATE',
-    'AI_SETTINGS_UPDATE'
+    'AI_SETTINGS_UPDATE',
+    'PROFILE_APPROVE',
+    'PROFILE_REJECT',
+    'PROFILE_REQUEST_CHANGES',
+    'PROMO_REVOKE',
+    'PAYOUT_COMPLETE',
+    'PAYOUT_REJECT'
   ]);
 
   app.post('/api/super-admin/approvals/propose', requireSuperAdmin, async (req, res) => {
@@ -1301,6 +1316,70 @@ export function registerCommandCenterRoutes(
       } else if (actionType === 'AI_SETTINGS_UPDATE') {
         Object.assign(aiCtx.aiSettings, payload.aiSettings || {});
         executionResult = { updated: true };
+      } else if (
+        actionType === 'PROFILE_APPROVE' ||
+        actionType === 'PROFILE_REJECT' ||
+        actionType === 'PROFILE_REQUEST_CHANGES'
+      ) {
+        const target = Array.from(deps.users.values()).find(u => u.id === targetId || u.email === targetId);
+        if (!target) throw new Error('Target artist account not found.');
+        const decision =
+          actionType === 'PROFILE_APPROVE'
+            ? 'approve'
+            : actionType === 'PROFILE_REJECT'
+              ? 'reject'
+              : 'request_changes';
+        executionResult = await executeArtistProfileReviewAction({
+          targetUser: target,
+          decision,
+          reason: payload.reason,
+          adminEmail: admin.email,
+          deps
+        });
+      } else if (actionType === 'PROMO_REVOKE') {
+        const reason = String(payload.reason || '').trim();
+        if (!reason) throw new Error('A clear reason is required to revoke promotional access.');
+        const revoked = await dbRevokePromotionSlot(targetId, reason);
+        if (!revoked) throw new Error('Promotional allocation not found for this user.');
+        const dash = deps.userDashboards.get(targetId);
+        if (dash?.subscription?.isPromotional) {
+          dash.subscription.status = 'revoked';
+          dash.subscription.revokedAt = new Date().toISOString();
+          dash.subscription.revocationReason = reason;
+          dash.subscription.daysRemaining = 0;
+          await deps.dbSaveDashboard(targetId, dash);
+        }
+        executionResult = { revoked: true, slotNumber: revoked.slotNumber };
+      } else if (actionType === 'PAYOUT_COMPLETE' || actionType === 'PAYOUT_REJECT') {
+        const allPayouts = await dbGetPayoutRequests();
+        const targetPayout = allPayouts.find(p => p.id === targetId);
+        if (!targetPayout) throw new Error('Payout request not found.');
+        if (targetPayout.status !== 'Pending') throw new Error(`Payout already finalized (${targetPayout.status}).`);
+        const nextStatus = actionType === 'PAYOUT_COMPLETE' ? 'Completed' : 'Rejected';
+        await dbSavePayoutRequest({
+          ...targetPayout,
+          status: nextStatus,
+          processedBy: admin.email,
+          notes: String(payload.reason || '').trim() || undefined,
+          processedAt: new Date().toISOString()
+        });
+        const ledgerEntries = await dbGetLedgerEntries(targetPayout.userId);
+        const matchingLedger = ledgerEntries.find(e => e.referenceId === targetPayout.reference);
+        if (matchingLedger) {
+          await dbSaveLedgerEntry({
+            ...matchingLedger,
+            entryType: nextStatus === 'Completed' ? 'PAYOUT_SUCCESS' : 'PAYOUT_PENDING',
+            status: nextStatus === 'Completed' ? 'COMPLETED' : 'FAILED',
+            description: `${matchingLedger.description} (${nextStatus}${payload.reason ? ': ' + payload.reason : ''})`
+          });
+        }
+        const summary = await computeRealFinancialSummary(targetPayout.userId);
+        const dash = deps.getUserDashboard(targetPayout.userId);
+        dash.balance = summary.clearedBalance;
+        dash.lastPayout = summary.lastPayout;
+        dash.transactions = summary.transactions;
+        await deps.dbSaveDashboard(targetPayout.userId, dash);
+        executionResult = { payoutId: targetPayout.id, status: nextStatus };
       }
 
       proposal.status = 'EXECUTED';
@@ -1350,7 +1429,7 @@ export function registerCommandCenterRoutes(
     return res.json({ success: true, approval: proposal });
   });
 
-  // 4. AI Executive Assistant Chat (Advisory Only — Zero Auto-Execution)
+  // 4. Rudra AI — Intelligent Music Distribution Assistant Chat (Advisory Only — Zero Auto-Execution)
   app.post('/api/super-admin/ai-assistant/chat', requireSuperAdmin, async (req, res) => {
     const admin = (req as any).superAdmin;
     const { message, activeTab, activeSubmenu, history } = req.body || {};
@@ -1412,7 +1491,7 @@ export function registerCommandCenterRoutes(
       });
 
       const deterministicLines = [
-        `Gemini API Key is not configured on the backend, so I am providing a verified real-database status brief instead of generative prose:`,
+        `Namaste! Main Rudra hoon (Rudra AI — Intelligent Music Distribution Assistant). GEMINI_API_KEY is not configured on the backend, so I am providing a verified real-database status brief instead of generative prose:`,
         snapshot.ok
           ? `• Data Source: ${snapshot.dataSource} (${snapshot.users.length} prod users, ${snapshot.releases.length} releases, ₹${paidRevenue.toLocaleString('en-IN')} verified paid revenue; ${snapshot.excludedTestCounts.users} demo/test user(s) isolated).`
           : `• Data Status: Data Unavailable (${snapshot.error}).`,
@@ -1442,7 +1521,8 @@ export function registerCommandCenterRoutes(
       httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
     });
 
-    const systemInstruction = `You are the Rudraatma Music Distribution AI Executive Assistant inside the Super Admin Command Center.
+    const systemInstruction = `You are Rudra (display name: Rudra AI), the Intelligent Music Distribution Assistant inside Rudraatma Command Center 2.0.
+You assist the Super Admin with music distribution, releases, royalties, analytics, diagnostics, and platform management.
 STRICT GOVERNANCE RULES:
 1. ZERO FABRICATION: Cite ONLY numbers, records, and integration states present in "LIVE_PLATFORM_CONTEXT". If "dataUnavailable" is true, state "Data Unavailable" — never guess or say 0.
 2. ADVISORY ONLY: You can analyze, diagnose, explain, and draft proposals, but you MUST NEVER claim to have executed any action (KYC approval, release approval, suspension, refund, pricing/settings updates). Always state that explicit Super Admin approval is required before execution.

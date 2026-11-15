@@ -129,12 +129,19 @@ async function runMigrations(): Promise<void> {
       account_status TEXT NOT NULL DEFAULT 'active',
       status_reason TEXT,
       kyc_data JSONB,
+      artist_profile_data JSONB,
+      artist_profile_status TEXT NOT NULL DEFAULT 'Incomplete',
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
     ALTER TABLE users ADD COLUMN IF NOT EXISTS account_status TEXT NOT NULL DEFAULT 'active';
     ALTER TABLE users ADD COLUMN IF NOT EXISTS status_reason TEXT;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS kyc_data JSONB;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS artist_profile_data JSONB;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS artist_profile_status TEXT NOT NULL DEFAULT 'Incomplete';
     CREATE INDEX IF NOT EXISTS idx_users_email ON users (email);
+    CREATE INDEX IF NOT EXISTS idx_users_created_at ON users (created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_users_role_status ON users (role, account_status);
+    CREATE INDEX IF NOT EXISTS idx_users_profile_status ON users (artist_profile_status);
 
     CREATE TABLE IF NOT EXISTS platform_settings (
       key TEXT PRIMARY KEY,
@@ -370,6 +377,102 @@ async function runMigrations(): Promise<void> {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
     CREATE INDEX IF NOT EXISTS idx_ai_usage_created ON ai_usage_logs (created_at DESC);
+
+    -- ======================== ARTIST ONBOARDING, PROMO SLOTS & FINANCIAL LEDGER ========================
+    CREATE TABLE IF NOT EXISTS promotional_allocations (
+      id TEXT PRIMARY KEY,
+      slot_number INTEGER UNIQUE NOT NULL CHECK (slot_number >= 1 AND slot_number <= 10),
+      user_id TEXT UNIQUE NOT NULL,
+      user_email TEXT NOT NULL,
+      artist_display_name TEXT,
+      plan_id TEXT NOT NULL DEFAULT 'promo-first-10-monthly',
+      status TEXT NOT NULL DEFAULT 'ACTIVE',
+      approved_by TEXT NOT NULL,
+      activated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      expires_at TIMESTAMPTZ NOT NULL,
+      revoked_at TIMESTAMPTZ,
+      notes TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_promo_status_expires ON promotional_allocations (status, expires_at);
+
+    CREATE TABLE IF NOT EXISTS artist_profile_submissions (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      user_email TEXT NOT NULL,
+      status TEXT NOT NULL,
+      completion_percent INTEGER NOT NULL DEFAULT 0,
+      profile_data JSONB NOT NULL,
+      reviewer_email TEXT,
+      review_notes TEXT,
+      submitted_at TIMESTAMPTZ,
+      reviewed_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_artist_profiles_user ON artist_profile_submissions (user_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_artist_profiles_status ON artist_profile_submissions (status, created_at DESC);
+
+    CREATE TABLE IF NOT EXISTS financial_ledger_entries (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      entry_type TEXT NOT NULL,
+      amount_inr NUMERIC(12,2) NOT NULL DEFAULT 0,
+      status TEXT NOT NULL,
+      reference_id TEXT,
+      statement_month TEXT,
+      description TEXT NOT NULL,
+      source TEXT NOT NULL DEFAULT 'system',
+      created_by TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_ledger_user_status ON financial_ledger_entries (user_id, status, created_at DESC);
+
+    CREATE TABLE IF NOT EXISTS verified_royalty_statements (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      month TEXT NOT NULL,
+      month_label TEXT NOT NULL,
+      status TEXT NOT NULL,
+      gross_royalty NUMERIC(12,2) NOT NULL DEFAULT 0,
+      net_royalty NUMERIC(12,2) NOT NULL DEFAULT 0,
+      streams BIGINT NOT NULL DEFAULT 0,
+      dsp_breakdown JSONB,
+      statement_ref TEXT,
+      payout_date TEXT,
+      verified_by TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_royalty_user_month ON verified_royalty_statements (user_id, month DESC);
+
+    CREATE TABLE IF NOT EXISTS payout_requests (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      amount_inr NUMERIC(12,2) NOT NULL,
+      method TEXT NOT NULL,
+      details TEXT,
+      reference TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'Pending',
+      processed_by TEXT,
+      notes TEXT,
+      processed_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_payout_user_status ON payout_requests (user_id, status, created_at DESC);
+
+    CREATE TABLE IF NOT EXISTS email_queue (
+      id TEXT PRIMARY KEY,
+      recipient_email TEXT NOT NULL,
+      subject TEXT NOT NULL,
+      purpose TEXT NOT NULL,
+      payload JSONB NOT NULL,
+      status TEXT NOT NULL DEFAULT 'QUEUED',
+      attempts INTEGER NOT NULL DEFAULT 0,
+      last_error TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      sent_at TIMESTAMPTZ
+    );
+    CREATE INDEX IF NOT EXISTS idx_email_queue_status ON email_queue (status, created_at ASC);
   `);
 
   console.log('[Rudraatma DB] PostgreSQL migrations and indexes verified.');
@@ -389,12 +492,14 @@ export async function dbUpsertUser(user: {
   accountStatus?: string;
   statusReason?: string;
   kyc?: unknown;
+  artistProfile?: unknown;
+  artistProfileStatus?: string;
   createdAt: string;
 }): Promise<void> {
   if (!pool) return;
   await pool.query(
-    `INSERT INTO users (id, full_name, email, country, password_hash, role, is_active, selected_plan_id, account_status, status_reason, kyc_data, created_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12)
+    `INSERT INTO users (id, full_name, email, country, password_hash, role, is_active, selected_plan_id, account_status, status_reason, kyc_data, artist_profile_data, artist_profile_status, created_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12::jsonb, $13, $14)
      ON CONFLICT (email) DO UPDATE SET
        full_name = EXCLUDED.full_name,
        country = EXCLUDED.country,
@@ -404,7 +509,9 @@ export async function dbUpsertUser(user: {
        selected_plan_id = EXCLUDED.selected_plan_id,
        account_status = EXCLUDED.account_status,
        status_reason = EXCLUDED.status_reason,
-       kyc_data = EXCLUDED.kyc_data`,
+       kyc_data = EXCLUDED.kyc_data,
+       artist_profile_data = COALESCE(EXCLUDED.artist_profile_data, users.artist_profile_data),
+       artist_profile_status = COALESCE(EXCLUDED.artist_profile_status, users.artist_profile_status)`,
     [
       user.id,
       user.fullName,
@@ -417,6 +524,8 @@ export async function dbUpsertUser(user: {
       user.accountStatus || 'active',
       user.statusReason || null,
       user.kyc ? JSON.stringify(user.kyc) : null,
+      user.artistProfile ? JSON.stringify(user.artistProfile) : null,
+      user.artistProfileStatus || (user.artistProfile as any)?.status || 'Incomplete',
       user.createdAt
     ]
   );
@@ -818,6 +927,546 @@ export async function dbGetAiUsageLogs(limit = 200): Promise<any[]> {
     actorEmail: r.actor_email || undefined,
     createdAt: new Date(r.created_at).toISOString()
   }));
+}
+
+// ======================== PROMOTIONAL ALLOCATION ATOMIC HELPERS ========================
+
+export interface PromotionalAllocationRecord {
+  id: string;
+  slotNumber: number;
+  userId: string;
+  userEmail: string;
+  artistDisplayName: string;
+  planId: string;
+  status: 'ACTIVE' | 'EXPIRED' | 'REVOKED';
+  approvedBy: string;
+  activatedAt: string;
+  expiresAt: string;
+  revokedAt?: string;
+  notes?: string;
+  createdAt: string;
+}
+
+const inMemoryPromotions: PromotionalAllocationRecord[] = [];
+let promoMutex: Promise<unknown> = Promise.resolve();
+
+function withPromoLock<T>(fn: () => Promise<T>): Promise<T> {
+  const next = promoMutex.then(fn, fn);
+  promoMutex = next.catch(() => {});
+  return next;
+}
+
+function mapPromoRow(r: any): PromotionalAllocationRecord {
+  return {
+    id: r.id,
+    slotNumber: Number(r.slot_number),
+    userId: r.user_id,
+    userEmail: r.user_email,
+    artistDisplayName: r.artist_display_name || '',
+    planId: r.plan_id,
+    status: r.status,
+    approvedBy: r.approved_by,
+    activatedAt: new Date(r.activated_at).toISOString(),
+    expiresAt: new Date(r.expires_at).toISOString(),
+    revokedAt: r.revoked_at ? new Date(r.revoked_at).toISOString() : undefined,
+    notes: r.notes || undefined,
+    createdAt: new Date(r.created_at).toISOString()
+  };
+}
+
+export async function dbSyncAndListPromotions(): Promise<PromotionalAllocationRecord[]> {
+  if (!pool) {
+    const now = Date.now();
+    for (const p of inMemoryPromotions) {
+      if (p.status === 'ACTIVE' && new Date(p.expiresAt).getTime() <= now) {
+        p.status = 'EXPIRED';
+      }
+    }
+    return [...inMemoryPromotions].sort((a, b) => a.slotNumber - b.slotNumber);
+  }
+  await pool.query(
+    `UPDATE promotional_allocations SET status = 'EXPIRED' WHERE status = 'ACTIVE' AND expires_at <= NOW()`
+  );
+  const res = await pool.query(`SELECT * FROM promotional_allocations ORDER BY slot_number ASC`);
+  return res.rows.map(mapPromoRow);
+}
+
+/**
+ * Atomically claims one of the first 10 promotional free 1-month slots.
+ * Uses PostgreSQL EXCLUSIVE TABLE LOCK inside a transaction (and mutex lock in dev in-memory mode)
+ * so concurrent approvals can never exceed 10 or double-assign a slot number or user.
+ */
+export async function dbClaimFirst10PromotionalSlot(params: {
+  userId: string;
+  userEmail: string;
+  artistDisplayName: string;
+  approvedBy: string;
+  notes?: string;
+}): Promise<{
+  allocated: boolean;
+  reason?: string;
+  allocation?: PromotionalAllocationRecord;
+  slotsUsed: number;
+  slotsRemaining: number;
+}> {
+  return withPromoLock(async () => {
+    const nowDate = new Date();
+    const expiresDate = new Date(nowDate);
+    expiresDate.setMonth(expiresDate.getMonth() + 1);
+
+    if (!pool) {
+      const existingUser = inMemoryPromotions.find(p => p.userId === params.userId || p.userEmail === params.userEmail.toLowerCase());
+      if (existingUser) {
+        return {
+          allocated: false,
+          reason: 'Artist has already claimed a promotional slot previously.',
+          slotsUsed: inMemoryPromotions.length,
+          slotsRemaining: Math.max(0, 10 - inMemoryPromotions.length)
+        };
+      }
+      if (inMemoryPromotions.length >= 10) {
+        return {
+          allocated: false,
+          reason: 'All 10 complimentary First-10 promotional slots have already been allocated.',
+          slotsUsed: 10,
+          slotsRemaining: 0
+        };
+      }
+      const nextSlot = inMemoryPromotions.length + 1;
+      const rec: PromotionalAllocationRecord = {
+        id: `promo_${Date.now()}_${nextSlot}`,
+        slotNumber: nextSlot,
+        userId: params.userId,
+        userEmail: params.userEmail.toLowerCase(),
+        artistDisplayName: params.artistDisplayName,
+        planId: 'promo-first-10-monthly',
+        status: 'ACTIVE',
+        approvedBy: params.approvedBy,
+        activatedAt: nowDate.toISOString(),
+        expiresAt: expiresDate.toISOString(),
+        notes: params.notes || 'First 10 Approved Artists — 1 Month Complimentary Access',
+        createdAt: nowDate.toISOString()
+      };
+      inMemoryPromotions.push(rec);
+      return {
+        allocated: true,
+        allocation: rec,
+        slotsUsed: inMemoryPromotions.length,
+        slotsRemaining: Math.max(0, 10 - inMemoryPromotions.length)
+      };
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query('LOCK TABLE promotional_allocations IN EXCLUSIVE MODE');
+
+      const dupCheck = await client.query(
+        'SELECT * FROM promotional_allocations WHERE user_id = $1 OR LOWER(user_email) = LOWER($2) LIMIT 1',
+        [params.userId, params.userEmail]
+      );
+      const countRes = await client.query('SELECT COUNT(*)::int AS cnt FROM promotional_allocations');
+      const currentCount = Number(countRes.rows[0]?.cnt || 0);
+
+      if (dupCheck.rows.length > 0) {
+        await client.query('ROLLBACK');
+        return {
+          allocated: false,
+          reason: 'Artist has already received a First-10 promotional allocation.',
+          slotsUsed: currentCount,
+          slotsRemaining: Math.max(0, 10 - currentCount)
+        };
+      }
+
+      if (currentCount >= 10) {
+        await client.query('ROLLBACK');
+        return {
+          allocated: false,
+          reason: 'All 10 promotional slots are filled.',
+          slotsUsed: 10,
+          slotsRemaining: 0
+        };
+      }
+
+      const nextSlot = currentCount + 1;
+      const promoId = `promo_${Date.now()}_${nextSlot}`;
+      const insertRes = await client.query(
+        `INSERT INTO promotional_allocations (id, slot_number, user_id, user_email, artist_display_name, plan_id, status, approved_by, activated_at, expires_at, notes)
+         VALUES ($1, $2, $3, $4, $5, $6, 'ACTIVE', $7, $8, $9, $10)
+         RETURNING *`,
+        [
+          promoId,
+          nextSlot,
+          params.userId,
+          params.userEmail.toLowerCase(),
+          params.artistDisplayName,
+          'promo-first-10-monthly',
+          params.approvedBy,
+          nowDate.toISOString(),
+          expiresDate.toISOString(),
+          params.notes || 'First 10 Approved Artists — 1 Month Complimentary Access'
+        ]
+      );
+      await client.query('COMMIT');
+      const rec = mapPromoRow(insertRes.rows[0]);
+      return {
+        allocated: true,
+        allocation: rec,
+        slotsUsed: nextSlot,
+        slotsRemaining: Math.max(0, 10 - nextSlot)
+      };
+    } catch (err) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw err;
+    } finally {
+      client.release();
+    }
+  });
+}
+
+export async function dbRevokePromotionSlot(userId: string, reason: string): Promise<PromotionalAllocationRecord | null> {
+  if (!pool) {
+    const found = inMemoryPromotions.find(p => p.userId === userId);
+    if (!found) return null;
+    found.status = 'REVOKED';
+    found.revokedAt = new Date().toISOString();
+    found.notes = reason;
+    return found;
+  }
+  const res = await pool.query(
+    `UPDATE promotional_allocations SET status = 'REVOKED', revoked_at = NOW(), notes = $2 WHERE user_id = $1 RETURNING *`,
+    [userId, reason]
+  );
+  return res.rows[0] ? mapPromoRow(res.rows[0]) : null;
+}
+
+export function resetInMemoryPromotionsForTest(): void {
+  inMemoryPromotions.length = 0;
+}
+
+// ======================== ARTIST PROFILE SUBMISSIONS & LEDGER HELPERS ========================
+
+const inMemoryProfileSubmissions: any[] = [];
+const inMemoryLedgerEntries: any[] = [];
+const inMemoryRoyaltyStatements: any[] = [];
+const inMemoryPayoutRequests: any[] = [];
+const inMemoryEmailQueue: any[] = [];
+
+export async function dbSaveArtistProfileSubmission(sub: {
+  id: string;
+  userId: string;
+  userEmail: string;
+  status: string;
+  completionPercent: number;
+  profileData: unknown;
+  reviewerEmail?: string;
+  reviewNotes?: string;
+  submittedAt?: string;
+  reviewedAt?: string;
+}): Promise<void> {
+  const entry = { ...sub, createdAt: new Date().toISOString() };
+  inMemoryProfileSubmissions.unshift(entry);
+  if (inMemoryProfileSubmissions.length > 500) inMemoryProfileSubmissions.length = 500;
+  if (!pool) return;
+  await pool.query(
+    `INSERT INTO artist_profile_submissions (id, user_id, user_email, status, completion_percent, profile_data, reviewer_email, review_notes, submitted_at, reviewed_at)
+     VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10)
+     ON CONFLICT (id) DO UPDATE SET
+       status = EXCLUDED.status,
+       reviewer_email = EXCLUDED.reviewer_email,
+       review_notes = EXCLUDED.review_notes,
+       reviewed_at = EXCLUDED.reviewed_at`,
+    [
+      sub.id,
+      sub.userId,
+      sub.userEmail,
+      sub.status,
+      sub.completionPercent,
+      JSON.stringify(sub.profileData),
+      sub.reviewerEmail || null,
+      sub.reviewNotes || null,
+      sub.submittedAt || null,
+      sub.reviewedAt || null
+    ]
+  );
+}
+
+export async function dbGetArtistProfileHistory(userId: string): Promise<any[]> {
+  if (!pool) {
+    return inMemoryProfileSubmissions.filter(s => s.userId === userId);
+  }
+  const res = await pool.query(
+    `SELECT * FROM artist_profile_submissions WHERE user_id = $1 ORDER BY created_at DESC LIMIT 30`,
+    [userId]
+  );
+  return res.rows.map(r => ({
+    id: r.id,
+    userId: r.user_id,
+    userEmail: r.user_email,
+    status: r.status,
+    completionPercent: Number(r.completion_percent || 0),
+    profileData: r.profile_data,
+    reviewerEmail: r.reviewer_email || undefined,
+    reviewNotes: r.review_notes || undefined,
+    submittedAt: r.submitted_at ? new Date(r.submitted_at).toISOString() : undefined,
+    reviewedAt: r.reviewed_at ? new Date(r.reviewed_at).toISOString() : undefined,
+    createdAt: new Date(r.created_at).toISOString()
+  }));
+}
+
+export async function dbSaveLedgerEntry(entry: {
+  id: string;
+  userId: string;
+  entryType: 'ROYALTY_CLEARED' | 'ROYALTY_PENDING' | 'ROYALTY_PROJECTED' | 'PAYOUT_SUCCESS' | 'PAYOUT_PENDING' | 'ADJUSTMENT';
+  amountINR: number;
+  status: 'CLEARED' | 'PENDING' | 'PROJECTED' | 'COMPLETED' | 'FAILED';
+  referenceId?: string;
+  statementMonth?: string;
+  description: string;
+  source: string;
+  createdBy?: string;
+  createdAt?: string;
+}): Promise<void> {
+  const row = { ...entry, createdAt: entry.createdAt || new Date().toISOString() };
+  const idx = inMemoryLedgerEntries.findIndex(e => e.id === row.id);
+  if (idx >= 0) inMemoryLedgerEntries[idx] = row;
+  else inMemoryLedgerEntries.unshift(row);
+  if (!pool) return;
+  await pool.query(
+    `INSERT INTO financial_ledger_entries (id, user_id, entry_type, amount_inr, status, reference_id, statement_month, description, source, created_by, created_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+     ON CONFLICT (id) DO UPDATE SET status = EXCLUDED.status, amount_inr = EXCLUDED.amount_inr, description = EXCLUDED.description, updated_at = NOW()`,
+    [
+      row.id,
+      row.userId,
+      row.entryType,
+      row.amountINR,
+      row.status,
+      row.referenceId || null,
+      row.statementMonth || null,
+      row.description,
+      row.source,
+      row.createdBy || null,
+      row.createdAt
+    ]
+  );
+}
+
+export async function dbGetLedgerEntries(userId?: string): Promise<any[]> {
+  if (!pool) {
+    return userId ? inMemoryLedgerEntries.filter(e => e.userId === userId) : [...inMemoryLedgerEntries];
+  }
+  const res = userId
+    ? await pool.query(`SELECT * FROM financial_ledger_entries WHERE user_id = $1 ORDER BY created_at DESC LIMIT 500`, [userId])
+    : await pool.query(`SELECT * FROM financial_ledger_entries ORDER BY created_at DESC LIMIT 500`);
+  return res.rows.map(r => ({
+    id: r.id,
+    userId: r.user_id,
+    entryType: r.entry_type,
+    amountINR: Number(r.amount_inr || 0),
+    status: r.status,
+    referenceId: r.reference_id || undefined,
+    statementMonth: r.statement_month || undefined,
+    description: r.description,
+    source: r.source,
+    createdBy: r.created_by || undefined,
+    createdAt: new Date(r.created_at).toISOString()
+  }));
+}
+
+export async function dbSaveVerifiedRoyaltyStatement(stmt: {
+  id: string;
+  userId: string;
+  month: string;
+  monthLabel: string;
+  status: 'Cleared' | 'In Clearance' | 'Processing' | 'Projected';
+  grossRoyalty: number;
+  netRoyalty: number;
+  streams: number;
+  dspBreakdown?: Record<string, number>;
+  statementRef?: string;
+  payoutDate?: string;
+  verifiedBy?: string;
+}): Promise<void> {
+  const row = { ...stmt, createdAt: new Date().toISOString() };
+  const idx = inMemoryRoyaltyStatements.findIndex(s => s.id === row.id);
+  if (idx >= 0) inMemoryRoyaltyStatements[idx] = row;
+  else inMemoryRoyaltyStatements.unshift(row);
+  if (!pool) return;
+  await pool.query(
+    `INSERT INTO verified_royalty_statements (id, user_id, month, month_label, status, gross_royalty, net_royalty, streams, dsp_breakdown, statement_ref, payout_date, verified_by)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11, $12)
+     ON CONFLICT (id) DO UPDATE SET status = EXCLUDED.status, gross_royalty = EXCLUDED.gross_royalty, net_royalty = EXCLUDED.net_royalty, streams = EXCLUDED.streams, dsp_breakdown = EXCLUDED.dsp_breakdown`,
+    [
+      stmt.id,
+      stmt.userId,
+      stmt.month,
+      stmt.monthLabel,
+      stmt.status,
+      stmt.grossRoyalty,
+      stmt.netRoyalty,
+      stmt.streams,
+      JSON.stringify(stmt.dspBreakdown || {}),
+      stmt.statementRef || stmt.id,
+      stmt.payoutDate || null,
+      stmt.verifiedBy || null
+    ]
+  );
+}
+
+export async function dbGetVerifiedRoyaltyStatements(userId?: string): Promise<any[]> {
+  if (!pool) {
+    return userId ? inMemoryRoyaltyStatements.filter(s => s.userId === userId) : [...inMemoryRoyaltyStatements];
+  }
+  const res = userId
+    ? await pool.query(`SELECT * FROM verified_royalty_statements WHERE user_id = $1 ORDER BY month DESC`, [userId])
+    : await pool.query(`SELECT * FROM verified_royalty_statements ORDER BY month DESC LIMIT 500`);
+  return res.rows.map(r => ({
+    id: r.id,
+    userId: r.user_id,
+    month: r.month,
+    monthLabel: r.month_label,
+    status: r.status,
+    grossRoyalty: Number(r.gross_royalty || 0),
+    netRoyalty: Number(r.net_royalty || 0),
+    streams: Number(r.streams || 0),
+    dspBreakdown: r.dsp_breakdown || {},
+    statementId: r.statement_ref || r.id,
+    payoutDate: r.payout_date || undefined,
+    verifiedBy: r.verified_by || undefined,
+    createdAt: new Date(r.created_at).toISOString()
+  }));
+}
+
+export async function dbSavePayoutRequest(payout: {
+  id: string;
+  userId: string;
+  amountINR: number;
+  method: string;
+  details: string;
+  reference: string;
+  status: 'Pending' | 'Completed' | 'Rejected';
+  processedBy?: string;
+  notes?: string;
+  processedAt?: string;
+  createdAt?: string;
+}): Promise<void> {
+  const row = { ...payout, createdAt: payout.createdAt || new Date().toISOString() };
+  const idx = inMemoryPayoutRequests.findIndex(p => p.id === row.id);
+  if (idx >= 0) inMemoryPayoutRequests[idx] = row;
+  else inMemoryPayoutRequests.unshift(row);
+  if (!pool) return;
+  await pool.query(
+    `INSERT INTO payout_requests (id, user_id, amount_inr, method, details, reference, status, processed_by, notes, processed_at, created_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+     ON CONFLICT (id) DO UPDATE SET status = EXCLUDED.status, processed_by = EXCLUDED.processed_by, notes = EXCLUDED.notes, processed_at = EXCLUDED.processed_at`,
+    [
+      row.id,
+      row.userId,
+      row.amountINR,
+      row.method,
+      row.details,
+      row.reference,
+      row.status,
+      row.processedBy || null,
+      row.notes || null,
+      row.processedAt || null,
+      row.createdAt
+    ]
+  );
+}
+
+export async function dbGetPayoutRequests(userId?: string): Promise<any[]> {
+  if (!pool) {
+    return userId ? inMemoryPayoutRequests.filter(p => p.userId === userId) : [...inMemoryPayoutRequests];
+  }
+  const res = userId
+    ? await pool.query(`SELECT * FROM payout_requests WHERE user_id = $1 ORDER BY created_at DESC LIMIT 200`, [userId])
+    : await pool.query(`SELECT * FROM payout_requests ORDER BY created_at DESC LIMIT 500`);
+  return res.rows.map(r => ({
+    id: r.id,
+    userId: r.user_id,
+    amountINR: Number(r.amount_inr || 0),
+    method: r.method,
+    details: r.details || '',
+    reference: r.reference,
+    status: r.status,
+    processedBy: r.processed_by || undefined,
+    notes: r.notes || undefined,
+    processedAt: r.processed_at ? new Date(r.processed_at).toISOString() : undefined,
+    createdAt: new Date(r.created_at).toISOString()
+  }));
+}
+
+export async function dbQueueEmailJob(job: {
+  id: string;
+  recipientEmail: string;
+  subject: string;
+  purpose: string;
+  payload: unknown;
+  status: string;
+  lastError?: string;
+}): Promise<void> {
+  const row = { ...job, attempts: 1, createdAt: new Date().toISOString() };
+  const idx = inMemoryEmailQueue.findIndex(e => e.id === row.id);
+  if (idx >= 0) inMemoryEmailQueue[idx] = row;
+  else inMemoryEmailQueue.unshift(row);
+  if (inMemoryEmailQueue.length > 200) inMemoryEmailQueue.length = 200;
+  if (!pool) return;
+  await pool.query(
+    `INSERT INTO email_queue (id, recipient_email, subject, purpose, payload, status, attempts, last_error, sent_at)
+     VALUES ($1, $2, $3, $4, $5::jsonb, $6, 1, $7, $8)
+     ON CONFLICT (id) DO UPDATE SET status = EXCLUDED.status, attempts = email_queue.attempts + 1, last_error = EXCLUDED.last_error, sent_at = EXCLUDED.sent_at`,
+    [
+      job.id,
+      job.recipientEmail,
+      job.subject,
+      job.purpose,
+      JSON.stringify(job.payload || {}),
+      job.status,
+      job.lastError || null,
+      job.status === 'SENT' ? new Date().toISOString() : null
+    ]
+  );
+}
+
+export async function dbGetEmailQueueStats(): Promise<{ queued: number; sent: number; failed: number; recent: any[] }> {
+  if (!pool) {
+    return {
+      queued: inMemoryEmailQueue.filter(e => e.status === 'QUEUED').length,
+      sent: inMemoryEmailQueue.filter(e => e.status === 'SENT').length,
+      failed: inMemoryEmailQueue.filter(e => e.status === 'FAILED').length,
+      recent: inMemoryEmailQueue.slice(0, 20)
+    };
+  }
+  const [counts, recent] = await Promise.all([
+    pool.query(`SELECT status, COUNT(*)::int AS cnt FROM email_queue GROUP BY status`),
+    pool.query(`SELECT id, recipient_email, subject, purpose, status, attempts, last_error, created_at, sent_at FROM email_queue ORDER BY created_at DESC LIMIT 20`)
+  ]);
+  let queued = 0;
+  let sent = 0;
+  let failed = 0;
+  for (const r of counts.rows) {
+    if (r.status === 'QUEUED') queued = Number(r.cnt);
+    else if (r.status === 'SENT') sent = Number(r.cnt);
+    else if (r.status === 'FAILED') failed = Number(r.cnt);
+  }
+  return {
+    queued,
+    sent,
+    failed,
+    recent: recent.rows.map(r => ({
+      id: r.id,
+      recipientEmail: r.recipient_email,
+      subject: r.subject,
+      purpose: r.purpose,
+      status: r.status,
+      attempts: Number(r.attempts || 0),
+      lastError: r.last_error || undefined,
+      createdAt: new Date(r.created_at).toISOString(),
+      sentAt: r.sent_at ? new Date(r.sent_at).toISOString() : undefined
+    }))
+  };
 }
 
 

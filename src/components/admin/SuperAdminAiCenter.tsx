@@ -637,7 +637,7 @@ export const SuperAdminAiSettings: React.FC<Props> = ({
         targetId: 'global_ai_config',
         title: 'Save AI Configuration & Governance Permissions',
         explanation: 'Updates server-side AI pipeline switches, model selection, thresholds, and permissions.',
-        consequences: 'Affects automated metadata/audio analysis and Executive Assistant model routing.',
+        consequences: 'Affects automated metadata/audio analysis and Rudra AI model routing.',
         proposedChanges: settings,
         payload: { aiSettings: settings }
       });

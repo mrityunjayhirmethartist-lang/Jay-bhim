@@ -56,7 +56,9 @@ import {
   Filter,
   ChevronDown,
   ChevronUp,
-  TrendingUp
+  TrendingUp,
+  Gift,
+  Upload
 } from 'lucide-react';
 
 // ======================== 1. MY LABELS PAGE ========================
@@ -166,26 +168,50 @@ export const MyLabelsPage: React.FC = () => {
   );
 };
 
-// ======================== 2. PROFILE PAGE ========================
+// ======================== 2. ARTIST PROFILE & ONBOARDING PAGE ========================
 export const ProfilePage: React.FC = () => {
   const { user, token } = useAuth();
-  const [fullName, setFullName] = useState(user?.fullName || '');
-  const [country, setCountry] = useState(user?.country || '');
-  const [saved, setSaved] = useState(false);
-  const [savingProfile, setSavingProfile] = useState(false);
-  const [profileCompletion, setProfileCompletion] = useState(0);
+  const { navigate } = useRouter();
 
-  // KYC State
+  // Artist Onboarding Profile State (11 required + 3 optional)
+  const [legalName, setLegalName] = useState(user?.fullName || '');
+  const [displayName, setDisplayName] = useState(user?.fullName || '');
+  const [artistType, setArtistType] = useState<'Individual Artist' | 'Label' | ''>('');
+  const [country, setCountry] = useState(user?.country || '');
+  const [stateRegion, setStateRegion] = useState('');
+  const [city, setCity] = useState('');
+  const [contactEmail, setContactEmail] = useState(user?.email || '');
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [musicGenre, setMusicGenre] = useState('');
+  const [biography, setBiography] = useState('');
+  const [profileImageUrl, setProfileImageUrl] = useState('');
+  const [profileImageFileId, setProfileImageFileId] = useState('');
+  const [spotifyUrl, setSpotifyUrl] = useState('');
+  const [youtubeUrl, setYoutubeUrl] = useState('');
+  const [otherDspUrls, setOtherDspUrls] = useState('');
+
+  const [profileStatus, setProfileStatus] = useState<string>('Incomplete');
+  const [reviewNotes, setReviewNotes] = useState<string>('');
+  const [completionPercent, setCompletionPercent] = useState<number>(0);
+  const [missingFields, setMissingFields] = useState<string[]>([]);
+  const [history, setHistory] = useState<any[]>([]);
+  const [promoProgram, setPromoProgram] = useState<any>(null);
+  const [loadingProfile, setLoadingProfile] = useState(true);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [savingDraft, setSavingDraft] = useState(false);
+  const [submittingProfile, setSubmittingProfile] = useState(false);
+  const [profileFeedback, setProfileFeedback] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+
+  // Separate, Optional Payout KYC Drawer (NOT required for Artist Profile completion or release upload)
+  const [showOptionalKyc, setShowOptionalKyc] = useState(false);
   const [kycStatus, setKycStatus] = useState<string>('Not Submitted');
   const [kycReason, setKycReason] = useState<string>('');
-  const [servicesUnlocked, setServicesUnlocked] = useState(false);
   const [fullLegalName, setFullLegalName] = useState(user?.fullName || '');
   const [dateOfBirth, setDateOfBirth] = useState('');
   const [address, setAddress] = useState('');
   const [mobileNumber, setMobileNumber] = useState('');
   const [aadhaarLast4, setAadhaarLast4] = useState('');
   const [panNumber, setPanNumber] = useState('');
-
   const [aadhaarFrontFileId, setAadhaarFrontFileId] = useState('');
   const [aadhaarFrontUrl, setAadhaarFrontUrl] = useState('');
   const [aadhaarBackFileId, setAadhaarBackFileId] = useState('');
@@ -194,65 +220,178 @@ export const ProfilePage: React.FC = () => {
   const [panCardUrl, setPanCardUrl] = useState('');
   const [profilePhotoFileId, setProfilePhotoFileId] = useState('');
   const [profilePhotoUrl, setProfilePhotoUrl] = useState('');
-
   const [uploadingDoc, setUploadingDoc] = useState<string | null>(null);
   const [kycSubmitting, setKycSubmitting] = useState(false);
   const [kycMessage, setKycMessage] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
 
-  useEffect(() => {
+  const loadArtistOnboardingData = async () => {
     if (!token) return;
-    fetch(apiUrl('/api/profile'), { headers: { Authorization: `Bearer ${token}` } })
-      .then(r => r.json())
-      .then(data => {
-        if (data.profile) {
-          setFullName(data.profile.fullName || '');
-          setCountry(data.profile.country || '');
-          setProfileCompletion(data.profile.profileCompletion || 0);
-          const k = data.profile.kyc;
-          if (k) {
-            setKycStatus(k.status || 'Not Submitted');
-            setKycReason(k.rejectionReason || '');
-            setServicesUnlocked(Boolean(k.servicesUnlocked));
-            if (k.fullLegalName) setFullLegalName(k.fullLegalName);
-            if (k.dateOfBirth) setDateOfBirth(k.dateOfBirth);
-            if (k.address) setAddress(k.address);
-            if (k.mobileNumber) setMobileNumber(k.mobileNumber);
-            if (k.aadhaarNumberLast4) setAadhaarLast4(k.aadhaarNumberLast4);
-            if (k.panNumber) setPanNumber(k.panNumber);
-            if (k.aadhaarFrontFileId) setAadhaarFrontFileId(k.aadhaarFrontFileId);
-            if (k.aadhaarFrontUrl) setAadhaarFrontUrl(k.aadhaarFrontUrl);
-            if (k.aadhaarBackFileId) setAadhaarBackFileId(k.aadhaarBackFileId);
-            if (k.aadhaarBackUrl) setAadhaarBackUrl(k.aadhaarBackUrl);
-            if (k.panCardFileId) setPanCardFileId(k.panCardFileId);
-            if (k.panCardUrl) setPanCardUrl(k.panCardUrl);
-            if (k.profilePhotoFileId) setProfilePhotoFileId(k.profilePhotoFileId);
-            if (k.profilePhotoUrl) setProfilePhotoUrl(k.profilePhotoUrl);
-          }
-        }
-      })
-      .catch(() => {});
-  }, [token]);
-
-  const handleSaveProfile = async () => {
-    if (!token) return;
-    setSavingProfile(true);
-    setSaved(false);
+    setLoadingProfile(true);
     try {
-      const res = await fetch(apiUrl('/api/profile'), {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ fullName, country })
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        setSaved(true);
-        if (typeof data.profileCompletion === 'number') setProfileCompletion(data.profileCompletion);
+      const [apRes, kycRes] = await Promise.all([
+        fetch(apiUrl('/api/artist-profile'), { headers: { Authorization: `Bearer ${token}` } }),
+        fetch(apiUrl('/api/profile'), { headers: { Authorization: `Bearer ${token}` } })
+      ]);
+      if (apRes.ok) {
+        const d = await apRes.json();
+        const ap = d.artistProfile || {};
+        setLegalName(ap.legalName || user?.fullName || '');
+        setDisplayName(ap.displayName || user?.fullName || '');
+        setArtistType(ap.artistType || '');
+        setCountry(ap.country || user?.country || '');
+        setStateRegion(ap.stateRegion || '');
+        setCity(ap.city || '');
+        setContactEmail(ap.contactEmail || user?.email || '');
+        setPhoneNumber(ap.phoneNumber || '');
+        setMusicGenre(ap.musicGenre || '');
+        setBiography(ap.biography || '');
+        setProfileImageUrl(ap.profileImageUrl || '');
+        setProfileImageFileId(ap.profileImageFileId || '');
+        setSpotifyUrl(ap.spotifyUrl || '');
+        setYoutubeUrl(ap.youtubeUrl || '');
+        setOtherDspUrls(ap.otherDspUrls || '');
+        setProfileStatus(d.status || 'Incomplete');
+        setReviewNotes(ap.reviewNotes || '');
+        setCompletionPercent(d.completion?.completionPercent ?? 0);
+        setMissingFields(d.completion?.missingFields || []);
+        setHistory(d.history || []);
+        setPromoProgram(d.promotionalProgram || null);
+      }
+      if (kycRes.ok) {
+        const kd = await kycRes.json();
+        const k = kd.profile?.kyc;
+        if (k) {
+          setKycStatus(k.status || 'Not Submitted');
+          setKycReason(k.rejectionReason || '');
+          if (k.fullLegalName) setFullLegalName(k.fullLegalName);
+          if (k.dateOfBirth) setDateOfBirth(k.dateOfBirth);
+          if (k.address) setAddress(k.address);
+          if (k.mobileNumber) setMobileNumber(k.mobileNumber);
+          if (k.aadhaarNumberLast4) setAadhaarLast4(k.aadhaarNumberLast4);
+          if (k.panNumber) setPanNumber(k.panNumber);
+          if (k.aadhaarFrontFileId) setAadhaarFrontFileId(k.aadhaarFrontFileId);
+          if (k.aadhaarFrontUrl) setAadhaarFrontUrl(k.aadhaarFrontUrl);
+          if (k.aadhaarBackFileId) setAadhaarBackFileId(k.aadhaarBackFileId);
+          if (k.aadhaarBackUrl) setAadhaarBackUrl(k.aadhaarBackUrl);
+          if (k.panCardFileId) setPanCardFileId(k.panCardFileId);
+          if (k.panCardUrl) setPanCardUrl(k.panCardUrl);
+          if (k.profilePhotoFileId) setProfilePhotoFileId(k.profilePhotoFileId);
+          if (k.profilePhotoUrl) setProfilePhotoUrl(k.profilePhotoUrl);
+        }
       }
     } finally {
-      setSavingProfile(false);
+      setLoadingProfile(false);
+    }
+  };
+
+  useEffect(() => {
+    loadArtistOnboardingData();
+  }, [token]);
+
+  const currentPayload = {
+    legalName,
+    displayName,
+    artistType,
+    country,
+    stateRegion,
+    city,
+    contactEmail,
+    phoneNumber,
+    musicGenre,
+    biography,
+    profileImageUrl,
+    profileImageFileId,
+    spotifyUrl,
+    youtubeUrl,
+    otherDspUrls
+  };
+
+  const handleAvatarUpload = async (file: File) => {
+    if (!token) return;
+    setUploadingAvatar(true);
+    setProfileFeedback(null);
+    try {
+      const fd = new FormData();
+      fd.append('image', file);
+      const res = await fetch(apiUrl('/api/artist-profile/image'), {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: fd
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setProfileFeedback({ type: 'err', text: data.error || 'Image upload failed.' });
+        return;
+      }
+      setProfileImageFileId(data.fileId);
+      setProfileImageUrl(data.fileUrl);
+      setProfileFeedback({ type: 'ok', text: `Profile image "${file.name}" uploaded.` });
+    } catch {
+      setProfileFeedback({ type: 'err', text: 'Failed to upload profile image.' });
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
+
+  const handleSaveDraft = async () => {
+    if (!token) return;
+    setSavingDraft(true);
+    setProfileFeedback(null);
+    try {
+      const res = await fetch(apiUrl('/api/artist-profile/draft'), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(currentPayload)
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setProfileFeedback({ type: 'err', text: data.error || 'Failed to save draft.' });
+        return;
+      }
+      setCompletionPercent(data.completion?.completionPercent ?? completionPercent);
+      setMissingFields(data.completion?.missingFields || []);
+      setProfileStatus(data.status || profileStatus);
+      setProfileFeedback({ type: 'ok', text: 'Artist Profile draft saved.' });
+    } catch {
+      setProfileFeedback({ type: 'err', text: 'Network error saving Artist Profile draft.' });
+    } finally {
+      setSavingDraft(false);
+    }
+  };
+
+  const handleSubmitProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token) return;
+    setSubmittingProfile(true);
+    setProfileFeedback(null);
+    try {
+      const res = await fetch(apiUrl('/api/artist-profile/submit'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(currentPayload)
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        if (data.completion) {
+          setCompletionPercent(data.completion.completionPercent);
+          setMissingFields(data.completion.missingFields || []);
+        }
+        setProfileFeedback({ type: 'err', text: data.error || 'Profile submission failed.' });
+        return;
+      }
+      setProfileStatus(data.status || 'Submitted');
+      setCompletionPercent(100);
+      setMissingFields([]);
+      setReviewNotes('');
+      setProfileFeedback({
+        type: 'ok',
+        text: data.message || 'Artist Profile submitted for Super Admin review.'
+      });
+      await loadArtistOnboardingData();
+    } catch {
+      setProfileFeedback({ type: 'err', text: 'Network error submitting Artist Profile.' });
+    } finally {
+      setSubmittingProfile(false);
     }
   };
 
@@ -287,7 +426,7 @@ export const ProfilePage: React.FC = () => {
         setProfilePhotoFileId(data.fileId);
         setProfilePhotoUrl(data.fileUrl);
       }
-      setKycMessage({ type: 'ok', text: `${file.name} uploaded securely to private storage.` });
+      setKycMessage({ type: 'ok', text: `${file.name} uploaded to encrypted storage.` });
     } catch {
       setKycMessage({ type: 'err', text: 'Network error uploading document.' });
     } finally {
@@ -326,251 +465,462 @@ export const ProfilePage: React.FC = () => {
       });
       const data = await res.json();
       if (!res.ok) {
-        setKycMessage({ type: 'err', text: data.error || 'KYC submission failed.' });
+        setKycMessage({ type: 'err', text: data.error || 'Payout KYC submission failed.' });
         return;
       }
       setKycStatus(data.kyc.status);
       setKycReason('');
-      setServicesUnlocked(Boolean(data.kyc.servicesUnlocked));
-      if (typeof data.profileCompletion === 'number') setProfileCompletion(data.profileCompletion);
-      setKycMessage({ type: 'ok', text: 'KYC documents submitted securely. Our compliance team will review them shortly.' });
+      setKycMessage({ type: 'ok', text: 'Optional Payout KYC submitted for review.' });
     } catch {
-      setKycMessage({ type: 'err', text: 'Network error submitting KYC.' });
+      setKycMessage({ type: 'err', text: 'Network error submitting Payout KYC.' });
     } finally {
       setKycSubmitting(false);
     }
   };
 
   return (
-    <DashboardLayout title="Profile & KYC">
-      <div className="max-w-3xl space-y-6">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-white font-display">Artist Account Profile & KYC</h1>
-            <p className="text-xs text-slate-400">Manage legal identification, country, and identity verification documents</p>
-          </div>
-          <div className="px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs font-mono text-slate-300">
-            Completion: <span className="text-amber-400 font-semibold">{profileCompletion}%</span>
-          </div>
-        </div>
-
-        {/* Basic Account Details */}
+    <DashboardLayout title="Artist Profile">
+      <div className="max-w-4xl space-y-6">
+        {/* Header & Completion Bar */}
         <div className="p-6 rounded-2xl bg-[#090e1a] border border-slate-800 space-y-4">
-          <h2 className="text-sm font-semibold text-white">Account Information</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <label className="block text-xs font-medium text-slate-300 mb-1">Display Name</label>
-              <input
-                type="text"
-                value={fullName}
-                onChange={e => setFullName(e.target.value)}
-                className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-xs text-white"
-              />
+              <h1 className="text-2xl font-bold text-white font-display">Artist Onboarding & Profile</h1>
+              <p className="text-xs text-slate-400 mt-1">
+                Complete all 11 required profile fields and submit for Super Admin approval before uploading releases.
+              </p>
             </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-300 mb-1">Account Email</label>
-              <input
-                type="email"
-                readOnly
-                value={user?.email || ''}
-                className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-xs text-slate-400 cursor-not-allowed"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-medium text-slate-300 mb-1">Country</label>
-              <input
-                type="text"
-                value={country}
-                onChange={e => setCountry(e.target.value)}
-                className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-xs text-white"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-300 mb-1">Account Role</label>
-              <input
-                type="text"
-                readOnly
-                value={user?.role || ''}
-                className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-xs text-blue-400 font-mono capitalize"
-              />
+            <div className="flex items-center gap-3">
+              <div className="text-right">
+                <div className="text-[11px] font-mono text-slate-400 uppercase">Profile Status</div>
+                <div
+                  className={`text-sm font-bold ${
+                    profileStatus === 'Approved'
+                      ? 'text-emerald-400'
+                      : profileStatus === 'Rejected'
+                        ? 'text-rose-400'
+                        : profileStatus === 'Changes Requested'
+                          ? 'text-amber-400'
+                          : profileStatus === 'Submitted' || profileStatus === 'Under Review'
+                            ? 'text-blue-400'
+                            : 'text-slate-300'
+                  }`}
+                >
+                  {profileStatus}
+                </div>
+              </div>
+              <div className="px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-800 font-mono text-xs tabular-nums">
+                Completion: <span className={completionPercent === 100 ? 'text-emerald-400 font-bold' : 'text-amber-400 font-bold'}>{completionPercent}%</span>
+              </div>
             </div>
           </div>
 
-          {saved && (
-            <div className="p-3 text-xs text-emerald-300 bg-emerald-950/60 border border-emerald-800/40 rounded-lg">
-              Profile details updated and saved.
+          <div className="w-full h-2 bg-slate-900 rounded-full overflow-hidden border border-slate-800">
+            <div
+              className={`h-full transition-all duration-300 ${completionPercent === 100 ? 'bg-emerald-500' : 'bg-blue-500'}`}
+              style={{ width: `${completionPercent}%` }}
+            />
+          </div>
+
+          {promoProgram && (
+            <div className="p-3.5 rounded-xl bg-emerald-950/25 border border-emerald-800/50 flex flex-wrap items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-2.5 text-emerald-200">
+                <Gift className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>
+                  {promoProgram.claimed
+                    ? `First-10 Artists Offer Claimed (Slot #${promoProgram.allocation?.slotNumber} of 10 · Status: ${promoProgram.allocation?.status})`
+                    : promoProgram.slotsRemaining > 0
+                      ? `First 10 Approved Artists receive 1 Month Complimentary Access (${promoProgram.slotsRemaining}/10 slots remaining). Zero bank/PAN required here.`
+                      : 'All 10 complimentary promotional slots have been allocated. Choose a paid plan after profile approval.'}
+                </span>
+              </div>
+              <span className="font-mono text-emerald-300 tabular-nums">
+                {promoProgram.slotsUsed}/10 Used
+              </span>
             </div>
           )}
 
-          <div className="pt-2 flex justify-end">
-            <button
-              onClick={handleSaveProfile}
-              disabled={savingProfile}
-              className="px-5 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-lg text-xs font-semibold"
+          {(profileStatus === 'Submitted' || profileStatus === 'Under Review') && (
+            <div className="p-3.5 rounded-xl bg-blue-950/30 border border-blue-800/60 text-xs text-blue-200">
+              Your Artist Profile is currently under review. Release submission will become available after Super Admin approval.
+            </div>
+          )}
+
+          {reviewNotes && (
+            <div
+              className={`p-3.5 rounded-xl border text-xs ${
+                profileStatus === 'Rejected' || profileStatus === 'Changes Requested'
+                  ? 'bg-rose-950/40 border-rose-800 text-rose-200'
+                  : 'bg-emerald-950/30 border-emerald-800/60 text-emerald-200'
+              }`}
             >
-              {savingProfile ? 'Saving...' : 'Save Profile Changes'}
-            </button>
-          </div>
+              <strong className="text-white">Super Admin Review Note:</strong> {reviewNotes}
+            </div>
+          )}
+
+          {missingFields.length > 0 && (
+            <div className="text-[11px] text-amber-300">
+              Remaining required fields: {missingFields.join(' · ')}
+            </div>
+          )}
         </div>
 
-        {/* KYC Verification Section */}
-        <form onSubmit={handleSubmitKyc} className="p-6 rounded-2xl bg-[#090e1a] border border-slate-800 space-y-5">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-4">
-            <div>
-              <h2 className="text-sm font-semibold text-white">KYC Identity Verification</h2>
-              <p className="text-xs text-slate-400">Encrypted & stored privately for royalty payouts and distribution compliance</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <span
-                className={`px-2.5 py-1 rounded text-[11px] font-semibold uppercase tracking-wide ${
-                  kycStatus === 'Approved'
-                    ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
-                    : kycStatus === 'Pending'
-                      ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
-                      : kycStatus === 'Rejected' || kycStatus === 'Reupload Required'
-                        ? 'bg-red-500/15 text-red-300 border border-red-500/30'
-                        : 'bg-slate-800 text-slate-300'
-                }`}
-              >
-                {kycStatus}
-              </span>
-              {servicesUnlocked && (
-                <span className="px-2 py-1 rounded text-[11px] bg-emerald-900/40 text-emerald-300 border border-emerald-700/40">
-                  Services Unlocked
-                </span>
-              )}
-            </div>
+        {/* Main 11-Field Artist Profile Form */}
+        <form onSubmit={handleSubmitProfile} className="p-6 rounded-2xl bg-[#090e1a] border border-slate-800 space-y-5">
+          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+            <h2 className="text-sm font-bold text-white">Required Artist & Label Identity Details</h2>
+            <span className="text-[11px] text-slate-400">* Required for verification</span>
           </div>
-
-          {kycReason && (
-            <div className="p-3 rounded-lg bg-red-950/50 border border-red-800/50 text-xs text-red-200">
-              <span className="font-semibold">Admin Review Note:</span> {kycReason}
-            </div>
-          )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-medium text-slate-300 mb-1">Full Legal Name *</label>
               <input
                 type="text"
-                required
-                value={fullLegalName}
-                onChange={e => setFullLegalName(e.target.value)}
-                placeholder="As printed on Aadhaar / PAN"
+                value={legalName}
+                onChange={e => setLegalName(e.target.value)}
+                placeholder="Full legal name"
                 className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-xs text-white"
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-slate-300 mb-1">Date of Birth *</label>
+              <label className="block text-xs font-medium text-slate-300 mb-1">Artist Display / Stage Name *</label>
               <input
-                type="date"
-                required
-                value={dateOfBirth}
-                onChange={e => setDateOfBirth(e.target.value)}
+                type="text"
+                value={displayName}
+                onChange={e => setDisplayName(e.target.value)}
+                placeholder="Public artist or label name"
                 className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-xs text-white"
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-slate-300 mb-1">Mobile Number *</label>
+              <label className="block text-xs font-medium text-slate-300 mb-1">Account Type *</label>
+              <select
+                value={artistType}
+                onChange={e => setArtistType(e.target.value as any)}
+                className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-xs text-white"
+              >
+                <option value="">Select Individual Artist or Label</option>
+                <option value="Individual Artist">Individual Artist</option>
+                <option value="Label">Label</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-300 mb-1">Primary Genre / Music Category *</label>
+              <input
+                type="text"
+                value={musicGenre}
+                onChange={e => setMusicGenre(e.target.value)}
+                placeholder="e.g. Pop, Classical Fusion, Hip-Hop, Indie"
+                className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-xs text-white"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-300 mb-1">Country *</label>
+              <input
+                type="text"
+                value={country}
+                onChange={e => setCountry(e.target.value)}
+                placeholder="India"
+                className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-xs text-white"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-300 mb-1">State / Region *</label>
+              <input
+                type="text"
+                value={stateRegion}
+                onChange={e => setStateRegion(e.target.value)}
+                placeholder="e.g. Maharashtra, Karnataka"
+                className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-xs text-white"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-300 mb-1">City *</label>
+              <input
+                type="text"
+                value={city}
+                onChange={e => setCity(e.target.value)}
+                placeholder="e.g. Mumbai, Bengaluru"
+                className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-xs text-white"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-300 mb-1">Contact Email *</label>
+              <input
+                type="email"
+                value={contactEmail}
+                onChange={e => setContactEmail(e.target.value)}
+                placeholder="artist@domain.com"
+                className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-xs text-white"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-300 mb-1">Phone Number *</label>
               <input
                 type="tel"
-                required
-                value={mobileNumber}
-                onChange={e => setMobileNumber(e.target.value)}
+                value={phoneNumber}
+                onChange={e => setPhoneNumber(e.target.value)}
                 placeholder="+91 98XXXXXXXX"
                 className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-xs text-white"
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-slate-300 mb-1">PAN Number</label>
-              <input
-                type="text"
-                value={panNumber}
-                onChange={e => setPanNumber(e.target.value.toUpperCase())}
-                placeholder="ABCDE1234F"
-                maxLength={10}
-                className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-xs text-white font-mono uppercase"
-              />
+              <label className="block text-xs font-medium text-slate-300 mb-1">Profile Image / Logo *</label>
+              <div className="flex items-center gap-3">
+                {profileImageUrl && (
+                  <img
+                    src={apiUrl(profileImageUrl)}
+                    alt="Profile"
+                    className="w-10 h-10 rounded-lg object-cover border border-slate-700 shrink-0"
+                  />
+                )}
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  onChange={e => {
+                    const f = e.target.files?.[0];
+                    if (f) handleAvatarUpload(f);
+                  }}
+                  className="block w-full text-[11px] text-slate-400 file:mr-2.5 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-slate-800 file:text-slate-200 hover:file:bg-slate-700"
+                />
+              </div>
+              {uploadingAvatar && <p className="text-[11px] text-amber-400 mt-1">Uploading image...</p>}
             </div>
             <div className="sm:col-span-2">
-              <label className="block text-xs font-medium text-slate-300 mb-1">Residential / Registered Address *</label>
-              <input
-                type="text"
-                required
-                value={address}
-                onChange={e => setAddress(e.target.value)}
-                placeholder="Full street address, city, state, PIN code"
+              <label className="block text-xs font-medium text-slate-300 mb-1">Bio / Artist Description * (min 10 characters)</label>
+              <textarea
+                rows={3}
+                value={biography}
+                onChange={e => setBiography(e.target.value)}
+                placeholder="Describe your musical background, catalog focus, or label mission..."
                 className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-xs text-white"
               />
             </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-300 mb-1">Aadhaar Last 4 Digits</label>
+          </div>
+
+          {/* Optional Social & DSP Links */}
+          <div className="pt-3 border-t border-slate-800 space-y-3">
+            <h3 className="text-xs font-semibold text-slate-300">Optional DSP & Social Links</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <input
-                type="text"
-                value={aadhaarLast4}
-                onChange={e => setAadhaarLast4(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                placeholder="1234"
-                maxLength={4}
-                className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-xs text-white font-mono"
+                type="url"
+                value={spotifyUrl}
+                onChange={e => setSpotifyUrl(e.target.value)}
+                placeholder="Spotify Artist URL (optional)"
+                className="px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-xs text-white"
+              />
+              <input
+                type="url"
+                value={youtubeUrl}
+                onChange={e => setYoutubeUrl(e.target.value)}
+                placeholder="YouTube Channel URL (optional)"
+                className="px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-xs text-white"
+              />
+              <input
+                type="url"
+                value={otherDspUrls}
+                onChange={e => setOtherDspUrls(e.target.value)}
+                placeholder="Apple Music / Website URL (optional)"
+                className="px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-xs text-white"
               />
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-            {[
-              { key: 'aadhaarFront' as const, label: 'Aadhaar Front', fileId: aadhaarFrontFileId },
-              { key: 'aadhaarBack' as const, label: 'Aadhaar Back', fileId: aadhaarBackFileId },
-              { key: 'panCard' as const, label: 'PAN Card', fileId: panCardFileId },
-              { key: 'profilePhoto' as const, label: 'Profile Photograph', fileId: profilePhotoFileId }
-            ].map(doc => (
-              <div key={doc.key} className="p-3 rounded-xl bg-slate-900/70 border border-slate-800 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium text-slate-200">{doc.label}</span>
-                  {doc.fileId ? (
-                    <span className="text-[11px] text-emerald-400 font-mono">Uploaded</span>
-                  ) : (
-                    <span className="text-[11px] text-slate-500">Required</span>
-                  )}
-                </div>
-                <input
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp,application/pdf"
-                  onChange={e => {
-                    const f = e.target.files?.[0];
-                    if (f) handleDocUpload(doc.key, f);
-                  }}
-                  className="block w-full text-[11px] text-slate-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-slate-800 file:text-slate-200 hover:file:bg-slate-700"
-                />
-                {uploadingDoc === doc.key && <p className="text-[11px] text-amber-400">Uploading securely...</p>}
-              </div>
-            ))}
-          </div>
-
-          {kycMessage && (
+          {profileFeedback && (
             <div
               className={`p-3 rounded-lg text-xs border ${
-                kycMessage.type === 'ok'
-                  ? 'bg-emerald-950/60 border-emerald-800/40 text-emerald-300'
-                  : 'bg-red-950/60 border-red-800/40 text-red-300'
+                profileFeedback.type === 'ok'
+                  ? 'bg-emerald-950/60 border-emerald-800/50 text-emerald-200'
+                  : 'bg-rose-950/60 border-rose-800/50 text-rose-200'
               }`}
             >
-              {kycMessage.text}
+              {profileFeedback.text}
             </div>
           )}
 
-          <div className="flex justify-end">
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
             <button
-              type="submit"
-              disabled={kycSubmitting}
-              className="px-5 py-2.5 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black rounded-lg text-xs font-bold"
+              type="button"
+              onClick={handleSaveDraft}
+              disabled={savingDraft || loadingProfile}
+              className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-semibold disabled:opacity-50"
             >
-              {kycSubmitting ? 'Submitting KYC...' : kycStatus === 'Pending' ? 'Update KYC Submission' : 'Submit KYC for Verification'}
+              {savingDraft ? 'Saving Draft...' : 'Save Draft'}
             </button>
+
+            <div className="flex items-center gap-3">
+              {profileStatus === 'Approved' && (
+                <button
+                  type="button"
+                  onClick={() => navigate('/dashboard/releases/new')}
+                  className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold"
+                >
+                  Proceed to Release Upload
+                </button>
+              )}
+              <button
+                type="submit"
+                disabled={submittingProfile || loadingProfile}
+                className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-lg text-xs font-semibold"
+              >
+                {submittingProfile
+                  ? 'Submitting Profile...'
+                  : profileStatus === 'Rejected' || profileStatus === 'Changes Requested'
+                    ? 'Resubmit Profile for Review'
+                    : profileStatus === 'Submitted' || profileStatus === 'Under Review'
+                      ? 'Update & Resubmit Profile'
+                      : 'Submit Profile for Approval'}
+              </button>
+            </div>
           </div>
         </form>
+
+        {/* Profile Submission History */}
+        {history.length > 0 && (
+          <div className="p-6 rounded-2xl bg-[#090e1a] border border-slate-800 space-y-3">
+            <h2 className="text-sm font-bold text-white">Submission & Review History</h2>
+            <div className="divide-y divide-slate-800/70 text-xs">
+              {history.map((item: any) => (
+                <div key={item.id} className="py-2.5 flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <span className="font-semibold text-white">{item.status}</span>
+                    {item.reviewNotes && <span className="text-slate-400 ml-2">· {item.reviewNotes}</span>}
+                  </div>
+                  <div className="text-[11px] font-mono text-slate-400 tabular-nums">
+                    {item.reviewedAt
+                      ? `Reviewed ${new Date(item.reviewedAt).toLocaleString()}`
+                      : item.submittedAt
+                        ? `Submitted ${new Date(item.submittedAt).toLocaleString()}`
+                        : ''}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Separate Optional Payout KYC Section (NOT required during Artist Onboarding) */}
+        <div className="p-5 rounded-2xl bg-[#090e1a] border border-slate-800 space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold text-white">Optional Payout KYC Verification ({kycStatus})</h2>
+              <p className="text-xs text-slate-400">
+                Not required for Artist Profile approval or release submission. Required only later for tax-compliant bank withdrawals.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowOptionalKyc(v => !v)}
+              className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-xs font-semibold text-slate-200 rounded-lg"
+            >
+              {showOptionalKyc ? 'Hide Payout KYC' : 'Manage Payout KYC'}
+            </button>
+          </div>
+
+          {showOptionalKyc && (
+            <form onSubmit={handleSubmitKyc} className="space-y-4 pt-3 border-t border-slate-800">
+              {kycReason && (
+                <div className="p-3 rounded-lg bg-rose-950/50 border border-rose-800/50 text-xs text-rose-200">
+                  <strong>Note:</strong> {kycReason}
+                </div>
+              )}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <input
+                  type="text"
+                  required
+                  value={fullLegalName}
+                  onChange={e => setFullLegalName(e.target.value)}
+                  placeholder="Full Legal Name *"
+                  className="px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-xs text-white"
+                />
+                <input
+                  type="date"
+                  required
+                  value={dateOfBirth}
+                  onChange={e => setDateOfBirth(e.target.value)}
+                  className="px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-xs text-white"
+                />
+                <input
+                  type="tel"
+                  required
+                  value={mobileNumber}
+                  onChange={e => setMobileNumber(e.target.value)}
+                  placeholder="Mobile Number *"
+                  className="px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-xs text-white"
+                />
+                <input
+                  type="text"
+                  value={panNumber}
+                  onChange={e => setPanNumber(e.target.value.toUpperCase())}
+                  placeholder="PAN Number (Optional)"
+                  maxLength={10}
+                  className="px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-xs text-white font-mono uppercase"
+                />
+                <input
+                  type="text"
+                  required
+                  value={address}
+                  onChange={e => setAddress(e.target.value)}
+                  placeholder="Registered Address *"
+                  className="sm:col-span-2 px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-xs text-white"
+                />
+                <input
+                  type="text"
+                  value={aadhaarLast4}
+                  onChange={e => setAadhaarLast4(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                  placeholder="Aadhaar Last 4 Digits (Optional)"
+                  maxLength={4}
+                  className="px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-xs text-white font-mono"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {[
+                  { key: 'aadhaarFront' as const, label: 'ID Front', fileId: aadhaarFrontFileId },
+                  { key: 'aadhaarBack' as const, label: 'ID Back', fileId: aadhaarBackFileId },
+                  { key: 'panCard' as const, label: 'Tax / PAN Card', fileId: panCardFileId },
+                  { key: 'profilePhoto' as const, label: 'Verification Photo', fileId: profilePhotoFileId }
+                ].map(doc => (
+                  <div key={doc.key} className="p-3 rounded-xl bg-slate-900/70 border border-slate-800 space-y-1.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-slate-200">{doc.label}</span>
+                      <span className={doc.fileId ? 'text-emerald-400 font-mono text-[11px]' : 'text-slate-500 text-[11px]'}>
+                        {doc.fileId ? 'Uploaded' : 'Optional'}
+                      </span>
+                    </div>
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,application/pdf"
+                      onChange={e => {
+                        const f = e.target.files?.[0];
+                        if (f) handleDocUpload(doc.key, f);
+                      }}
+                      className="block w-full text-[11px] text-slate-400"
+                    />
+                    {uploadingDoc === doc.key && <p className="text-[11px] text-amber-400">Uploading...</p>}
+                  </div>
+                ))}
+              </div>
+
+              {kycMessage && (
+                <div className={`p-3 rounded-lg text-xs ${kycMessage.type === 'ok' ? 'bg-emerald-950/50 text-emerald-200' : 'bg-rose-950/50 text-rose-200'}`}>
+                  {kycMessage.text}
+                </div>
+              )}
+
+              <div className="flex justify-end">
+                <button
+                  type="submit"
+                  disabled={kycSubmitting}
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-xs font-semibold"
+                >
+                  {kycSubmitting ? 'Submitting...' : 'Submit Payout KYC'}
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
       </div>
     </DashboardLayout>
   );
@@ -1290,20 +1640,29 @@ export const SupportPage: React.FC = () => {
 // ======================== 7. SUBSCRIPTION MANAGEMENT ========================
 export const SubscriptionPlanPage: React.FC = () => {
   const { navigate } = useRouter();
-  const { token, selectedPlanId } = useAuth();
-  const [activePlanId, setActivePlanId] = useState('growth-monthly');
+  const { token } = useAuth();
+  const [activePlanId, setActivePlanId] = useState<string | null>(null);
   const [subscription, setSubscription] = useState<any>(null);
+  const [promoSummary, setPromoSummary] = useState<any>(null);
   const [cancelLoading, setCancelLoading] = useState(false);
   const [cancelMessage, setCancelMessage] = useState<string | null>(null);
+  const [dataUnavailable, setDataUnavailable] = useState(false);
 
   const fetchSubscriptionData = () => {
     if (!token) return;
+    setDataUnavailable(false);
     fetch(apiUrl('/api/dashboard/data'), { headers: { Authorization: `Bearer ${token}` } })
-      .then(res => res.json())
-      .then(d => {
-        if (d.planId) setActivePlanId(d.planId);
-        if (d.subscription) setSubscription(d.subscription);
-      });
+      .then(async res => {
+        const d = await res.json().catch(() => ({}));
+        if (res.status === 503 || d.dataUnavailable) {
+          setDataUnavailable(true);
+          return;
+        }
+        setActivePlanId(d.planId || null);
+        setSubscription(d.subscription || null);
+        setPromoSummary(d.promotionalProgram || null);
+      })
+      .catch(() => setDataUnavailable(true));
   };
 
   useEffect(() => {
@@ -1311,7 +1670,6 @@ export const SubscriptionPlanPage: React.FC = () => {
   }, [token]);
 
   const handleCancelAutoRenew = async () => {
-    if (!confirm('Are you sure you want to cancel automatic renewal? Your benefits will remain active until the end of your current cycle.')) return;
     setCancelLoading(true);
     try {
       const res = await fetch(apiUrl('/api/razorpay/cancel-subscription'), {
@@ -1328,223 +1686,220 @@ export const SubscriptionPlanPage: React.FC = () => {
     }
   };
 
-  const currentPlan = PRICING_PLANS.find(p => p.id === activePlanId) || PRICING_PLANS[0];
-  const featuresList = subscription?.features && subscription.features.length > 0
-    ? subscription.features
-    : currentPlan.features;
+  const currentPlan = activePlanId ? PRICING_PLANS.find(p => p.id === activePlanId) || null : null;
+  const isPromo = Boolean(subscription?.isPromotional || subscription?.planId === 'promo-first-10-monthly');
+  const featuresList =
+    subscription?.features && subscription.features.length > 0
+      ? subscription.features
+      : isPromo
+        ? [
+            '1-month complimentary access (First 10 Approved Artists)',
+            'Up to 5 release submissions during complimentary window',
+            'Zero automatic charges or recurring renewal',
+            '100% artist royalty retention on verified DSP statements'
+          ]
+        : currentPlan?.features || [];
 
   const isPlanActive = subscription?.status === 'active';
   const isPlanExpired = subscription?.status === 'expired';
-  const isPlanPending = subscription?.status === 'pending';
   const isPlanRevoked = subscription?.status === 'revoked';
 
   return (
     <DashboardLayout title="Subscription Plan">
       <div className="space-y-8">
         <div>
-          <h1 className="text-2xl font-bold text-white font-display">My Plan / Subscription</h1>
-          <p className="text-xs text-slate-400">Manage your digital music distribution entitlement, billing cycles, and platform allowances</p>
+          <h1 className="text-2xl font-bold text-white font-display">My Plan & Subscription</h1>
+          <p className="text-xs text-slate-400">
+            Verified subscription entitlement, First-10 complimentary access tracking, and plan upgrades
+          </p>
         </div>
 
-        {/* PRIMARY CARD: MY PLAN / SUBSCRIPTION DETAILS */}
-        <div className="p-7 rounded-3xl bg-[#090e1a] border border-blue-500/30 shadow-2xl relative overflow-hidden">
-          {/* Subtle Glow */}
-          <div className="absolute top-0 right-0 w-96 h-96 bg-blue-600/5 blur-3xl pointer-events-none rounded-full" />
+        {dataUnavailable && (
+          <div className="p-4 rounded-xl bg-rose-950/60 border border-rose-800 text-xs text-rose-200">
+            Data Unavailable: Unable to load subscription ledger from server.
+          </div>
+        )}
 
-          {/* Header Row: Plan Name, Status, and Renew/Upgrade */}
+        {/* PRIMARY CARD: REAL SUBSCRIPTION OR EXPLICIT EMPTY STATE */}
+        <div className="p-7 rounded-2xl bg-[#090e1a] border border-slate-800 space-y-6">
           <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-6 pb-6 border-b border-slate-800">
             <div className="space-y-2">
-              <div className="flex flex-wrap items-center gap-3">
-                {/* 3. Plan Status Badge */}
-                {isPlanActive ? (
-                  <span className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full text-xs font-bold bg-emerald-950/80 text-emerald-400 border border-emerald-500/50 shadow-sm shadow-emerald-950">
-                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
-                    <span>Active Subscription</span>
-                  </span>
-                ) : isPlanExpired ? (
-                  <span className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full text-xs font-bold bg-rose-950/80 text-rose-400 border border-rose-500/50">
-                    <AlertCircle className="w-3.5 h-3.5" />
-                    <span>Expired</span>
-                  </span>
-                ) : isPlanRevoked ? (
-                  <span className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full text-xs font-bold bg-rose-950/80 text-rose-400 border border-rose-500/50">
-                    <ShieldAlert className="w-3.5 h-3.5" />
-                    <span>Revoked by Admin</span>
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full text-xs font-bold bg-amber-950/80 text-amber-400 border border-amber-500/50">
-                    <Clock className="w-3.5 h-3.5" />
-                    <span>Pending Verification</span>
-                  </span>
-                )}
-
-                {/* 4. Payment Status Badge */}
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-medium bg-slate-900 border border-slate-700/80 text-cyan-300">
-                  <CreditCard className="w-3.5 h-3.5 text-cyan-400" />
-                  <span>Payment: {subscription?.paymentStatus || 'Verified & Paid'}</span>
+              <div className="flex flex-wrap items-center gap-3 text-xs">
+                <span
+                  className={`font-semibold ${
+                    isPlanActive
+                      ? 'text-emerald-400'
+                      : isPlanExpired || isPlanRevoked
+                        ? 'text-rose-400'
+                        : 'text-slate-400'
+                  }`}
+                >
+                  {isPlanActive
+                    ? 'Active Entitlement'
+                    : isPlanExpired
+                      ? 'Expired'
+                      : isPlanRevoked
+                        ? 'Revoked by Admin'
+                        : subscription
+                          ? 'Pending Payment'
+                          : 'No Active Subscription'}
                 </span>
+                <span className="text-slate-600">·</span>
+                <span className="font-mono text-cyan-300">
+                  {subscription?.paymentStatus || (subscription ? 'Pending' : 'No Payment Recorded')}
+                </span>
+                {isPromo && subscription?.promoSlotNumber && (
+                  <>
+                    <span className="text-slate-600">·</span>
+                    <span className="font-mono text-emerald-300">
+                      Slot #{subscription.promoSlotNumber} / 10
+                    </span>
+                  </>
+                )}
               </div>
 
-              {/* 1. Current Plan Name */}
-              <h2 className="text-3xl font-bold text-white font-display pt-1">
-                {subscription?.planName || currentPlan.name}
+              <h2 className="text-2xl sm:text-3xl font-bold text-white font-display pt-1">
+                {subscription?.planName || currentPlan?.name || 'No Active Plan'}
               </h2>
 
               <p className="text-xs text-slate-300 max-w-xl">
-                {currentPlan.description}
+                {isPromo
+                  ? 'Awarded automatically upon Super Admin approval of your Artist Profile. Zero payment charged and zero auto-renewal after 1 month.'
+                  : currentPlan?.description ||
+                    (promoSummary && promoSummary.slotsRemaining > 0
+                      ? `Complete and get your Artist Profile approved to qualify for 1 month free (${promoSummary.slotsRemaining}/10 slots left), or choose any distribution package below.`
+                      : 'Select any distribution plan below after your Artist Profile is approved.')}
               </p>
             </div>
 
-            {/* Actions: Upgrade / Renew Plan Button */}
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 shrink-0">
               <button
                 onClick={() => navigate('/pricing')}
-                className="px-5 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-semibold shadow-lg shadow-blue-600/25 flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-[0.98]"
+                className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-2 whitespace-nowrap"
               >
                 <Sparkles className="w-4 h-4" />
-                <span>Upgrade / Renew Plan</span>
+                <span>{subscription ? 'Upgrade / Renew Plan' : 'Choose a Plan'}</span>
               </button>
 
-              {currentPlan.type !== 'one-time' && subscription?.autoRenew && (
+              {currentPlan?.type !== 'one-time' && subscription?.autoRenew && !isPromo && (
                 <button
                   onClick={handleCancelAutoRenew}
                   disabled={cancelLoading}
-                  className="px-4 py-3 bg-slate-900 hover:bg-slate-800 text-rose-400 border border-rose-900/60 rounded-xl text-xs font-semibold transition-colors disabled:opacity-50"
+                  className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-rose-400 border border-rose-900/60 rounded-xl text-xs font-semibold disabled:opacity-50 whitespace-nowrap"
                 >
                   {cancelLoading ? 'Cancelling...' : 'Cancel Auto-Renewal'}
                 </button>
               )}
-
-              <button
-                onClick={() => navigate('/dashboard/wallet-transactions')}
-                className="px-4 py-3 bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white rounded-xl text-xs font-semibold border border-slate-800 transition-colors"
-              >
-                Payment Ledger
-              </button>
             </div>
           </div>
 
-          {/* Key Metrics Grid (Price, Purchase Date, Expiry Date, Days Remaining, Transaction ID) */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 pt-6">
-            {/* 2. Plan Price */}
-            <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800/80">
-              <span className="text-[11px] font-mono uppercase tracking-wider text-slate-400">Plan Price</span>
-              <div className="text-xl font-bold font-mono text-white mt-1">
-                ₹{subscription?.planPrice || currentPlan.priceINR}
-                <span className="text-xs text-slate-400 font-normal ml-1">
-                  {currentPlan.billingText}
-                </span>
-              </div>
-            </div>
-
-            {/* 5. Purchase Date */}
-            <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800/80">
-              <span className="text-[11px] font-mono uppercase tracking-wider text-slate-400">Purchase Date</span>
-              <div className="text-sm font-semibold font-mono text-slate-200 mt-2 flex items-center gap-1.5">
-                <Calendar className="w-3.5 h-3.5 text-blue-400 shrink-0" />
-                <span>{subscription?.startedAt || 'Active Cycle'}</span>
-              </div>
-            </div>
-
-            {/* 6. Expiry Date */}
-            <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800/80">
-              <span className="text-[11px] font-mono uppercase tracking-wider text-slate-400">Expiry Date</span>
-              <div className="text-sm font-semibold font-mono text-slate-200 mt-2 flex items-center gap-1.5">
-                <Clock className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
-                <span>{subscription?.expiresAt || (subscription?.renewsAt ? subscription.renewsAt : 'Never (Lifetime)')}</span>
-              </div>
-            </div>
-
-            {/* 7. Days Remaining */}
-            <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800/80">
-              <span className="text-[11px] font-mono uppercase tracking-wider text-slate-400">Days Remaining</span>
-              <div className="text-xl font-bold font-mono mt-1 flex items-baseline gap-1">
-                <span className={isPlanExpired ? 'text-rose-400' : 'text-emerald-400'}>
-                  {subscription?.daysRemaining ?? (isPlanExpired ? 0 : 30)}
-                </span>
-                <span className="text-xs text-slate-400 font-normal">days left</span>
-              </div>
-            </div>
-
-            {/* 8. Transaction ID */}
-            <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800/80 col-span-2 md:col-span-1">
-              <span className="text-[11px] font-mono uppercase tracking-wider text-slate-400">Transaction ID</span>
-              <div className="text-xs font-mono text-cyan-300 mt-2 truncate font-semibold" title={subscription?.transactionId || subscription?.paymentId || subscription?.orderId}>
-                {subscription?.transactionId || subscription?.paymentId || subscription?.orderId || 'Verified Record'}
-              </div>
-            </div>
-          </div>
-
-          {/* 9. Plan Features Checklist */}
-          <div className="mt-6 pt-6 border-t border-slate-800/80">
-            <h3 className="text-xs font-mono uppercase tracking-widest text-slate-400 mb-3 flex items-center gap-2">
-              <ShieldCheck className="w-4 h-4 text-blue-400" />
-              <span>Included Plan Entitlements & Features</span>
-            </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-              {featuresList.map((feat: string, i: number) => (
-                <div key={i} className="flex items-start gap-2.5 p-2.5 rounded-xl bg-slate-900/40 border border-slate-800/50">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                  <span className="text-xs text-slate-200">{feat}</span>
+          {subscription ? (
+            <>
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800/80">
+                  <span className="text-[11px] font-mono uppercase tracking-wider text-slate-400">Plan Cost</span>
+                  <div className="text-xl font-bold font-mono text-white mt-1 tabular-nums">
+                    ₹{Number(subscription.amount ?? currentPlan?.priceINR ?? 0)}
+                    <span className="text-xs text-slate-400 font-normal ml-1">
+                      {isPromo ? 'COMPED' : currentPlan?.billingText || ''}
+                    </span>
+                  </div>
                 </div>
-              ))}
+
+                <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800/80">
+                  <span className="text-[11px] font-mono uppercase tracking-wider text-slate-400">Activated Date</span>
+                  <div className="text-sm font-semibold font-mono text-slate-200 mt-2 tabular-nums">
+                    {subscription.startedAt ? String(subscription.startedAt).split('T')[0] : '—'}
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800/80">
+                  <span className="text-[11px] font-mono uppercase tracking-wider text-slate-400">Expiry Date</span>
+                  <div className="text-sm font-semibold font-mono text-slate-200 mt-2 tabular-nums">
+                    {subscription.expiresAt ? String(subscription.expiresAt).split('T')[0] : subscription.renewsAt || '—'}
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800/80">
+                  <span className="text-[11px] font-mono uppercase tracking-wider text-slate-400">Days Remaining</span>
+                  <div className="text-xl font-bold font-mono mt-1 tabular-nums">
+                    <span className={isPlanExpired || isPlanRevoked ? 'text-rose-400' : 'text-emerald-400'}>
+                      {isPlanExpired || isPlanRevoked ? 0 : subscription.daysRemaining ?? 0}
+                    </span>
+                    <span className="text-xs text-slate-400 font-normal ml-1">days</span>
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800/80 col-span-2 md:col-span-1">
+                  <span className="text-[11px] font-mono uppercase tracking-wider text-slate-400">Reference</span>
+                  <div className="text-xs font-mono text-cyan-300 mt-2 truncate font-semibold">
+                    {isPromo ? `PROMO-SLOT-${subscription.promoSlotNumber || '10'}` : subscription.paymentId || subscription.orderId || 'Unpaid'}
+                  </div>
+                </div>
+              </div>
+
+              {featuresList.length > 0 && (
+                <div className="pt-4 border-t border-slate-800/80">
+                  <h3 className="text-xs font-mono uppercase tracking-widest text-slate-400 mb-3">Included Entitlements</h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {featuresList.map((feat: string, i: number) => (
+                      <div key={i} className="flex items-start gap-2.5 p-2.5 rounded-xl bg-slate-900/40 border border-slate-800/50">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                        <span className="text-xs text-slate-200">{feat}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="p-5 rounded-xl bg-slate-950/60 border border-slate-800/80 text-xs text-slate-300">
+              No active or paid subscription record exists on your account yet. Complete your Artist Profile for First-10 complimentary review or purchase any plan below.
             </div>
-          </div>
+          )}
 
           {cancelMessage && (
-            <div className="mt-4 p-3 bg-blue-950/40 border border-blue-800/60 rounded-xl text-xs text-blue-300">
+            <div className="p-3 bg-blue-950/40 border border-blue-800/60 rounded-xl text-xs text-blue-300">
               {cancelMessage}
             </div>
           )}
         </div>
 
-        {/* Catalog Grid for Plan Switching */}
+        {/* Paid Plan Catalog Grid */}
         <div>
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h2 className="text-lg font-bold text-white font-display">
-                All Available Rudraatma Music Plans
-              </h2>
-              <p className="text-xs text-slate-400">Switch or renew directly into any one-time or recurring package</p>
+              <h2 className="text-lg font-bold text-white font-display">Distribution Plans</h2>
+              <p className="text-xs text-slate-400">Purchase or upgrade any paid distribution package</p>
             </div>
             <button
               onClick={() => navigate('/pricing')}
               className="text-xs font-semibold text-blue-400 hover:text-blue-300 flex items-center gap-1"
             >
-              <span>View Full Matrix</span>
+              <span>Full Matrix</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {PRICING_PLANS.map((p) => {
-              const isCurrent = p.id === activePlanId;
+              const isCurrent = isPlanActive && p.id === activePlanId;
               return (
                 <div
                   key={p.id}
                   className={`p-5 rounded-2xl bg-[#090e1a] border flex flex-col justify-between transition-all ${
-                    isCurrent ? 'border-emerald-500/80 shadow-lg shadow-emerald-500/10' : 'border-slate-800 hover:border-slate-700'
+                    isCurrent ? 'border-emerald-500/80' : 'border-slate-800 hover:border-slate-700'
                   }`}
                 >
                   <div>
                     <div className="flex justify-between items-center">
                       <span className="text-[11px] font-mono uppercase text-slate-400">{p.type}</span>
-                      {isCurrent && (
-                        <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950 px-2 py-0.5 rounded border border-emerald-800 flex items-center gap-1">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                          <span>Active Plan</span>
-                        </span>
-                      )}
+                      {isCurrent && <span className="text-[11px] font-bold text-emerald-400">Active</span>}
                     </div>
                     <h3 className="font-bold text-white mt-1">{p.name}</h3>
-                    <div className="text-xl font-bold font-mono text-white mt-2">
+                    <div className="text-xl font-bold font-mono text-white mt-2 tabular-nums">
                       ₹{p.priceINR} <span className="text-xs text-slate-400 font-normal">{p.billingText}</span>
                     </div>
-                    {p.annualCalculation && (
-                      <div className="text-[10px] font-mono text-emerald-400 mt-0.5">
-                        {p.annualCalculation}
-                      </div>
-                    )}
                     <div className="text-xs text-blue-300 mt-1 font-medium">{p.allowance}</div>
                   </div>
 
@@ -1556,9 +1911,9 @@ export const SubscriptionPlanPage: React.FC = () => {
                     ) : (
                       <button
                         onClick={() => navigate(`/checkout?planId=${p.id}`)}
-                        className="w-full py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-500 rounded-lg transition-colors shadow-sm"
+                        className="w-full py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-500 rounded-lg transition-colors"
                       >
-                        {p.type === 'one-time' ? `Purchase for ₹${p.priceINR}` : `Switch to ${p.name}`}
+                        {p.type === 'one-time' ? `Purchase for ₹${p.priceINR}` : `Choose ${p.name}`}
                       </button>
                     )}
                   </div>
@@ -1576,12 +1931,21 @@ export const SubscriptionPlanPage: React.FC = () => {
 export const WalletTransactionsPage: React.FC = () => {
   const { token } = useAuth();
   const [transactions, setTransactions] = useState<TransactionItem[]>([]);
+  const [dataUnavailable, setDataUnavailable] = useState(false);
 
   useEffect(() => {
     if (!token) return;
+    setDataUnavailable(false);
     fetch(apiUrl('/api/dashboard/data'), { headers: { Authorization: `Bearer ${token}` } })
-      .then(res => res.json())
-      .then(d => setTransactions(d.transactions || []));
+      .then(async res => {
+        const d = await res.json().catch(() => ({}));
+        if (res.status === 503 || d.dataUnavailable) {
+          setDataUnavailable(true);
+          return;
+        }
+        setTransactions(d.transactions || []);
+      })
+      .catch(() => setDataUnavailable(true));
   }, [token]);
 
   return (
@@ -1592,9 +1956,17 @@ export const WalletTransactionsPage: React.FC = () => {
           <p className="text-xs text-slate-400">Auditable accounting records of royalty credits, debits, and verified payouts</p>
         </div>
 
+        {dataUnavailable && (
+          <div className="p-4 rounded-xl bg-rose-950/60 border border-rose-800 text-xs text-rose-200">
+            Data Unavailable: Unable to load financial transaction records from database.
+          </div>
+        )}
+
         <div className="p-6 rounded-2xl bg-[#090e1a] border border-slate-800">
           {transactions.length === 0 ? (
-            <div className="py-10 text-center text-xs text-slate-400">No transactions recorded yet.</div>
+            <div className="py-10 text-center text-xs text-slate-400">
+              {dataUnavailable ? 'Data Unavailable.' : 'No financial transactions yet.'}
+            </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
