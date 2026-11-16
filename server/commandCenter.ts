@@ -12,7 +12,8 @@ import {
   dbGetPayoutRequests,
   dbSavePayoutRequest,
   dbGetLedgerEntries,
-  dbSaveLedgerEntry
+  dbSaveLedgerEntry,
+  dbGetEmailQueueStats
 } from './db';
 import { getSafeEmailDiagnostics } from './appsScriptEmail';
 import { checkFfmpegBinary, checkChromaprintBinary } from './ai/audioEngine';
@@ -37,7 +38,12 @@ const adminSessionMetaMap = new Map<string, AdminSessionMeta>();
 const inMemoryApprovals = new Map<string, any>();
 const inMemoryAiUsageLogs: any[] = [];
 
-export function recordAdminSessionMeta(token: string, user: { email: string; role: string }, ip?: string) {
+export function recordAdminSessionMeta(
+  token: string,
+  user: { email: string; role: string },
+  ip?: string,
+  twoFactorVerified = false
+) {
   const now = new Date().toISOString();
   adminSessionMetaMap.set(token, {
     tokenPrefix: token.slice(0, 12) + '...',
@@ -46,7 +52,7 @@ export function recordAdminSessionMeta(token: string, user: { email: string; rol
     loginAt: now,
     lastActivityAt: now,
     ip: ip || 'unknown',
-    twoFactorVerified: false
+    twoFactorVerified
   });
 }
 
@@ -1100,9 +1106,11 @@ export function registerCommandCenterRoutes(
     'RELEASE_REJECT',
     'RELEASE_REQUEST_CORRECTIONS',
     'RELEASE_PUBLISH',
+    'RELEASE_METADATA_UPDATE',
     'USER_SUSPEND',
     'USER_TERMINATE',
     'USER_REACTIVATE',
+    'SUBSCRIPTION_MANAGE',
     'PAYMENT_REFUND',
     'SETTINGS_UPDATE',
     'AI_SETTINGS_UPDATE',
@@ -1265,6 +1273,87 @@ export function registerCommandCenterRoutes(
         deps.notifications.set(notif.id, notif);
         await deps.dbSaveNotification({ ...notif, userId: ownerUserId });
         executionResult = { releaseId: foundRelease.id, status: foundRelease.status };
+      } else if (actionType === 'RELEASE_METADATA_UPDATE') {
+        let foundRelease: any = null;
+        let ownerUserId: string | null = null;
+        let ownerDash: any = null;
+        for (const [uid, dash] of deps.userDashboards.entries()) {
+          const m = (dash.releases || []).find((r: any) => r.id === targetId);
+          if (m) {
+            foundRelease = m;
+            ownerUserId = uid;
+            ownerDash = dash;
+            break;
+          }
+        }
+        if (!foundRelease || !ownerUserId || !ownerDash) throw new Error('Target release not found.');
+        const fields = payload.metadata || {};
+        const allowedKeys = ['title', 'artist', 'label', 'type', 'upc', 'language', 'primaryGenre', 'releaseDate'];
+        const changed: string[] = [];
+        for (const key of allowedKeys) {
+          if (typeof fields[key] === 'string' && fields[key].trim() !== '' && fields[key] !== foundRelease[key]) {
+            changed.push(`${key}: "${foundRelease[key] || ''}" -> "${fields[key].trim()}"`);
+            foundRelease[key] = fields[key].trim();
+          }
+        }
+        if (typeof fields.primaryIsrc === 'string' && Array.isArray(foundRelease.tracks) && foundRelease.tracks[0]) {
+          if (fields.primaryIsrc.trim() !== (foundRelease.tracks[0].isrc || '')) {
+            changed.push(`primaryIsrc: "${foundRelease.tracks[0].isrc || ''}" -> "${fields.primaryIsrc.trim()}"`);
+            foundRelease.tracks[0].isrc = fields.primaryIsrc.trim();
+          }
+        }
+        foundRelease.metadataHistory = foundRelease.metadataHistory || [];
+        foundRelease.metadataHistory.unshift({
+          id: 'mhist_' + Date.now(),
+          actor: admin.email,
+          changes: changed,
+          reason: String(payload.reason || 'Metadata correction approved by Super Admin').trim(),
+          timestamp: new Date().toISOString()
+        });
+        foundRelease.lastReviewedAt = new Date().toISOString();
+        await deps.dbSaveDashboard(ownerUserId, ownerDash);
+        executionResult = { releaseId: foundRelease.id, updatedFields: changed };
+      } else if (actionType === 'SUBSCRIPTION_MANAGE') {
+        const target = Array.from(deps.users.values()).find(u => u.id === targetId || u.email === targetId);
+        if (!target) throw new Error('Target artist account not found.');
+        const operation = String(payload.operation || 'activate');
+        const dash = deps.getUserDashboard(target.id);
+        const now = new Date();
+        if (operation === 'cancel') {
+          if (!dash.subscription) throw new Error('User has no subscription record to cancel.');
+          dash.subscription.status = 'cancelled';
+          dash.subscription.autoRenew = false;
+          dash.subscription.cancelledAt = now.toISOString();
+          dash.subscription.revocationReason = String(payload.reason || 'Cancelled by Super Admin').trim();
+          dash.subscription.daysRemaining = 0;
+          await deps.dbSaveDashboard(target.id, dash);
+          executionResult = { userId: target.id, status: 'cancelled' };
+        } else {
+          const plan = deps.PLAN_CATALOG[String(payload.planId || '')];
+          if (!plan) throw new Error('Valid target planId from PLAN_CATALOG is required.');
+          const days = Number(payload.validityDays) || plan.validityDays || (plan.type === 'monthly' ? 30 : 365);
+          const expiresAtIso = new Date(now.getTime() + days * 86400000).toISOString();
+          dash.planId = plan.id;
+          target.selectedPlanId = plan.id;
+          dash.subscription = {
+            status: 'active',
+            planId: plan.id,
+            planName: plan.name,
+            billingFrequency: plan.type,
+            startedAt: now.toISOString(),
+            expiresAt: expiresAtIso,
+            renewsAt: expiresAtIso.split('T')[0],
+            daysRemaining: days,
+            orderId: dash.subscription?.orderId || `admin_sub_${Date.now().toString().slice(-6)}`,
+            paymentId: dash.subscription?.paymentId || `ADMIN_${operation.toUpperCase()}_${Date.now().toString().slice(-5)}`,
+            amount: plan.priceINR,
+            autoRenew: false,
+            paymentStatus: `Owner-Approved (${operation})`
+          };
+          await deps.dbUpsertUser(target);
+          await deps.dbSaveDashboard(target.id, dash);
+          executionResult = { userId: target.id, operation, planId: plan.id, expiresAt: expiresAtIso };
+        }
       } else if (actionType === 'USER_SUSPEND' || actionType === 'USER_TERMINATE' || actionType === 'USER_REACTIVATE') {
         const target = Array.from(deps.users.values()).find(u => u.id === targetId || u.email === targetId);
         if (!target) throw new Error('Target user not found.');
@@ -1299,10 +1388,43 @@ export function registerCommandCenterRoutes(
         if (typeof updates.maintenanceMode === 'boolean') {
           deps.platformSettings.maintenanceMode = updates.maintenanceMode;
         }
+        if (typeof updates.maintenanceMessage === 'string') {
+          deps.platformSettings.maintenanceMessage = updates.maintenanceMessage;
+        }
+        if (typeof updates.websiteAnnouncement === 'string') {
+          deps.platformSettings.websiteAnnouncement = updates.websiteAnnouncement;
+        }
+        if (typeof updates.homepageBannerTitle === 'string') {
+          deps.platformSettings.homepageBannerTitle = updates.homepageBannerTitle;
+        }
+        if (typeof updates.homepageBannerSubtitle === 'string') {
+          deps.platformSettings.homepageBannerSubtitle = updates.homepageBannerSubtitle;
+        }
+        if (typeof updates.seoTitle === 'string') {
+          deps.platformSettings.seoTitle = updates.seoTitle;
+        }
+        if (typeof updates.seoDescription === 'string') {
+          deps.platformSettings.seoDescription = updates.seoDescription;
+        }
+        if (typeof updates.adsEnabled === 'boolean') {
+          deps.platformSettings.adsEnabled = updates.adsEnabled;
+        }
+        if (typeof updates.analyticsId === 'string') {
+          deps.platformSettings.analyticsId = updates.analyticsId.trim();
+        }
+        if (typeof updates.adminTwoFactorEnabled === 'boolean') {
+          deps.platformSettings.adminTwoFactorEnabled = updates.adminTwoFactorEnabled;
+        }
         if (updates.paymentSettings && typeof updates.paymentSettings === 'object') {
           deps.platformSettings.paymentSettings = {
             ...deps.platformSettings.paymentSettings,
             ...updates.paymentSettings
+          };
+        }
+        if (updates.platformPolicies && typeof updates.platformPolicies === 'object') {
+          deps.platformSettings.platformPolicies = {
+            ...deps.platformSettings.platformPolicies,
+            ...updates.platformPolicies
           };
         }
         if (updates.services && typeof updates.services === 'object') {
@@ -1310,6 +1432,26 @@ export function registerCommandCenterRoutes(
             ...deps.platformSettings.services,
             ...updates.services
           };
+        }
+        if (Array.isArray(payload.planUpdates)) {
+          for (const upd of payload.planUpdates) {
+            if (upd.id && deps.PLAN_CATALOG[upd.id]) {
+              if (typeof upd.priceINR === 'number' && upd.priceINR >= 0) {
+                deps.PLAN_CATALOG[upd.id].priceINR = upd.priceINR;
+                deps.PLAN_CATALOG[upd.id].amountPaise = Math.round(upd.priceINR * 100);
+              }
+              if (typeof upd.name === 'string' && upd.name.trim()) {
+                deps.PLAN_CATALOG[upd.id].name = upd.name.trim();
+              }
+              if (typeof upd.enabled === 'boolean') {
+                deps.PLAN_CATALOG[upd.id].enabled = upd.enabled;
+              }
+              if (typeof upd.validityDays === 'number' && upd.validityDays > 0) {
+                deps.PLAN_CATALOG[upd.id].validityDays = upd.validityDays;
+              }
+            }
+          }
+          await deps.dbSavePlatformSetting('plan_catalog_overrides', deps.PLAN_CATALOG);
         }
         await deps.dbSavePlatformSetting('platform_settings', deps.platformSettings);
         executionResult = { updated: true };
@@ -1729,5 +1871,491 @@ Message: ${String(body || '').slice(0, 1000)}`
     }
 
     return res.json(report);
+  });
+
+  // 8. Global Search across Users, Releases, Transactions, Support Tickets & Admin Modules
+  app.get('/api/super-admin/search', requireSuperAdmin, async (req, res) => {
+    const q = String(req.query.q || '').trim().toLowerCase();
+    const includeTest = req.query.includeTest === 'true';
+    if (!q || q.length < 2) {
+      return res.json({ users: [], releases: [], orders: [], tickets: [], actions: [] });
+    }
+
+    const snapshot = await loadLivePlatformSnapshot(deps, aiCtx, { includeTest });
+    if (!snapshot.ok) {
+      return res.status(503).json({ dataUnavailable: true, error: snapshot.error });
+    }
+
+    const matchedUsers = snapshot.users
+      .filter(
+        u =>
+          String(u.fullName || '').toLowerCase().includes(q) ||
+          String(u.email || '').toLowerCase().includes(q) ||
+          String(u.id || '').toLowerCase().includes(q)
+      )
+      .slice(0, 6)
+      .map(u => ({
+        id: u.id,
+        fullName: u.fullName,
+        email: u.email,
+        accountStatus: u.accountStatus || 'active',
+        kycStatus: u.kyc?.status || 'Not Submitted'
+      }));
+
+    const matchedReleases = snapshot.releases
+      .filter(
+        r =>
+          String(r.title || '').toLowerCase().includes(q) ||
+          String(r.artist || '').toLowerCase().includes(q) ||
+          String(r.upc || '').toLowerCase().includes(q) ||
+          String(r.id || '').toLowerCase().includes(q)
+      )
+      .slice(0, 6)
+      .map(r => ({
+        id: r.id,
+        title: r.title,
+        artist: r.artist,
+        status: r.status,
+        upc: r.upc || ''
+      }));
+
+    const matchedOrders = snapshot.orders
+      .filter(
+        o =>
+          String(o.orderId || '').toLowerCase().includes(q) ||
+          String(o.paymentId || '').toLowerCase().includes(q) ||
+          String(o.userEmail || '').toLowerCase().includes(q) ||
+          String(o.planName || '').toLowerCase().includes(q)
+      )
+      .slice(0, 6)
+      .map(o => ({
+        orderId: o.orderId,
+        paymentId: o.paymentId || '',
+        userEmail: o.userEmail,
+        planName: o.planName,
+        amount: o.amount,
+        status: o.status
+      }));
+
+    const allTickets: any[] = [];
+    for (const u of snapshot.users) {
+      const dash = snapshot.dashboards.get(u.id);
+      for (const t of dash?.tickets || []) {
+        if (
+          String(t.subject || '').toLowerCase().includes(q) ||
+          String(t.id || '').toLowerCase().includes(q) ||
+          String(u.email || '').toLowerCase().includes(q)
+        ) {
+          allTickets.push({
+            id: t.id,
+            subject: t.subject,
+            userEmail: u.email,
+            status: t.status || 'Open',
+            sourceType: 'ticket'
+          });
+        }
+      }
+    }
+    for (const c of snapshot.contactSubmissions) {
+      if (
+        String(c.subject || c.name || '').toLowerCase().includes(q) ||
+        String(c.email || '').toLowerCase().includes(q)
+      ) {
+        allTickets.push({
+          id: c.id,
+          subject: c.subject || c.name,
+          userEmail: c.email,
+          status: c.status || 'Open',
+          sourceType: 'contact'
+        });
+      }
+    }
+
+    const adminActionsCatalog = [
+      { id: 'overview', label: 'Overview / Executive Dashboard', tab: 'overview', submenu: 'executive-overview' },
+      { id: 'users', label: 'User Management & Accounts', tab: 'users', submenu: 'all-users' },
+      { id: 'kyc', label: 'KYC Verification Queue', tab: 'users', submenu: 'kyc-pending' },
+      { id: 'releases', label: 'Music & Release Management', tab: 'releases', submenu: 'all-releases' },
+      { id: 'finance', label: 'Royalty & Finance / Payouts', tab: 'finance', submenu: 'financial-overview' },
+      { id: 'subscriptions', label: 'Subscription & Plan Management', tab: 'subscriptions', submenu: 'active-subscriptions' },
+      { id: 'ai-center', label: 'AI Control Centre & Copyright QC', tab: 'ai-center', submenu: 'ai-system-analysis' },
+      { id: 'distribution', label: 'Distribution & DSP Integrations', tab: 'distribution', submenu: 'delivery-overview' },
+      { id: 'support', label: 'Support Tickets & Complaints', tab: 'support', submenu: 'open-tickets' },
+      { id: 'website', label: 'Website Banners, SEO & Maintenance', tab: 'website', submenu: 'announcements' },
+      { id: 'security', label: 'Security, RBAC & Audit Logs', tab: 'security', submenu: 'rbac-matrix' },
+      { id: 'health', label: 'System Health, DB & Server Logs', tab: 'health', submenu: 'infra-overview' },
+      { id: 'settings', label: 'Settings, Email & Backups', tab: 'settings', submenu: 'general-settings' }
+    ].filter(a => a.label.toLowerCase().includes(q) || a.tab.includes(q));
+
+    return res.json({
+      users: matchedUsers,
+      releases: matchedReleases,
+      orders: matchedOrders,
+      tickets: allTickets.slice(0, 6),
+      actions: adminActionsCatalog.slice(0, 6)
+    });
+  });
+
+  // 9. Super Admin Notification Centre (Real Aggregated System & Operational Events)
+  app.get('/api/super-admin/notifications', requireSuperAdmin, async (_req, res) => {
+    const snapshot = await loadLivePlatformSnapshot(deps, aiCtx, { includeTest: false });
+    if (!snapshot.ok) {
+      return res.status(503).json({ dataUnavailable: true, error: snapshot.error, items: [] });
+    }
+
+    const items: Array<{
+      id: string;
+      severity: 'critical' | 'high' | 'medium' | 'info';
+      title: string;
+      detail: string;
+      tab: string;
+      submenu?: string;
+      timestamp: string;
+    }> = [];
+
+    const pendingKyc = snapshot.users.filter(u => u.kyc?.status === 'Pending');
+    if (pendingKyc.length > 0) {
+      items.push({
+        id: 'n_kyc_pending',
+        severity: 'high',
+        title: `${pendingKyc.length} KYC Verification(s) Pending`,
+        detail: `${pendingKyc[0].fullName} (${pendingKyc[0].email}) awaiting compliance approval`,
+        tab: 'users',
+        submenu: 'kyc-pending',
+        timestamp: pendingKyc[0].kyc?.submittedAt || pendingKyc[0].createdAt
+      });
+    }
+
+    const pendingProfiles = snapshot.users.filter(u => u.artistProfileStatus === 'Under Review');
+    if (pendingProfiles.length > 0) {
+      items.push({
+        id: 'n_prof_pending',
+        severity: 'medium',
+        title: `${pendingProfiles.length} Artist Onboarding Profile(s) Ready`,
+        detail: `${pendingProfiles[0].email} submitted profile for verification`,
+        tab: 'users',
+        submenu: 'artist-pending',
+        timestamp: pendingProfiles[0].createdAt
+      });
+    }
+
+    const pendingReleases = snapshot.releases.filter(r => r.status === 'Submitted' || r.status === 'Under Review');
+    if (pendingReleases.length > 0) {
+      items.push({
+        id: 'n_rel_pending',
+        severity: 'high',
+        title: `${pendingReleases.length} Release(s) Awaiting Review`,
+        detail: `Latest: "${pendingReleases[0].title}" by ${pendingReleases[0].artist}`,
+        tab: 'releases',
+        submenu: 'pending-releases',
+        timestamp: pendingReleases[0].submittedAt || new Date().toISOString()
+      });
+    }
+
+    const pendingApprovals = Array.from(inMemoryApprovals.values()).filter(
+      a => a.status === 'PENDING_OWNER_APPROVAL'
+    );
+    if (pendingApprovals.length > 0) {
+      items.push({
+        id: 'n_apr_pending',
+        severity: 'critical',
+        title: `${pendingApprovals.length} Action(s) Need Owner Approval`,
+        detail: pendingApprovals[0].title,
+        tab: 'security',
+        submenu: 'owner-approvals',
+        timestamp: pendingApprovals[0].createdAt
+      });
+    }
+
+    const failedOrders = snapshot.failedOrders;
+    if (failedOrders.length > 0) {
+      items.push({
+        id: 'n_orders_failed',
+        severity: 'medium',
+        title: `${failedOrders.length} Failed / Cancelled Payment Order(s)`,
+        detail: `Latest: ${failedOrders[0].userEmail} (${failedOrders[0].orderId})`,
+        tab: 'finance',
+        submenu: 'payments-ledger',
+        timestamp: failedOrders[0].createdAt
+      });
+    }
+
+    const openTicketsCount =
+      Array.from(snapshot.dashboards.values()).reduce(
+        (acc, d: any) => acc + (d.tickets || []).filter((t: any) => (t.status || 'Open') !== 'Resolved').length,
+        0
+      ) + snapshot.contactSubmissions.filter(c => (c.status || 'Open') !== 'Resolved').length;
+    if (openTicketsCount > 0) {
+      items.push({
+        id: 'n_tickets_open',
+        severity: 'medium',
+        title: `${openTicketsCount} Open Support Ticket(s)`,
+        detail: 'Artist & public contact queue requires desk response',
+        tab: 'support',
+        submenu: 'open-tickets',
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    const emailQueueStats = await dbGetEmailQueueStats().catch(() => ({ queued: 0, sent: 0, failed: 0, recent: [] }));
+    if (emailQueueStats.failed > 0) {
+      items.push({
+        id: 'n_email_failed',
+        severity: 'high',
+        title: `${emailQueueStats.failed} Failed Email Delivery Job(s)`,
+        detail: 'Check Apps Script configuration in System Health / Settings',
+        tab: 'health',
+        submenu: 'email-status',
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    const recentFailures = snapshot.auditLogs
+      .filter(l => l.action === 'SUPER_ADMIN_LOGIN_FAILED')
+      .slice(-3);
+    if (recentFailures.length > 0) {
+      items.push({
+        id: 'n_sec_failed_login',
+        severity: 'critical',
+        title: `${recentFailures.length} Recent Failed Executive Login(s)`,
+        detail: recentFailures[recentFailures.length - 1].details,
+        tab: 'security',
+        submenu: 'failed-logins',
+        timestamp: recentFailures[recentFailures.length - 1].timestamp
+      });
+    }
+
+    return res.json({ items, unreadCount: items.length });
+  });
+
+  // 10. System Health & Infrastructure Diagnostics
+  app.get('/api/super-admin/system-health', requireSuperAdmin, async (_req, res) => {
+    const emailDiag = getSafeEmailDiagnostics();
+    const [ffmpeg, chromaprint, emailQueue] = await Promise.all([
+      checkFfmpegBinary(),
+      checkChromaprintBinary(),
+      dbGetEmailQueueStats().catch(() => ({ queued: 0, sent: 0, failed: 0, recent: [] }))
+    ]);
+
+    let dbHealthy = !isDatabaseEnabled();
+    let dbLatencyMs: number | null = null;
+    let dbPoolStats: { totalCount: number; idleCount: number; waitingCount: number } | null = null;
+    let dbError: string | null = null;
+
+    if (isDatabaseEnabled()) {
+      const pool = getDbPool();
+      const t0 = Date.now();
+      try {
+        await pool.query('SELECT 1');
+        dbLatencyMs = Date.now() - t0;
+        dbHealthy = true;
+        dbPoolStats = {
+          totalCount: pool.totalCount,
+          idleCount: pool.idleCount,
+          waitingCount: pool.waitingCount
+        };
+      } catch (err: any) {
+        dbHealthy = false;
+        dbError = err?.message || 'Database ping failed';
+      }
+    }
+
+    const mem = process.memoryUsage();
+    const recentLogs = deps.getRecentServerLogs ? deps.getRecentServerLogs() : [];
+
+    return res.json({
+      checkedAt: new Date().toISOString(),
+      runtime: {
+        nodeVersion: process.version,
+        platform: process.platform,
+        uptimeSeconds: Math.round(process.uptime()),
+        environment: process.env.NODE_ENV || 'development',
+        memoryMB: {
+          rss: Math.round(mem.rss / 1024 / 1024),
+          heapUsed: Math.round(mem.heapUsed / 1024 / 1024),
+          heapTotal: Math.round(mem.heapTotal / 1024 / 1024)
+        }
+      },
+      database: {
+        mode: isDatabaseEnabled() ? 'postgresql' : 'in-memory-fallback',
+        healthy: dbHealthy,
+        latencyMs: dbLatencyMs,
+        pool: dbPoolStats,
+        error: dbError
+      },
+      storage: {
+        provider: getStorageProviderName(),
+        s3Configured: Boolean(process.env.S3_BUCKET && process.env.S3_ACCESS_KEY_ID && process.env.S3_SECRET_ACCESS_KEY)
+      },
+      email: {
+        ...emailDiag,
+        queue: emailQueue
+      },
+      integrations: {
+        razorpayConfigured: Boolean(process.env.RAZORPAY_KEY_ID?.trim() && process.env.RAZORPAY_KEY_SECRET?.trim()),
+        razorpayWebhookConfigured: Boolean(process.env.RAZORPAY_WEBHOOK_SECRET?.trim()),
+        geminiConfigured: Boolean(process.env.GEMINI_API_KEY?.trim()),
+        geminiModel: aiCtx.aiSettings?.activeModel || 'gemini-4-hydrogen',
+        acoustIdConfigured: Boolean(process.env.ACOUSTID_CLIENT_KEY?.trim()),
+        ffmpeg,
+        chromaprint
+      },
+      serverLogs: recentLogs
+    });
+  });
+
+  // 11. Distribution & DSP Delivery Control (Honest status — never fabricates external DSP deliveries)
+  app.get('/api/super-admin/distribution', requireSuperAdmin, async (req, res) => {
+    const includeTest = req.query.includeTest === 'true';
+    const snapshot = await loadLivePlatformSnapshot(deps, aiCtx, { includeTest });
+    if (!snapshot.ok) {
+      return res.status(503).json({ dataUnavailable: true, error: snapshot.error });
+    }
+
+    // Check whether any real external DSP aggregator API keys exist in server env
+    const aggregatorConfigured = Boolean(process.env.DSP_AGGREGATOR_API_KEY?.trim());
+    const youtubeOacConfigured = Boolean(process.env.YOUTUBE_CMS_API_KEY?.trim());
+
+    const providers = [
+      {
+        id: 'spotify',
+        name: 'Spotify for Artists Feed',
+        type: 'DSP Aggregator',
+        status: aggregatorConfigured ? 'Connected' : 'Not Configured',
+        details: aggregatorConfigured
+          ? 'External aggregator API credentials active'
+          : 'Requires DSP_AGGREGATOR_API_KEY (DDEX / partner feed) on backend; internal catalog workflow operational.'
+      },
+      {
+        id: 'apple',
+        name: 'Apple Music / iTunes Producer',
+        type: 'DSP Aggregator',
+        status: aggregatorConfigured ? 'Connected' : 'Not Configured',
+        details: aggregatorConfigured
+          ? 'External aggregator API credentials active'
+          : 'Requires Apple / DDEX delivery partner credentials on backend.'
+      },
+      {
+        id: 'youtube-oac',
+        name: 'YouTube Official Artist Channel (OAC)',
+        type: 'Channel Linking',
+        status: youtubeOacConfigured ? 'Connected' : 'Not Configured',
+        details: youtubeOacConfigured
+          ? 'YouTube CMS partner API configured'
+          : 'Requires YOUTUBE_CMS_API_KEY partner channel integration.'
+      },
+      {
+        id: 'youtube-cid',
+        name: 'YouTube Content ID',
+        type: 'Rights & Monetization',
+        status: youtubeOacConfigured ? 'Connected' : 'Not Configured',
+        details: youtubeOacConfigured
+          ? 'Content ID claims feed enabled'
+          : 'Platform toggle enabled for intake metadata; external Content ID CMS feed not wired.'
+      },
+      {
+        id: 'meta-tiktok',
+        name: 'Meta / Instagram & TikTok Library',
+        type: 'Short-Form DSP',
+        status: aggregatorConfigured ? 'Connected' : 'Not Configured',
+        details: aggregatorConfigured
+          ? 'Short-form audio fingerprinting active'
+          : 'Requires external DDEX partner feed credentials.'
+      }
+    ];
+
+    const deliveries = snapshot.releases.map(r => ({
+      releaseId: r.id,
+      title: r.title,
+      artist: r.artist,
+      ownerEmail: r.ownerEmail,
+      upc: r.upc || 'Not Assigned',
+      tracksCount: Array.isArray(r.tracks) ? r.tracks.length : 1,
+      releaseStatus: r.status,
+      deliveryState:
+        r.status === 'Rejected' || r.status === 'Action Required'
+          ? 'Held / Action Required'
+          : r.status === 'Live' || r.status === 'Published' || r.status === 'Delivered'
+            ? aggregatorConfigured
+              ? 'DSP Dispatched'
+              : 'Internal Catalog Live (External DSP Feed Not Configured)'
+            : r.status === 'Approved'
+              ? 'Ready for Delivery Queue'
+              : 'In Review Queue',
+      submittedAt: r.submittedAt || r.releaseDate || '',
+      lastUpdatedAt: r.lastReviewedAt || r.publishedAt || r.submittedAt || ''
+    }));
+
+    return res.json({
+      aggregatorConfigured,
+      providers,
+      deliveries,
+      summary: {
+        totalReleases: deliveries.length,
+        readyForQueue: deliveries.filter(d => d.releaseStatus === 'Approved').length,
+        catalogLive: deliveries.filter(d => d.releaseStatus === 'Live' || d.releaseStatus === 'Published' || d.releaseStatus === 'Delivered').length,
+        heldOrRejected: deliveries.filter(d => d.releaseStatus === 'Rejected' || d.releaseStatus === 'Action Required').length
+      }
+    });
+  });
+
+  // 12. Security Overview, Active Executive Sessions, Failed Logins & RBAC Matrix
+  app.get('/api/super-admin/security-overview', requireSuperAdmin, async (_req, res) => {
+    const activeAdminSessions = Array.from(adminSessionMetaMap.entries())
+      .filter(([token]) => deps.sessions.has(token))
+      .map(([, meta]) => meta);
+
+    const failedLogins: Array<{ key: string; count: number; locked: boolean; lockedUntil: string | null; lastAttempt: string }> = [];
+    const now = Date.now();
+    for (const [key, data] of deps.failedLoginAttempts.entries()) {
+      failedLogins.push({
+        key,
+        count: data.count,
+        locked: data.lockedUntil > now,
+        lockedUntil: data.lockedUntil > now ? new Date(data.lockedUntil).toISOString() : null,
+        lastAttempt: new Date(data.lastAttempt).toISOString()
+      });
+    }
+
+    const rbacMatrix = [
+      {
+        role: 'SUPER_ADMIN',
+        scope: 'Full Platform Governance',
+        dashboardAccess: true,
+        kycReview: true,
+        releaseReview: true,
+        financeAndRefunds: true,
+        settingsAndWebsite: true,
+        ownerApprovalRequiredForSensitive: true
+      },
+      {
+        role: 'admin',
+        scope: 'Standard Catalog Admin',
+        dashboardAccess: false,
+        kycReview: false,
+        releaseReview: true,
+        financeAndRefunds: false,
+        settingsAndWebsite: false,
+        ownerApprovalRequiredForSensitive: true
+      },
+      {
+        role: 'artist / label_manager',
+        scope: 'Creator Workspace Only',
+        dashboardAccess: false,
+        kycReview: false,
+        releaseReview: false,
+        financeAndRefunds: false,
+        settingsAndWebsite: false,
+        ownerApprovalRequiredForSensitive: false
+      }
+    ];
+
+    return res.json({
+      activeAdminSessions,
+      totalActiveUserSessions: deps.sessions.size,
+      twoFactorEnabled: Boolean(deps.platformSettings.adminTwoFactorEnabled && deps.platformSettings.adminTotpPinHash),
+      failedLogins: failedLogins.sort((a, b) => new Date(b.lastAttempt).getTime() - new Date(a.lastAttempt).getTime()),
+      rbacMatrix
+    });
   });
 }

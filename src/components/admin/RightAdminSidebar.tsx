@@ -1,14 +1,16 @@
 import React, { useState } from 'react';
 import {
   LayoutDashboard,
-  Sparkles,
-  Sliders,
   Users,
-  ShieldCheck,
   Disc3,
-  CreditCard,
+  IndianRupee,
+  Crown,
+  Sparkles,
+  Globe,
   MessageSquare,
-  FileSearch,
+  LayoutTemplate,
+  ShieldCheck,
+  Activity,
   Settings,
   Shield,
   LogOut,
@@ -36,16 +38,18 @@ interface Props {
 }
 
 const ICONS: Record<AdminTab, React.ReactNode> = {
-  overview: <LayoutDashboard className="w-4 h-4" />,
-  'ai-review': <Sparkles className="w-4 h-4" />,
-  'ai-settings': <Sliders className="w-4 h-4" />,
-  users: <Users className="w-4 h-4" />,
-  kyc: <ShieldCheck className="w-4 h-4" />,
-  releases: <Disc3 className="w-4 h-4" />,
-  payments: <CreditCard className="w-4 h-4" />,
-  support: <MessageSquare className="w-4 h-4" />,
-  audit: <FileSearch className="w-4 h-4" />,
-  settings: <Settings className="w-4 h-4" />
+  overview: <LayoutDashboard className="w-4 h-4 shrink-0" />,
+  users: <Users className="w-4 h-4 shrink-0" />,
+  releases: <Disc3 className="w-4 h-4 shrink-0" />,
+  finance: <IndianRupee className="w-4 h-4 shrink-0" />,
+  subscriptions: <Crown className="w-4 h-4 shrink-0" />,
+  'ai-center': <Sparkles className="w-4 h-4 shrink-0" />,
+  distribution: <Globe className="w-4 h-4 shrink-0" />,
+  support: <MessageSquare className="w-4 h-4 shrink-0" />,
+  website: <LayoutTemplate className="w-4 h-4 shrink-0" />,
+  security: <ShieldCheck className="w-4 h-4 shrink-0" />,
+  health: <Activity className="w-4 h-4 shrink-0" />,
+  settings: <Settings className="w-4 h-4 shrink-0" />
 };
 
 export const RightAdminSidebar: React.FC<Props> = ({
@@ -93,10 +97,10 @@ export const RightAdminSidebar: React.FC<Props> = ({
               </div>
               <div className="min-w-0">
                 <p className="text-xs font-bold tracking-wider text-[#f0cf65] uppercase truncate">
-                  Rudraatma
+                  RUDRAATMA Music
                 </p>
                 <p className="text-[10px] font-mono text-slate-400 truncate">
-                  COMMAND CENTER 2.0
+                  Distribution · Devotion · Beyond
                 </p>
               </div>
             </div>
@@ -105,7 +109,7 @@ export const RightAdminSidebar: React.FC<Props> = ({
           {isDrawer ? (
             <button
               onClick={onCloseMobile}
-              className="p-1.5 rounded-lg bg-[#121318] border border-slate-800 text-slate-300 hover:text-white"
+              className="p-2 rounded-lg bg-[#121318] border border-slate-800 text-slate-300 hover:text-white transition-colors"
               aria-label="Close navigation drawer"
             >
               <X className="w-4 h-4" />
@@ -113,7 +117,7 @@ export const RightAdminSidebar: React.FC<Props> = ({
           ) : (
             <button
               onClick={onToggleCollapse}
-              className="p-1.5 rounded-lg bg-[#121318] border border-slate-800 hover:border-[#d4af37]/50 text-[#f0cf65] mx-auto"
+              className="p-2 rounded-lg bg-[#121318] border border-slate-800 hover:border-[#d4af37]/50 text-[#f0cf65] mx-auto transition-colors"
               title={isMini ? 'Expand Navigation' : 'Collapse Navigation'}
               aria-label={isMini ? 'Expand Navigation' : 'Collapse Navigation'}
             >
@@ -122,7 +126,7 @@ export const RightAdminSidebar: React.FC<Props> = ({
           )}
         </div>
 
-        {/* Nav Tree */}
+        {/* 12-Module Nav Tree */}
         <nav className="flex-1 overflow-y-auto p-2.5 space-y-1">
           {ADMIN_NAV_CATEGORIES.map(cat => {
             const isTabActive = activeTab === cat.id;
@@ -133,7 +137,7 @@ export const RightAdminSidebar: React.FC<Props> = ({
                 <button
                   onClick={() => toggleGroup(cat.id, cat.submenus[0].id)}
                   title={cat.label}
-                  className={`w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-xl text-xs font-medium transition ${
+                  className={`w-full min-h-[40px] flex items-center justify-between gap-2 px-2.5 py-2 rounded-xl text-xs font-medium transition-colors duration-150 ${
                     isTabActive
                       ? 'bg-[#d4af37]/15 text-[#f0cf65] border border-[#d4af37]/40'
                       : 'text-slate-300 hover:text-white hover:bg-[#121318] border border-transparent'
@@ -164,7 +168,7 @@ export const RightAdminSidebar: React.FC<Props> = ({
                             onSelect(cat.id, sub.id);
                             if (isDrawer) onCloseMobile();
                           }}
-                          className={`w-full text-left px-2.5 py-1.5 rounded-lg text-[11px] transition flex items-center justify-between ${
+                          className={`w-full text-left px-2.5 py-1.5 rounded-lg text-[11px] transition-colors duration-150 flex items-center justify-between ${
                             isSubActive
                               ? 'bg-[#d4af37]/10 text-[#f0cf65] font-semibold border border-[#d4af37]/30'
                               : 'text-slate-400 hover:text-slate-100 hover:bg-white/[0.03] border border-transparent'
@@ -190,7 +194,7 @@ export const RightAdminSidebar: React.FC<Props> = ({
                   onOpenSessionPanel();
                   if (isDrawer) onCloseMobile();
                 }}
-                className="w-full text-left p-2.5 rounded-xl bg-[#0b0c10] border border-slate-800 hover:border-[#d4af37]/40 transition space-y-1"
+                className="w-full text-left p-2.5 rounded-xl bg-[#0b0c10] border border-slate-800 hover:border-[#d4af37]/40 transition-colors space-y-1"
               >
                 <div className="flex items-center justify-between text-[10px] font-mono text-[#d4af37]">
                   <span className="inline-flex items-center gap-1 font-semibold">
@@ -202,12 +206,12 @@ export const RightAdminSidebar: React.FC<Props> = ({
                   {sessionInfo?.email || userEmail || 'SUPER_ADMIN'}
                 </p>
                 <p className="text-[10px] text-slate-500 font-mono truncate">
-                  Role: {sessionInfo?.role || 'SUPER_ADMIN'} · Session Details
+                  Role: {sessionInfo?.role || 'SUPER_ADMIN'} · Account & Settings
                 </p>
               </button>
               <button
                 onClick={onSignOut}
-                className="w-full py-2 px-3 rounded-xl bg-[#121318] hover:bg-red-950/50 border border-slate-800 hover:border-red-700/50 text-xs text-slate-300 hover:text-red-200 flex items-center justify-center gap-2 transition whitespace-nowrap"
+                className="w-full min-h-[40px] py-2 px-3 rounded-xl bg-[#121318] hover:bg-red-950/50 border border-slate-800 hover:border-red-700/50 text-xs text-slate-300 hover:text-red-200 flex items-center justify-center gap-2 transition-colors whitespace-nowrap"
               >
                 <LogOut className="w-3.5 h-3.5" />
                 Sign Out

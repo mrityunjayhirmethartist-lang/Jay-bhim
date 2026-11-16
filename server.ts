@@ -121,9 +121,9 @@ function isOriginAllowed(origin?: string): boolean {
   const cleanOrigin = origin.trim().replace(/\/+$/, '');
   if (
     configuredOrigins.includes(cleanOrigin) ||
-    cleanOrigin.endsWith('.netlify.app') ||
-    cleanOrigin.endsWith('.onrender.com') ||
-    cleanOrigin.endsWith('.run.app')
+    /^https:\/\/rudraatma[^.]*\.(netlify\.app|onrender\.com)$/i.test(cleanOrigin) ||
+    /^https:\/\/ais-(dev|pre)-[a-z0-9-]+\.[a-z0-9-]+\.run\.app$/i.test(cleanOrigin) ||
+    cleanOrigin === 'https://aistudio.google.com'
   ) {
     return true;
   }
@@ -157,18 +157,58 @@ const corsMiddleware = cors({
 app.use(corsMiddleware);
 app.options('*', corsMiddleware);
 
+export interface ServerLogEntry {
+  id: string;
+  level: 'warn' | 'error';
+  source: string;
+  method?: string;
+  path?: string;
+  statusCode?: number;
+  message: string;
+  timestamp: string;
+}
+
+const recentServerLogs: ServerLogEntry[] = [];
+function pushServerLog(entry: Omit<ServerLogEntry, 'id' | 'timestamp'>) {
+  recentServerLogs.unshift({
+    ...entry,
+    id: 'srv_' + Date.now() + '_' + crypto.randomBytes(2).toString('hex'),
+    timestamp: new Date().toISOString()
+  });
+  if (recentServerLogs.length > 200) recentServerLogs.length = 200;
+}
+
 // Production-safe request error diagnostic logger (never logs passwords, OTPs, tokens, or secrets)
 app.use((req, res, next) => {
-  if (req.path.startsWith('/api/auth/') || req.path.startsWith('/api/super-admin/')) {
-    const start = Date.now();
-    res.on('finish', () => {
-      if (res.statusCode >= 400) {
-        console.warn(
-          `[Auth Diagnostic] ${req.method} ${req.path} -> HTTP ${res.statusCode} (${Date.now() - start}ms) origin=${req.headers.origin || 'same-origin'}`
-        );
+  const start = Date.now();
+  res.on('finish', () => {
+    if (res.statusCode >= 500) {
+      pushServerLog({
+        level: 'error',
+        source: 'http-server',
+        method: req.method,
+        path: req.path,
+        statusCode: res.statusCode,
+        message: `HTTP ${res.statusCode} on ${req.method} ${req.path} (${Date.now() - start}ms)`
+      });
+    } else if (
+      (req.path.startsWith('/api/auth/') || req.path.startsWith('/api/super-admin/')) &&
+      res.statusCode >= 400
+    ) {
+      const msg = `[Auth Diagnostic] ${req.method} ${req.path} -> HTTP ${res.statusCode} (${Date.now() - start}ms) origin=${req.headers.origin || 'same-origin'}`;
+      console.warn(msg);
+      if (res.statusCode === 401 || res.statusCode === 403 || res.statusCode === 429) {
+        pushServerLog({
+          level: 'warn',
+          source: 'auth-guard',
+          method: req.method,
+          path: req.path,
+          statusCode: res.statusCode,
+          message: `Blocked ${req.method} ${req.path} with HTTP ${res.statusCode}`
+        });
       }
-    });
-  }
+    }
+  });
   next();
 });
 
@@ -178,6 +218,14 @@ app.use(express.json({
   }
 }));
 
+// Never publicly expose private KYC or copyright evidence directories in local static uploads
+app.use('/uploads', (req, res, next) => {
+  const norm = req.path.toLowerCase();
+  if (norm.startsWith('/kyc') || norm.startsWith('/evidence')) {
+    return res.status(403).json({ error: 'Direct public access to private documents is forbidden.' });
+  }
+  next();
+});
 if (process.env.NODE_ENV !== 'production') {
   app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 }
@@ -2194,7 +2242,7 @@ app.get('/api/admin/plans', requireAdmin, (_req, res) => {
 });
 
 // Admin Create or Edit Plan
-app.post('/api/admin/plans', requireAdmin, (req, res) => {
+app.post('/api/admin/plans', requireAdmin, async (req, res) => {
   const user = getAuthenticatedUser(req)!;
   const { id, name, type, priceINR, billingText, allowance, description, isSubscription, validityDays, enabled, features } = req.body;
 
@@ -2225,8 +2273,9 @@ app.post('/api/admin/plans', requireAdmin, (req, res) => {
   };
 
   PLAN_CATALOG[planId] = plan;
+  await dbSavePlatformSetting('plan_catalog_overrides', PLAN_CATALOG);
 
-  auditLogs.push({
+  const planAudit: AuditLog = {
     id: 'aud_' + Date.now(),
     actorEmail: user.email,
     actorRole: user.role,
@@ -2235,21 +2284,24 @@ app.post('/api/admin/plans', requireAdmin, (req, res) => {
     entityId: planId,
     details: `${isExisting ? 'Updated' : 'Created'} plan "${plan.name}" at ₹${plan.priceINR} (${plan.type}, ${plan.validityDays} days validity). Status: ${plan.enabled ? 'Enabled' : 'Disabled'}.`,
     timestamp: new Date().toISOString()
-  });
+  };
+  auditLogs.push(planAudit);
+  await dbSaveAuditLog(planAudit);
 
   return res.json({ success: true, plan });
 });
 
 // Admin Toggle Plan Enabled/Disabled
-app.post('/api/admin/plans/:id/toggle', requireAdmin, (req, res) => {
+app.post('/api/admin/plans/:id/toggle', requireAdmin, async (req, res) => {
   const user = getAuthenticatedUser(req)!;
   const planId = req.params.id;
   const plan = PLAN_CATALOG[planId];
   if (!plan) return res.status(404).json({ error: 'Plan not found.' });
 
   plan.enabled = !plan.enabled;
+  await dbSavePlatformSetting('plan_catalog_overrides', PLAN_CATALOG);
 
-  auditLogs.push({
+  const toggleAudit: AuditLog = {
     id: 'aud_' + Date.now(),
     actorEmail: user.email,
     actorRole: user.role,
@@ -2258,7 +2310,9 @@ app.post('/api/admin/plans/:id/toggle', requireAdmin, (req, res) => {
     entityId: planId,
     details: `Toggled plan "${plan.name}" to ${plan.enabled ? 'Enabled (Active in Catalog)' : 'Disabled (Hidden from Catalog)'}.`,
     timestamp: new Date().toISOString()
-  });
+  };
+  auditLogs.push(toggleAudit);
+  await dbSaveAuditLog(toggleAudit);
 
   return res.json({ success: true, plan });
 });
@@ -2441,6 +2495,7 @@ async function createRazorpayOrderOnGateway(params: {
 }): Promise<{ success: boolean; orderId: string; isReal: boolean; error?: string }> {
   const keyId = process.env.RAZORPAY_KEY_ID?.trim();
   const keySecret = process.env.RAZORPAY_KEY_SECRET?.trim();
+  const isProd = process.env.NODE_ENV === 'production';
 
   // If real test or live keys are configured
   if (keyId && keySecret && (keyId.startsWith('rzp_test_') || keyId.startsWith('rzp_live_')) && keySecret.length > 5) {
@@ -2464,29 +2519,33 @@ async function createRazorpayOrderOnGateway(params: {
       if (response.ok && data.id) {
         return { success: true, orderId: data.id, isReal: true };
       } else {
-        console.warn('[Razorpay API Gateway Notice]:', data.error?.description || data);
-        const simOrderId = `order_sim_${Date.now().toString().slice(-8)}_${crypto.randomBytes(3).toString('hex')}`;
-        return {
-          success: true,
-          orderId: simOrderId,
-          isReal: false,
-          error: data.error?.description || 'Gateway returned non-200. Using test sandbox order.'
-        };
+        const msg = data.error?.description || `Razorpay API returned HTTP ${response.status}.`;
+        console.warn('[Razorpay API Gateway Error]:', msg);
+        return { success: false, orderId: '', isReal: false, error: msg };
       }
     } catch (err: any) {
       console.error('[Razorpay Network Error]:', err.message);
-      const simOrderId = `order_sim_${Date.now().toString().slice(-8)}_${crypto.randomBytes(3).toString('hex')}`;
-      return { success: true, orderId: simOrderId, isReal: false, error: err.message };
+      return { success: false, orderId: '', isReal: false, error: err.message };
     }
   }
 
-  // Graceful test sandbox mode if keys are not yet configured in environment
+  if (isProd) {
+    return {
+      success: false,
+      orderId: '',
+      isReal: false,
+      error: 'Payment gateway is not configured for live checkout (RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET missing).'
+    };
+  }
+
+  // Development-only sandbox order when keys are absent
   const testOrderId = `order_test_${Date.now().toString().slice(-8)}_${crypto.randomBytes(4).toString('hex')}`;
   return { success: true, orderId: testOrderId, isReal: false };
 }
 
 function verifyRazorpayPaymentSignature(orderId: string, paymentId: string, signature: string): boolean {
   const keySecret = process.env.RAZORPAY_KEY_SECRET?.trim();
+  const isProd = process.env.NODE_ENV === 'production';
   if (keySecret && !orderId.startsWith('order_test_') && !orderId.startsWith('order_sim_')) {
     const text = `${orderId}|${paymentId}`;
     const generated = crypto.createHmac('sha256', keySecret).update(text).digest('hex');
@@ -2496,8 +2555,8 @@ function verifyRazorpayPaymentSignature(orderId: string, paymentId: string, sign
       return false;
     }
   }
-  // If order was simulated in test mode, accept valid test signatures
-  if (orderId.startsWith('order_test_') || orderId.startsWith('order_sim_')) {
+  // Never accept simulated order prefixes in production
+  if (!isProd && !keySecret && orderId.startsWith('order_test_')) {
     return true;
   }
   return false;
@@ -2564,6 +2623,12 @@ app.post('/api/razorpay/create-order', (req, res) => {
       planType: plan.type
     }
   }).then(async orderRes => {
+    if (!orderRes.success || !orderRes.orderId) {
+      return res.status(502).json({
+        error: orderRes.error || 'Failed to create payment order on gateway.'
+      });
+    }
+
     const orderRecord: RazorpayOrderRecord = {
       orderId: orderRes.orderId,
       userId: user.id,
@@ -2627,7 +2692,12 @@ app.post('/api/razorpay/verify-payment', async (req, res) => {
     return res.status(403).json({ error: 'Unauthorized: order belongs to another artist workspace.' });
   }
 
-  const plan = PLAN_CATALOG[planId || order.planId];
+  // Prevent plan-substitution attack: strictly enforce the server-locked order.planId
+  if (planId && planId !== order.planId) {
+    return res.status(400).json({ error: 'Plan mismatch detected during payment verification.' });
+  }
+
+  const plan = PLAN_CATALOG[order.planId];
   if (!plan) {
     return res.status(400).json({ error: 'Plan mismatch during payment reconciliation.' });
   }
@@ -2743,6 +2813,9 @@ app.post('/api/razorpay/record-failure', async (req, res) => {
   const { orderId, errorReason, paymentId } = req.body;
   const order = razorpayOrders.get(orderId);
   if (order) {
+    if (order.userId !== user.id && user.role !== 'SUPER_ADMIN') {
+      return res.status(403).json({ error: 'Unauthorized: order belongs to another user.' });
+    }
     order.status = 'failed';
     order.failureReason = errorReason || 'Customer bank authorization rejected';
     if (paymentId) order.paymentId = paymentId;
@@ -2772,9 +2845,14 @@ app.post('/api/razorpay/record-cancellation', async (req, res) => {
 
   const { orderId } = req.body;
   const order = razorpayOrders.get(orderId);
-  if (order && order.status === 'created') {
-    order.status = 'cancelled';
-    await dbSaveOrder(order);
+  if (order) {
+    if (order.userId !== user.id && user.role !== 'SUPER_ADMIN') {
+      return res.status(403).json({ error: 'Unauthorized: order belongs to another user.' });
+    }
+    if (order.status === 'created') {
+      order.status = 'cancelled';
+      await dbSaveOrder(order);
+    }
   }
   return res.json({ success: true });
 });
@@ -2811,17 +2889,20 @@ app.post('/api/razorpay/cancel-subscription', async (req, res) => {
   });
 });
 
-// 7. Razorpay Webhook Handler (Raw body signature verification + Idempotent reconciliation)
+// 7. Razorpay Webhook Handler (Fail-closed HMAC signature verification + Idempotent reconciliation)
 app.post('/api/razorpay/webhook', async (req: any, res) => {
   const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET?.trim();
   const signature = req.headers['x-razorpay-signature'] as string;
 
-  if (webhookSecret) {
-    const isValid = verifyRazorpayWebhookSignature(req.rawBody, signature, webhookSecret);
-    if (!isValid) {
-      console.warn('[Razorpay Webhook Warning] Invalid webhook signature detected.');
-      return res.status(400).json({ error: 'Invalid webhook signature.' });
-    }
+  if (!webhookSecret) {
+    console.warn('[Razorpay Webhook Rejected] RAZORPAY_WEBHOOK_SECRET is not configured.');
+    return res.status(503).json({ error: 'Webhook verification secret is not configured on the server.' });
+  }
+
+  const isValid = verifyRazorpayWebhookSignature(req.rawBody, signature, webhookSecret);
+  if (!isValid) {
+    console.warn('[Razorpay Webhook Warning] Invalid webhook signature detected.');
+    return res.status(400).json({ error: 'Invalid webhook signature.' });
   }
 
   const eventPayload = req.body;
@@ -2854,6 +2935,8 @@ app.post('/api/razorpay/webhook', async (req: any, res) => {
             const dashboard = getUserDashboard(user.id);
             dashboard.planId = order.planId;
             const plan = PLAN_CATALOG[order.planId];
+            const validityDays = plan?.validityDays || (order.planType === 'monthly' ? 30 : 365);
+            const expiresAtIso = new Date(Date.now() + validityDays * 86400000).toISOString();
 
             dashboard.subscription = {
               status: 'active',
@@ -2861,11 +2944,10 @@ app.post('/api/razorpay/webhook', async (req: any, res) => {
               planName: order.planName,
               billingFrequency: order.planType,
               startedAt: new Date().toISOString(),
-              renewsAt: order.planType === 'monthly'
-                ? new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString().split('T')[0]
-                : order.planType === 'annual'
-                ? new Date(Date.now() + 365 * 24 * 3600 * 1000).toISOString().split('T')[0]
-                : undefined,
+              expiresAt: expiresAtIso,
+              renewsAt: expiresAtIso.split('T')[0],
+              daysRemaining: validityDays,
+              paymentStatus: 'Verified & Paid',
               orderId,
               paymentId,
               amount: order.amount,
@@ -2953,59 +3035,13 @@ app.get('/api/admin/payments', requireAdmin, (_req, res) => {
   });
 });
 
-// Legacy / Backward Compatible Checkout Endpoints
-app.post('/api/checkout/create-order', (req, res) => {
-  const { planId } = req.body;
-  const plan = PLAN_CATALOG[planId];
-  if (!plan) return res.status(400).json({ error: 'Invalid plan selected.' });
-
-  const orderId = 'ORD_' + Date.now().toString().slice(-8);
-  return res.json({
-    success: true,
-    orderId,
-    plan: {
-      id: plan.id,
-      name: plan.name,
-      type: plan.type,
-      basePrice: plan.priceINR,
-      taxRate: 0,
-      taxAmount: 0,
-      discount: 0,
-      finalAmount: plan.priceINR,
-      allowance: plan.allowance
-    }
-  });
+// Legacy unverified checkout endpoints disabled to prevent unverified plan activation
+app.post('/api/checkout/create-order', (_req, res) => {
+  return res.status(410).json({ error: 'Deprecated endpoint. Use /api/razorpay/create-order.' });
 });
 
-app.post('/api/checkout/verify-payment', (req, res) => {
-  const user = getAuthenticatedUser(req);
-  if (!user) return res.status(401).json({ error: 'Authentication required.' });
-
-  const { planId, orderId } = req.body;
-  const plan = PLAN_CATALOG[planId];
-  if (!plan) return res.status(400).json({ error: 'Invalid plan.' });
-
-  const dashboard = getUserDashboard(user.id);
-  dashboard.planId = planId;
-  user.selectedPlanId = planId;
-
-  const tx = {
-    id: 'tx-' + Date.now().toString().slice(-6),
-    type: 'Debit' as const,
-    amount: plan.priceINR,
-    description: `Plan Activation: ${plan.name} (${orderId || 'Direct'})`,
-    status: 'Completed' as const,
-    reference: 'PAY-' + Math.floor(100000 + Math.random() * 900000),
-    date: new Date().toISOString().split('T')[0]
-  };
-  dashboard.transactions.unshift(tx);
-
-  return res.json({
-    success: true,
-    message: `Plan ${plan.name} successfully activated!`,
-    planId,
-    transaction: tx
-  });
+app.post('/api/checkout/verify-payment', (_req, res) => {
+  return res.status(410).json({ error: 'Deprecated endpoint. Use /api/razorpay/verify-payment.' });
 });
 
 // ======================== DASHBOARD API ========================
@@ -3187,12 +3223,19 @@ app.post('/api/dashboard/upload/artwork', (req, res) => {
   });
 });
 
-// Stream / download persisted media from S3 or PostgreSQL
+// Stream / download persisted public release media (explicitly forbids private kyc/evidence files)
 app.get('/api/media/:fileId', async (req, res) => {
   try {
-    const media = await getStoredMedia(req.params.fileId);
+    const fileId = req.params.fileId;
+    if (fileId.startsWith('kyc-') || fileId.startsWith('evidence-')) {
+      return res.status(403).json({ error: 'Access forbidden to private compliance documents.' });
+    }
+    const media = await getStoredMedia(fileId);
     if (!media) {
       return res.status(404).json({ error: 'Media file not found.' });
+    }
+    if (media.category === 'kyc' || media.category === 'evidence') {
+      return res.status(403).json({ error: 'Access forbidden to private compliance documents.' });
     }
     res.setHeader('Content-Type', media.mimeType);
     res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(media.originalName)}"`);
@@ -4276,17 +4319,18 @@ app.get('/api/drive/files/:fileId/download', async (req, res) => {
   if (!conn) return res.status(400).json({ error: 'Google Drive is not connected.' });
 
   const { fileId } = req.params;
+  const safeFileId = encodeURIComponent(fileId);
 
   try {
     // 1. Get metadata for proper filename and mimeType
-    const metaRes = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?fields=id,name,mimeType,size`, {
+    const metaRes = await fetch(`https://www.googleapis.com/drive/v3/files/${safeFileId}?fields=id,name,mimeType,size`, {
       headers: { Authorization: `Bearer ${conn.accessToken}` }
     });
     if (!metaRes.ok) return res.status(metaRes.status).json({ error: 'File metadata not found' });
     const fileMeta = await metaRes.json();
 
     // 2. Fetch binary stream
-    const mediaRes = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+    const mediaRes = await fetch(`https://www.googleapis.com/drive/v3/files/${safeFileId}?alt=media`, {
       headers: { Authorization: `Bearer ${conn.accessToken}` }
     });
     if (!mediaRes.ok) return res.status(mediaRes.status).json({ error: 'Unable to download file content from Drive.' });
@@ -4313,15 +4357,16 @@ app.get('/api/drive/files/:fileId/stream', async (req, res) => {
   if (!conn) return res.status(400).json({ error: 'Google Drive is not connected.' });
 
   const { fileId } = req.params;
+  const safeFileId = encodeURIComponent(fileId);
 
   try {
-    const metaRes = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?fields=id,name,mimeType,size`, {
+    const metaRes = await fetch(`https://www.googleapis.com/drive/v3/files/${safeFileId}?fields=id,name,mimeType,size`, {
       headers: { Authorization: `Bearer ${conn.accessToken}` }
     });
     if (!metaRes.ok) return res.status(metaRes.status).json({ error: 'File metadata not found' });
     const fileMeta = await metaRes.json();
 
-    const mediaRes = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+    const mediaRes = await fetch(`https://www.googleapis.com/drive/v3/files/${safeFileId}?alt=media`, {
       headers: { Authorization: `Bearer ${conn.accessToken}` }
     });
     if (!mediaRes.ok) return res.status(mediaRes.status).json({ error: 'Unable to stream file' });
@@ -4645,11 +4690,11 @@ app.get('/api/sheets/:spreadsheetId', async (req, res) => {
   const conn = userDriveConnections.get(user.id);
   if (!conn) return res.status(400).json({ error: 'Google Sheets is not connected.' });
 
-  const { spreadsheetId } = req.params;
+  const safeSpreadsheetId = encodeURIComponent(req.params.spreadsheetId);
 
   try {
     const sheetRes = await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?fields=spreadsheetId,properties.title,sheets.properties(sheetId,title,gridProperties)`,
+      `https://sheets.googleapis.com/v4/spreadsheets/${safeSpreadsheetId}?fields=spreadsheetId,properties.title,sheets.properties(sheetId,title,gridProperties)`,
       {
         headers: { Authorization: `Bearer ${conn.accessToken}` }
       }
@@ -4664,7 +4709,7 @@ app.get('/api/sheets/:spreadsheetId', async (req, res) => {
     return res.json({
       spreadsheetId: data.spreadsheetId,
       title: data.properties?.title || 'Spreadsheet',
-      webViewLink: `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit`,
+      webViewLink: `https://docs.google.com/spreadsheets/d/${safeSpreadsheetId}/edit`,
       sheets: (data.sheets || []).map((s: any) => ({
         sheetId: s.properties.sheetId,
         title: s.properties.title,
@@ -4685,12 +4730,12 @@ app.get('/api/sheets/:spreadsheetId/values', async (req, res) => {
   const conn = userDriveConnections.get(user.id);
   if (!conn) return res.status(400).json({ error: 'Google Sheets is not connected.' });
 
-  const { spreadsheetId } = req.params;
+  const safeSpreadsheetId = encodeURIComponent(req.params.spreadsheetId);
   const range = (req.query.range as string) || 'A1:Z100';
 
   try {
     const valRes = await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}`,
+      `https://sheets.googleapis.com/v4/spreadsheets/${safeSpreadsheetId}/values/${encodeURIComponent(range)}`,
       {
         headers: { Authorization: `Bearer ${conn.accessToken}` }
       }
@@ -4720,13 +4765,13 @@ app.put('/api/sheets/:spreadsheetId/values', async (req, res) => {
   const conn = userDriveConnections.get(user.id);
   if (!conn) return res.status(400).json({ error: 'Google Sheets is not connected.' });
 
-  const { spreadsheetId } = req.params;
+  const safeSpreadsheetId = encodeURIComponent(req.params.spreadsheetId);
   const { range, values } = req.body;
   if (!range || !values) return res.status(400).json({ error: 'Range and values array are required.' });
 
   try {
     const updateRes = await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}?valueInputOption=USER_ENTERED`,
+      `https://sheets.googleapis.com/v4/spreadsheets/${safeSpreadsheetId}/values/${encodeURIComponent(range)}?valueInputOption=USER_ENTERED`,
       {
         method: 'PUT',
         headers: {
@@ -4764,13 +4809,13 @@ app.post('/api/sheets/:spreadsheetId/append', async (req, res) => {
   const conn = userDriveConnections.get(user.id);
   if (!conn) return res.status(400).json({ error: 'Google Sheets is not connected.' });
 
-  const { spreadsheetId } = req.params;
+  const safeSpreadsheetId = encodeURIComponent(req.params.spreadsheetId);
   const { sheetName, values } = req.body;
   if (!sheetName || !values) return res.status(400).json({ error: 'sheetName and values array are required.' });
 
   try {
     const appendRes = await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(sheetName)}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
+      `https://sheets.googleapis.com/v4/spreadsheets/${safeSpreadsheetId}/values/${encodeURIComponent(sheetName)}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
       {
         method: 'POST',
         headers: {
@@ -4804,12 +4849,12 @@ app.post('/api/sheets/:spreadsheetId/sync', async (req, res) => {
   const conn = userDriveConnections.get(user.id);
   if (!conn) return res.status(400).json({ error: 'Google Sheets is not connected.' });
 
-  const { spreadsheetId } = req.params;
+  const safeSpreadsheetId = encodeURIComponent(req.params.spreadsheetId);
 
   try {
     // 1. Fetch existing sheets to ensure required sheet tabs exist
     const sheetMetaRes = await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?fields=sheets.properties.title`,
+      `https://sheets.googleapis.com/v4/spreadsheets/${safeSpreadsheetId}?fields=sheets.properties.title`,
       {
         headers: { Authorization: `Bearer ${conn.accessToken}` }
       }
@@ -4832,7 +4877,7 @@ app.post('/api/sheets/:spreadsheetId/sync', async (req, res) => {
       }));
 
     if (addSheetRequests.length > 0) {
-      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`, {
+      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${safeSpreadsheetId}:batchUpdate`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${conn.accessToken}`,
@@ -4846,7 +4891,7 @@ app.post('/api/sheets/:spreadsheetId/sync', async (req, res) => {
     const dashboard = getUserDashboard(user.id);
     const batchData = generateUserSheetData(user, dashboard);
 
-    const updateRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchUpdate`, {
+    const updateRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${safeSpreadsheetId}/values:batchUpdate`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${conn.accessToken}`,
@@ -4881,12 +4926,13 @@ app.get('/api/sheets/:spreadsheetId/export', async (req, res) => {
   const conn = userDriveConnections.get(user.id);
   if (!conn) return res.status(400).json({ error: 'Google Sheets is not connected.' });
 
-  const { spreadsheetId } = req.params;
-  const format = (req.query.format as string) || 'xlsx';
+  const safeSpreadsheetId = encodeURIComponent(req.params.spreadsheetId);
+  const rawFormat = String(req.query.format || 'xlsx').toLowerCase();
+  const format = (['xlsx', 'csv', 'pdf'].includes(rawFormat) ? rawFormat : 'xlsx') as 'xlsx' | 'csv' | 'pdf';
 
   try {
     const metaRes = await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?fields=properties.title`,
+      `https://sheets.googleapis.com/v4/spreadsheets/${safeSpreadsheetId}?fields=properties.title`,
       {
         headers: { Authorization: `Bearer ${conn.accessToken}` }
       }
@@ -4897,7 +4943,7 @@ app.get('/api/sheets/:spreadsheetId/export', async (req, res) => {
       if (meta.properties?.title) title = meta.properties.title.replace(/[^a-zA-Z0-9_-]/g, '_');
     }
 
-    const exportUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=${format}`;
+    const exportUrl = `https://docs.google.com/spreadsheets/d/${safeSpreadsheetId}/export?format=${format}`;
     const exportRes = await fetch(exportUrl, {
       headers: { Authorization: `Bearer ${conn.accessToken}` }
     });
@@ -5253,7 +5299,8 @@ const superAdminDeps = {
   dbSaveOrder,
   dbSaveNotification,
   dbSavePlatformSetting,
-  localKycDir
+  localKycDir,
+  getRecentServerLogs: () => recentServerLogs.slice(0, 120)
 };
 registerSuperAdminRoutes(app, superAdminDeps);
 
@@ -5331,9 +5378,19 @@ async function startServer() {
   }
 
   // Global JSON error handler (prevents Express HTML error pages on CORS/API errors)
-  app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  app.use((err: any, req: express.Request, res: express.Response, _next: express.NextFunction) => {
     const status = Number(err?.status || err?.statusCode || 500);
     const message = err?.message || 'Internal server error.';
+    if (status >= 500) {
+      pushServerLog({
+        level: 'error',
+        source: 'express-middleware',
+        method: req.method,
+        path: req.path,
+        statusCode: status,
+        message
+      });
+    }
     if (res.headersSent) return;
     return res.status(status).json({ error: message });
   });

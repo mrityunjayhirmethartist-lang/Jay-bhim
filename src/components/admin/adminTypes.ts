@@ -1,13 +1,15 @@
 export type AdminTab =
   | 'overview'
-  | 'ai-review'
-  | 'ai-settings'
   | 'users'
-  | 'kyc'
   | 'releases'
-  | 'payments'
+  | 'finance'
+  | 'subscriptions'
+  | 'ai-center'
+  | 'distribution'
   | 'support'
-  | 'audit'
+  | 'website'
+  | 'security'
+  | 'health'
   | 'settings';
 
 export interface SubMenuItem {
@@ -25,40 +27,14 @@ export interface NavCategory {
 export const ADMIN_NAV_CATEGORIES: NavCategory[] = [
   {
     id: 'overview',
-    label: 'Overview & Analytics',
+    label: 'Overview / Dashboard',
     shortLabel: 'Overview',
     submenus: [
       { id: 'executive-overview', label: 'Executive Overview' },
-      { id: 'user-analytics', label: 'User Analytics' },
+      { id: 'user-analytics', label: 'User Growth Analytics' },
       { id: 'release-analytics', label: 'Release Analytics' },
       { id: 'revenue-analytics', label: 'Revenue Analytics' },
       { id: 'platform-activity', label: 'Platform Activity' }
-    ]
-  },
-  {
-    id: 'ai-review',
-    label: 'AI Review Center',
-    shortLabel: 'AI Review',
-    submenus: [
-      { id: 'pending-ai-reviews', label: 'Pending AI Reviews' },
-      { id: 'release-analysis', label: 'Release Analysis' },
-      { id: 'metadata-validation', label: 'Metadata Validation' },
-      { id: 'audio-quality-analysis', label: 'Audio Quality Analysis' },
-      { id: 'copyright-risk-analysis', label: 'Copyright Risk Analysis' },
-      { id: 'review-history', label: 'Review History' }
-    ]
-  },
-  {
-    id: 'ai-settings',
-    label: 'AI Configuration',
-    shortLabel: 'AI Config',
-    submenus: [
-      { id: 'ai-provider-settings', label: 'AI Provider Settings' },
-      { id: 'api-configuration', label: 'API Configuration' },
-      { id: 'model-selection', label: 'Model Selection' },
-      { id: 'agent-management', label: 'Agent Management' },
-      { id: 'ai-usage-costs', label: 'AI Usage & Costs' },
-      { id: 'ai-permissions', label: 'AI Permissions' }
     ]
   },
   {
@@ -66,99 +42,142 @@ export const ADMIN_NAV_CATEGORIES: NavCategory[] = [
     label: 'User Management',
     shortLabel: 'Users',
     submenus: [
-      { id: 'all-users', label: 'All Users' },
+      { id: 'all-users', label: 'All Registered Users' },
       { id: 'artist-onboarding', label: 'Artist Onboarding Queue' },
       { id: 'incomplete-profiles', label: 'Incomplete Profiles' },
       { id: 'pending-profile-reviews', label: 'Pending Profile Reviews' },
       { id: 'approved-artists', label: 'Approved Artists' },
-      { id: 'rejected-profiles', label: 'Rejected / Changes Requested' },
-      { id: 'artist-accounts', label: 'Artist Accounts' },
-      { id: 'new-registrations', label: 'New Registrations' },
+      { id: 'rejected-profiles', label: 'Rejected / Changes' },
+      { id: 'kyc-pending', label: 'KYC Pending Review' },
+      { id: 'kyc-approved', label: 'KYC Approved' },
+      { id: 'kyc-rejected', label: 'KYC Rejected / Re-upload' },
+      { id: 'kyc-history', label: 'All KYC Records' },
       { id: 'suspended-accounts', label: 'Suspended Accounts' },
-      { id: 'terminated-accounts', label: 'Terminated Accounts' },
-      { id: 'user-activity', label: 'User Activity' }
-    ]
-  },
-  {
-    id: 'kyc',
-    label: 'KYC Verification',
-    shortLabel: 'KYC',
-    submenus: [
-      { id: 'pending-verification', label: 'Pending Verification' },
-      { id: 'approved-kyc', label: 'Approved KYC' },
-      { id: 'rejected-kyc', label: 'Rejected KYC' },
-      { id: 'verification-history', label: 'Verification History' }
+      { id: 'terminated-accounts', label: 'Terminated Accounts' }
     ]
   },
   {
     id: 'releases',
-    label: 'Release Management',
+    label: 'Music & Release Management',
     shortLabel: 'Releases',
     submenus: [
-      { id: 'all-releases', label: 'All Releases' },
+      { id: 'all-releases', label: 'All Music Releases' },
       { id: 'pending-releases', label: 'Pending Releases' },
       { id: 'approved-releases', label: 'Approved Releases' },
+      { id: 'published-releases', label: 'Published / Live' },
       { id: 'rejected-releases', label: 'Rejected Releases' },
-      { id: 'published-releases', label: 'Published Releases' },
       { id: 'takedown-requests', label: 'Takedown Requests' },
-      { id: 'release-history', label: 'Release History' }
+      { id: 'release-history', label: 'Distribution History' }
     ]
   },
   {
-    id: 'payments',
-    label: 'Payments & Plans',
-    shortLabel: 'Payments',
+    id: 'finance',
+    label: 'Royalty & Finance',
+    shortLabel: 'Finance',
     submenus: [
-      { id: 'payment-overview', label: 'Payment Overview' },
-      { id: 'promotional-program', label: 'First 10 Free Artists Program' },
-      { id: 'financial-governance', label: 'Financial Governance & Statements' },
-      { id: 'transactions', label: 'Transactions' },
+      { id: 'financial-overview', label: 'Financial Overview' },
+      { id: 'financial-governance', label: 'Payouts & Governance' },
+      { id: 'transactions', label: 'Transactions Ledger' },
       { id: 'failed-payments', label: 'Failed Payments' },
-      { id: 'refund-requests', label: 'Refund Requests' },
-      { id: 'subscription-plans', label: 'Subscription Plans' },
+      { id: 'refund-requests', label: 'Refund Management' },
+      { id: 'revenue-reports', label: 'Financial Reports' }
+    ]
+  },
+  {
+    id: 'subscriptions',
+    label: 'Subscription Management',
+    shortLabel: 'Subscriptions',
+    submenus: [
       { id: 'active-subscriptions', label: 'Active Subscriptions' },
-      { id: 'revenue-reports', label: 'Revenue Reports' }
+      { id: 'expired-subscriptions', label: 'Expired / Cancelled' },
+      { id: 'pending-payments', label: 'Pending Plan Payments' },
+      { id: 'subscription-history', label: 'Subscription History' },
+      { id: 'promotional-program', label: 'First-10 Free Program' },
+      { id: 'plan-pricing', label: 'Plan Pricing & Config' }
+    ]
+  },
+  {
+    id: 'ai-center',
+    label: 'AI Control Centre',
+    shortLabel: 'AI Control',
+    submenus: [
+      { id: 'ai-system-analysis', label: 'System Analysis & Alerts' },
+      { id: 'pending-ai-reviews', label: 'Pending AI Reviews' },
+      { id: 'release-analysis', label: 'Release Analysis' },
+      { id: 'metadata-validation', label: 'Metadata & Audio QC' },
+      { id: 'copyright-risk-analysis', label: 'Copyright Risk Analysis' },
+      { id: 'ai-provider-settings', label: 'AI Engine & Models' },
+      { id: 'ai-usage-costs', label: 'AI Usage & Token Logs' },
+      { id: 'ai-permissions', label: 'AI Permissions' }
+    ]
+  },
+  {
+    id: 'distribution',
+    label: 'Distribution Management',
+    shortLabel: 'Distribution',
+    submenus: [
+      { id: 'delivery-overview', label: 'DSP Delivery Overview' },
+      { id: 'dsp-partners', label: 'DSP Integrations Matrix' },
+      { id: 'delivery-queue', label: 'Release Delivery Queue' },
+      { id: 'held-deliveries', label: 'Held & Failed Deliveries' }
     ]
   },
   {
     id: 'support',
-    label: 'Reviews & Support',
+    label: 'Support & Complaints',
     shortLabel: 'Support',
     submenus: [
-      { id: 'support-tickets', label: 'Support Tickets' },
-      { id: 'user-complaints', label: 'User Complaints' },
-      { id: 'platform-reviews', label: 'Platform Reviews' },
-      { id: 'ai-suggested-responses', label: 'AI Suggested Responses' },
-      { id: 'resolved-tickets', label: 'Resolved Tickets' }
+      { id: 'open-tickets', label: 'All Support Tickets' },
+      { id: 'user-complaints', label: 'Complaints & Contact' },
+      { id: 'platform-reviews', label: 'User Reviews' },
+      { id: 'resolved-tickets', label: 'Resolved History' }
     ]
   },
   {
-    id: 'audit',
-    label: 'Audit & Security Logs',
+    id: 'website',
+    label: 'Website Management',
+    shortLabel: 'Website',
+    submenus: [
+      { id: 'announcements', label: 'Announcements & Banners' },
+      { id: 'service-toggles', label: 'Service Module Toggles' },
+      { id: 'seo-settings', label: 'SEO & Ads Configuration' },
+      { id: 'maintenance-mode', label: 'Maintenance Mode' }
+    ]
+  },
+  {
+    id: 'security',
+    label: 'Security & Permissions',
     shortLabel: 'Security',
     submenus: [
-      { id: 'admin-activity', label: 'Admin Activity' },
+      { id: 'rbac-matrix', label: 'RBAC Permission Matrix' },
+      { id: 'owner-approvals', label: 'Owner Approvals Queue' },
+      { id: 'admin-sessions', label: 'Active Executive Sessions' },
+      { id: 'audit-logs', label: 'Immutable Audit Logs' },
       { id: 'login-history', label: 'Login History' },
-      { id: 'security-events', label: 'Security Events' },
-      { id: 'api-logs', label: 'API Logs' },
-      { id: 'database-events', label: 'Database Events' },
-      { id: 'permission-changes', label: 'Permission Changes' }
+      { id: 'failed-logins', label: 'Failed Login Monitor' }
+    ]
+  },
+  {
+    id: 'health',
+    label: 'System Health',
+    shortLabel: 'Health',
+    submenus: [
+      { id: 'infra-overview', label: 'Runtime & API Health' },
+      { id: 'database-status', label: 'Database & Storage' },
+      { id: 'email-status', label: 'Email Relay & Queue' },
+      { id: 'server-logs', label: 'Server Error Logs' },
+      { id: 'infrastructure-backups', label: 'Backups & Exports' }
     ]
   },
   {
     id: 'settings',
-    label: 'Platform Settings',
+    label: 'Settings',
     shortLabel: 'Settings',
     submenus: [
-      { id: 'general-settings', label: 'General Settings' },
-      { id: 'infrastructure-scalability', label: 'Infrastructure & Backups' },
-      { id: 'branding', label: 'Branding' },
-      { id: 'email-configuration', label: 'Email Configuration' },
-      { id: 'smtp-status', label: 'SMTP Status' },
-      { id: 'storage-configuration', label: 'Storage Configuration' },
-      { id: 'payment-gateway', label: 'Payment Gateway' },
-      { id: 'api-integrations', label: 'API Integrations' },
-      { id: 'maintenance-mode', label: 'Maintenance Mode' }
+      { id: 'general-settings', label: 'General & Security PIN' },
+      { id: 'email-configuration', label: 'Email Relay Diagnostics' },
+      { id: 'payment-gateway', label: 'Payment Gateway Status' },
+      { id: 'broadcast-notifications', label: 'Broadcast Notifications' }
     ]
   }
 ];
@@ -186,9 +205,11 @@ export interface OwnerApprovalProposalInput {
     | 'RELEASE_REJECT'
     | 'RELEASE_REQUEST_CORRECTIONS'
     | 'RELEASE_PUBLISH'
+    | 'RELEASE_METADATA_UPDATE'
     | 'USER_SUSPEND'
     | 'USER_TERMINATE'
     | 'USER_REACTIVATE'
+    | 'SUBSCRIPTION_MANAGE'
     | 'PAYMENT_REFUND'
     | 'SETTINGS_UPDATE'
     | 'AI_SETTINGS_UPDATE'

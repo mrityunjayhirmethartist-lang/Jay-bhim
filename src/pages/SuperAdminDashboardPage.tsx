@@ -1,7 +1,6 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   Search,
-  AlertTriangle,
   RefreshCw,
   Eye,
   Send,
@@ -9,15 +8,13 @@ import {
   Megaphone,
   RotateCcw,
   FileText,
-  Menu,
   Sparkles,
-  CheckCircle2,
-  XCircle,
   Mail,
   CreditCard,
   HardDrive,
-  ShieldCheck,
-  UserCheck
+  Disc3,
+  Clock,
+  Pencil
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -38,8 +35,17 @@ import { useRouter } from '../context/RouterContext';
 import { apiUrl } from '../utils/api';
 import { SuperAdminAiReviewCenter, SuperAdminAiSettings } from '../components/admin/SuperAdminAiCenter';
 import { RightAdminSidebar } from '../components/admin/RightAdminSidebar';
+import { AdminTopNav } from '../components/admin/AdminTopNav';
 import { DataIntegrityBanner } from '../components/admin/DataIntegrityBanner';
 import { AiExecutiveAssistant } from '../components/admin/AiExecutiveAssistant';
+import {
+  WelcomeOverviewBanner,
+  DistributionManagementPanel,
+  SubscriptionManagementPanel,
+  WebsiteManagementPanel,
+  SecurityPermissionsPanel,
+  SystemHealthPanel
+} from '../components/admin/EnterpriseModules';
 import {
   OwnerApprovalModal,
   OwnerApprovalsQueue,
@@ -49,9 +55,7 @@ import {
 } from '../components/admin/CommandCenterViews';
 import {
   ArtistOnboardingPanel,
-  PromotionalProgramPanel,
-  FinancialGovernancePanel,
-  InfrastructurePanel
+  FinancialGovernancePanel
 } from '../components/admin/OnboardingFinancePanels';
 import {
   ADMIN_NAV_CATEGORIES,
@@ -67,7 +71,7 @@ export const SuperAdminDashboardPage: React.FC = () => {
   const { user, token, logout } = useAuth();
   const { navigate } = useRouter();
 
-  // Navigation state (10 categories + 59 submenus)
+  // Navigation state (12 enterprise modules + submenus)
   const [activeTab, setActiveTab] = useState<AdminTab>('overview');
   const [activeSubmenu, setActiveSubmenu] = useState<string>('executive-overview');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -76,6 +80,7 @@ export const SuperAdminDashboardPage: React.FC = () => {
   // Global integrity & toast state
   const [loading, setLoading] = useState(false);
   const [includeTest, setIncludeTest] = useState(false);
+  const [overviewRange, setOverviewRange] = useState<'7d' | '30d' | '90d'>('30d');
   const [integrity, setIntegrity] = useState<DataIntegrityMeta | null>(null);
   const [dataUnavailable, setDataUnavailable] = useState(false);
   const [dataErrorMsg, setDataErrorMsg] = useState<string | null>(null);
@@ -99,8 +104,10 @@ export const SuperAdminDashboardPage: React.FC = () => {
     releaseStatusBreakdown: [],
     platformActivity: []
   });
+  const [topContent, setTopContent] = useState<any[]>([]);
+  const [recentActivity, setRecentActivity] = useState<any[]>([]);
 
-  // Users state
+  // Users & KYC state
   const [usersList, setUsersList] = useState<any[]>([]);
   const [userSearch, setUserSearch] = useState('');
   const [userStatusFilter, setUserStatusFilter] = useState('all');
@@ -109,7 +116,6 @@ export const SuperAdminDashboardPage: React.FC = () => {
   const [userPage, setUserPage] = useState(1);
   const [inspectedUser, setInspectedUser] = useState<any | null>(null);
 
-  // KYC state
   const [kycRecords, setKycRecords] = useState<any[]>([]);
   const [kycStatusFilter, setKycStatusFilter] = useState('all');
   const [inspectedKyc, setInspectedKyc] = useState<any | null>(null);
@@ -122,11 +128,24 @@ export const SuperAdminDashboardPage: React.FC = () => {
   const [releaseStatusFilter, setReleaseStatusFilter] = useState('all');
   const [releasePage, setReleasePage] = useState(1);
   const [inspectedRelease, setInspectedRelease] = useState<any | null>(null);
+  const [editingMetadata, setEditingMetadata] = useState(false);
+  const [metadataForm, setMetadataForm] = useState({
+    title: '',
+    artist: '',
+    upc: '',
+    primaryGenre: '',
+    language: '',
+    releaseDate: '',
+    territories: '',
+    label: ''
+  });
 
-  // Payments state
+  // Finance & Subscriptions state
   const [orders, setOrders] = useState<any[]>([]);
   const [subscriptions, setSubscriptions] = useState<any[]>([]);
   const [paymentSummary, setPaymentSummary] = useState<any | null>(null);
+  const [paymentDateFrom, setPaymentDateFrom] = useState('');
+  const [paymentDateTo, setPaymentDateTo] = useState('');
   const [paymentPage, setPaymentPage] = useState(1);
   const [invoiceModal, setInvoiceModal] = useState<any | null>(null);
 
@@ -143,17 +162,20 @@ export const SuperAdminDashboardPage: React.FC = () => {
     userEmail?: string;
     category?: string;
     body?: string;
+    priority?: string;
+    assignedTo?: string;
   } | null>(null);
   const [replyText, setReplyText] = useState('');
   const [replyStatus, setReplyStatus] = useState<'Open' | 'Pending' | 'Resolved'>('Resolved');
+  const [replyPriority, setReplyPriority] = useState<'Low' | 'Medium' | 'High' | 'Urgent'>('Medium');
+  const [replyAssignedTo, setReplyAssignedTo] = useState('');
   const [draftingAiReply, setDraftingAiReply] = useState(false);
 
-  // Audit logs state
+  // Security / Audit logs state
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [auditSearch, setAuditSearch] = useState('');
-  const [auditPage, setAuditPage] = useState(1);
 
-  // Settings state
+  // Settings & Website state
   const [settings, setSettings] = useState<any>(null);
   const [plans, setPlans] = useState<any[]>([]);
   const [emailConfig, setEmailConfig] = useState<any>(null);
@@ -163,6 +185,14 @@ export const SuperAdminDashboardPage: React.FC = () => {
   const [new2faPin, setNew2faPin] = useState('');
   const [broadcastTitle, setBroadcastTitle] = useState('');
   const [broadcastMessage, setBroadcastMessage] = useState('');
+
+  // AI Control sub-tab view switcher
+  const aiCenterMode = useMemo(() => {
+    if (['ai-provider-settings', 'ai-usage-costs', 'ai-permissions'].includes(activeSubmenu)) {
+      return 'settings' as const;
+    }
+    return 'review' as const;
+  }, [activeSubmenu]);
 
   const showToast = useCallback((type: 'ok' | 'err', text: string) => {
     setToast({ type, text });
@@ -231,7 +261,9 @@ export const SuperAdminDashboardPage: React.FC = () => {
       setLoading(true);
       try {
         if (tab === 'overview') {
-          const res = await authFetch(`/api/super-admin/overview?includeTest=${includeTest}`);
+          const res = await authFetch(
+            `/api/super-admin/overview?includeTest=${includeTest}&range=${overviewRange}`
+          );
           const data = await res.json();
           if (data._integrity) setIntegrity(data._integrity);
           if (!res.ok || data.dataUnavailable) {
@@ -244,38 +276,36 @@ export const SuperAdminDashboardPage: React.FC = () => {
           setDataErrorMsg(null);
           setKpis(data.kpis || {});
           setCharts(data.charts || {});
+          setTopContent(data.topContent || []);
+          setRecentActivity(data.recentActivity || []);
         } else if (tab === 'users') {
-          const params = new URLSearchParams();
-          params.set('includeTest', String(includeTest));
-          if (userSearch) params.set('q', userSearch);
-          if (userStatusFilter !== 'all') params.set('status', userStatusFilter);
-          if (userDateFrom) params.set('dateFrom', userDateFrom);
-          if (userDateTo) params.set('dateTo', userDateTo);
-          const res = await authFetch(`/api/super-admin/users?${params.toString()}`);
-          const data = await res.json();
-          if (data._integrity) setIntegrity(data._integrity);
-          if (!res.ok || data.dataUnavailable) {
+          const userParams = new URLSearchParams();
+          userParams.set('includeTest', String(includeTest));
+          if (userSearch) userParams.set('q', userSearch);
+          if (userStatusFilter !== 'all') userParams.set('status', userStatusFilter);
+          if (userDateFrom) userParams.set('dateFrom', userDateFrom);
+          if (userDateTo) userParams.set('dateTo', userDateTo);
+
+          const kycParams = new URLSearchParams();
+          kycParams.set('includeTest', String(includeTest));
+          if (kycStatusFilter !== 'all') kycParams.set('status', kycStatusFilter);
+
+          const [uRes, kRes] = await Promise.all([
+            authFetch(`/api/super-admin/users?${userParams.toString()}`),
+            authFetch(`/api/super-admin/kyc?${kycParams.toString()}`)
+          ]);
+          const uData = await uRes.json();
+          const kData = await kRes.json();
+          if (uData._integrity) setIntegrity(uData._integrity);
+          if (!uRes.ok || uData.dataUnavailable) {
             setDataUnavailable(true);
-            setDataErrorMsg(data.error || 'Failed to load users.');
+            setDataErrorMsg(uData.error || 'Failed to load users.');
             return;
           }
           setDataUnavailable(false);
-          setUsersList(data.users || []);
+          setUsersList(uData.users || []);
+          setKycRecords(kData.records || []);
           setUserPage(1);
-        } else if (tab === 'kyc') {
-          const params = new URLSearchParams();
-          params.set('includeTest', String(includeTest));
-          if (kycStatusFilter !== 'all') params.set('status', kycStatusFilter);
-          const res = await authFetch(`/api/super-admin/kyc?${params.toString()}`);
-          const data = await res.json();
-          if (data._integrity) setIntegrity(data._integrity);
-          if (!res.ok || data.dataUnavailable) {
-            setDataUnavailable(true);
-            setDataErrorMsg(data.error || 'Failed to load KYC records.');
-            return;
-          }
-          setDataUnavailable(false);
-          setKycRecords(data.records || []);
         } else if (tab === 'releases') {
           const params = new URLSearchParams();
           params.set('includeTest', String(includeTest));
@@ -293,21 +323,28 @@ export const SuperAdminDashboardPage: React.FC = () => {
           setReleasesList(data.releases || []);
           setTakedownsList(data.takedownRequests || []);
           setReleasePage(1);
-        } else if (tab === 'payments') {
-          const res = await authFetch(`/api/super-admin/payments?includeTest=${includeTest}`);
-          const data = await res.json();
-          if (data._integrity) setIntegrity(data._integrity);
-          if (!res.ok || data.dataUnavailable) {
+        } else if (tab === 'finance' || tab === 'subscriptions') {
+          const [payRes, setRes] = await Promise.all([
+            authFetch(`/api/super-admin/payments?includeTest=${includeTest}`),
+            authFetch('/api/super-admin/settings')
+          ]);
+          const payData = await payRes.json();
+          if (payData._integrity) setIntegrity(payData._integrity);
+          if (!payRes.ok || payData.dataUnavailable) {
             setDataUnavailable(true);
-            setDataErrorMsg(data.error || 'Failed to load payment records.');
+            setDataErrorMsg(payData.error || 'Failed to load payment records.');
             setPaymentSummary(null);
             return;
           }
           setDataUnavailable(false);
-          setOrders(data.orders || []);
-          setSubscriptions(data.subscriptions || []);
-          setPaymentSummary(data.summary || {});
+          setOrders(payData.orders || []);
+          setSubscriptions(payData.subscriptions || []);
+          setPaymentSummary(payData.summary || {});
           setPaymentPage(1);
+          if (setRes.ok) {
+            const sData = await setRes.json();
+            setPlans(sData.plans || []);
+          }
         } else if (tab === 'support') {
           const res = await authFetch('/api/super-admin/support');
           const data = await res.json();
@@ -318,7 +355,7 @@ export const SuperAdminDashboardPage: React.FC = () => {
               feedbacks: data.feedbacks || []
             });
           }
-        } else if (tab === 'audit') {
+        } else if (tab === 'security') {
           const params = new URLSearchParams();
           if (auditSearch) params.set('q', auditSearch);
           const res = await authFetch(`/api/super-admin/audit-logs?${params.toString()}`);
@@ -331,8 +368,7 @@ export const SuperAdminDashboardPage: React.FC = () => {
           }
           setDataUnavailable(false);
           setAuditLogs(data.logs || []);
-          setAuditPage(1);
-        } else if (tab === 'settings') {
+        } else if (tab === 'website' || tab === 'settings') {
           const res = await authFetch('/api/super-admin/settings');
           const data = await res.json();
           if (res.ok) {
@@ -353,6 +389,7 @@ export const SuperAdminDashboardPage: React.FC = () => {
     [
       token,
       includeTest,
+      overviewRange,
       authFetch,
       userSearch,
       userStatusFilter,
@@ -383,10 +420,10 @@ export const SuperAdminDashboardPage: React.FC = () => {
       if (submenuId === 'suspended-accounts') setUserStatusFilter('suspended');
       else if (submenuId === 'terminated-accounts') setUserStatusFilter('terminated');
       else setUserStatusFilter('all');
-    } else if (tab === 'kyc') {
-      if (submenuId === 'pending-verification') setKycStatusFilter('pending');
-      else if (submenuId === 'approved-kyc') setKycStatusFilter('approved');
-      else if (submenuId === 'rejected-kyc') setKycStatusFilter('rejected');
+
+      if (submenuId === 'kyc-pending') setKycStatusFilter('pending');
+      else if (submenuId === 'kyc-approved') setKycStatusFilter('approved');
+      else if (submenuId === 'kyc-rejected') setKycStatusFilter('rejected');
       else setKycStatusFilter('all');
     } else if (tab === 'releases') {
       if (submenuId === 'pending-releases') setReleaseStatusFilter('pending');
@@ -403,7 +440,6 @@ export const SuperAdminDashboardPage: React.FC = () => {
     if (!pendingProposal) return;
     setExecutingApproval(true);
     try {
-      // Step 1-4: Create formal approval proposal record in DB
       const propRes = await authFetch('/api/super-admin/approvals/propose', {
         method: 'POST',
         body: JSON.stringify({
@@ -423,7 +459,6 @@ export const SuperAdminDashboardPage: React.FC = () => {
       const propData = await propRes.json();
       if (!propRes.ok) throw new Error(propData.error || 'Failed to register approval proposal.');
 
-      // Step 5-6: Execute ONLY with explicit ownerConfirmed: true + immutable audit log
       const execRes = await authFetch(`/api/super-admin/approvals/${propData.approval.id}/execute`, {
         method: 'POST',
         body: JSON.stringify({
@@ -434,27 +469,11 @@ export const SuperAdminDashboardPage: React.FC = () => {
       const execData = await execRes.json();
       if (!execRes.ok) throw new Error(execData.error || 'Approval execution failed.');
 
-      // Also apply plan price updates if SETTINGS_UPDATE included planUpdates
-      if (
-        pendingProposal.actionType === 'SETTINGS_UPDATE' &&
-        Array.isArray(pendingProposal.payload?.planUpdates)
-      ) {
-        await authFetch('/api/super-admin/settings', {
-          method: 'PUT',
-          body: JSON.stringify({
-            ...pendingProposal.payload.settings,
-            ...(pendingProposal.payload.newAdminTwoFactorPin
-              ? { newAdminTwoFactorPin: pendingProposal.payload.newAdminTwoFactorPin }
-              : {}),
-            planUpdates: pendingProposal.payload.planUpdates
-          })
-        });
-      }
-
       showToast('ok', `Owner-approved action completed & logged: ${pendingProposal.title}`);
       setPendingProposal(null);
       setInspectedKyc(null);
       setInspectedRelease(null);
+      setEditingMetadata(false);
       await Promise.all([loadTabData(activeTab), loadCommandCenterMeta()]);
     } catch (err: any) {
       showToast('err', err.message);
@@ -530,6 +549,42 @@ export const SuperAdminDashboardPage: React.FC = () => {
     }
   };
 
+  const openReleaseInspector = (rel: any) => {
+    setInspectedRelease(rel);
+    setEditingMetadata(false);
+    setMetadataForm({
+      title: rel.title || '',
+      artist: rel.artist || '',
+      upc: rel.upc || '',
+      primaryGenre: rel.primaryGenre || '',
+      language: rel.language || '',
+      releaseDate: rel.releaseDate || '',
+      territories: rel.territories || '',
+      label: rel.label || ''
+    });
+  };
+
+  const inspectReleaseById = async (releaseId: string) => {
+    const found = releasesList.find(r => r.id === releaseId);
+    if (found) {
+      openReleaseInspector(found);
+      return;
+    }
+    try {
+      const res = await authFetch(`/api/super-admin/releases?includeTest=${includeTest}`);
+      const data = await res.json();
+      const target = (data.releases || []).find((r: any) => r.id === releaseId);
+      if (target) {
+        setReleasesList(data.releases || []);
+        openReleaseInspector(target);
+      } else {
+        showToast('err', 'Release record not found.');
+      }
+    } catch (err: any) {
+      showToast('err', err.message || 'Unable to inspect release.');
+    }
+  };
+
   const handleAiDraftSupportReply = async () => {
     if (!replyModal) return;
     setDraftingAiReply(true);
@@ -568,12 +623,14 @@ export const SuperAdminDashboardPage: React.FC = () => {
         body: JSON.stringify({
           sourceType: replyModal.sourceType,
           status: replyStatus,
+          priority: replyPriority,
+          assignedTo: replyAssignedTo.trim() || 'Unassigned',
           response: replyText.trim()
         })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to send response.');
-      showToast('ok', 'Response recorded and status updated.');
+      showToast('ok', 'Response recorded, priority/assignment saved, and status updated.');
       setReplyModal(null);
       setReplyText('');
       loadTabData('support');
@@ -623,43 +680,38 @@ export const SuperAdminDashboardPage: React.FC = () => {
   const pendingApprovalsCount = approvals.filter(a => a.status === 'PENDING_OWNER_APPROVAL').length;
 
   // Derived submenu views
+  const isUserKycView = ['kyc-pending', 'kyc-approved', 'kyc-rejected', 'kyc-history'].includes(activeSubmenu);
+  const isUserOnboardingView = [
+    'artist-onboarding',
+    'incomplete-profiles',
+    'pending-profile-reviews',
+    'approved-artists',
+    'rejected-profiles'
+  ].includes(activeSubmenu);
+
   const filteredUsers = useMemo(() => {
     if (activeTab !== 'users') return usersList;
-    if (activeSubmenu === 'artist-accounts') return usersList.filter(u => u.role === 'artist');
-    if (activeSubmenu === 'new-registrations') {
-      const sevenDaysAgo = Date.now() - 7 * 86400000;
-      return usersList.filter(u => new Date(u.createdAt).getTime() >= sevenDaysAgo);
-    }
     return usersList;
-  }, [usersList, activeTab, activeSubmenu]);
+  }, [usersList, activeTab]);
 
   const paginatedUsers = filteredUsers.slice((userPage - 1) * PAGE_SIZE, userPage * PAGE_SIZE);
   const paginatedReleases = releasesList.slice((releasePage - 1) * PAGE_SIZE, releasePage * PAGE_SIZE);
 
   const filteredOrders = useMemo(() => {
-    if (activeSubmenu === 'failed-payments') {
-      return orders.filter(o => o.status === 'failed' || o.status === 'cancelled');
-    }
-    if (activeSubmenu === 'refund-requests') {
-      return orders.filter(o => o.status === 'refunded' || o.status === 'paid');
-    }
-    return orders;
-  }, [orders, activeSubmenu]);
+    return orders.filter(o => {
+      if (activeSubmenu === 'failed-payments' && o.status !== 'failed' && o.status !== 'cancelled') {
+        return false;
+      }
+      if (activeSubmenu === 'refund-requests' && o.status !== 'refunded' && o.status !== 'paid') {
+        return false;
+      }
+      const ts = new Date(o.paidAt || o.createdAt || 0).getTime();
+      if (paymentDateFrom && ts < new Date(paymentDateFrom).getTime()) return false;
+      if (paymentDateTo && ts > new Date(paymentDateTo + 'T23:59:59').getTime()) return false;
+      return true;
+    });
+  }, [orders, activeSubmenu, paymentDateFrom, paymentDateTo]);
   const paginatedOrders = filteredOrders.slice((paymentPage - 1) * PAGE_SIZE, paymentPage * PAGE_SIZE);
-
-  const filteredAuditLogs = useMemo(() => {
-    if (activeTab !== 'audit') return auditLogs;
-    if (activeSubmenu === 'login-history') {
-      return auditLogs.filter(l => String(l.action || '').includes('LOGIN'));
-    }
-    if (activeSubmenu === 'security-events' || activeSubmenu === 'permission-changes') {
-      return auditLogs.filter(l =>
-        /USER_|KYC_|OWNER_|SETTINGS_|BOOTSTRAP|SECURITY/i.test(String(l.action || ''))
-      );
-    }
-    return auditLogs;
-  }, [auditLogs, activeTab, activeSubmenu]);
-  const paginatedAuditLogs = filteredAuditLogs.slice((auditPage - 1) * PAGE_SIZE, auditPage * PAGE_SIZE);
 
   const formatMetric = (val: number | undefined, isCurrency = false) => {
     if (dataUnavailable || !kpis) return 'Data Unavailable';
@@ -667,279 +719,377 @@ export const SuperAdminDashboardPage: React.FC = () => {
     return isCurrency ? `₹${num.toLocaleString('en-IN')}` : num.toLocaleString('en-IN');
   };
 
-  const kpiCards = [
-    { label: 'Total Registered Users', value: formatMetric(kpis?.totalRegisteredUsers) },
-    { label: 'Active Users', value: formatMetric(kpis?.activeUsers) },
+  // Top 4 headline KPI cards + full operational breakdown
+  const headlineKpis = [
+    { label: 'Total Users', value: formatMetric(kpis?.totalRegisteredUsers), sub: `${kpis?.activeUsers ?? 0} active` },
+    { label: 'Total Releases', value: formatMetric(kpis?.totalReleases), sub: `${kpis?.publishedReleases ?? 0} live` },
+    { label: 'Total Revenue', value: formatMetric(kpis?.totalRevenue, true), sub: `${kpis?.successfulPayments ?? 0} paid orders`, gold: true },
+    { label: 'Open Support Tickets', value: formatMetric(kpis?.openSupportTickets), sub: 'Tickets & inquiries' }
+  ];
+
+  const detailedKpis = [
     { label: 'Pending KYC Verification', value: formatMetric(kpis?.pendingKycVerification), accent: 'gold' },
     { label: 'Approved Profiles', value: formatMetric(kpis?.approvedProfiles) },
-    { label: 'Rejected Profiles', value: formatMetric(kpis?.rejectedProfiles) },
-    { label: 'Suspended Users', value: formatMetric(kpis?.suspendedUsers) },
-    { label: 'Terminated Accounts', value: formatMetric(kpis?.terminatedAccounts) },
-    { label: 'Total Releases', value: formatMetric(kpis?.totalReleases) },
+    { label: 'Suspended / Terminated', value: dataUnavailable || !kpis ? 'Data Unavailable' : `${kpis.suspendedUsers ?? 0} / ${kpis.terminatedAccounts ?? 0}` },
     { label: 'Pending Release Reviews', value: formatMetric(kpis?.pendingReleaseReviews), accent: 'gold' },
     { label: 'Approved Releases', value: formatMetric(kpis?.approvedReleases) },
-    { label: 'Published Releases', value: formatMetric(kpis?.publishedReleases) },
     { label: 'Rejected Releases', value: formatMetric(kpis?.rejectedReleases) },
     { label: 'Active Subscriptions', value: formatMetric(kpis?.activeSubscriptions) },
-    { label: 'Successful Paid Orders', value: formatMetric(kpis?.successfulPayments) },
-    { label: 'Failed / Pending Orders', value: dataUnavailable || !kpis ? 'Data Unavailable' : `${kpis.failedPayments ?? 0} / ${kpis.pendingPayments ?? 0}` },
-    { label: 'Verified Paid Revenue', value: formatMetric(kpis?.totalRevenue, true), accent: 'gold' }
+    { label: 'Failed / Pending Orders', value: dataUnavailable || !kpis ? 'Data Unavailable' : `${kpis.failedPayments ?? 0} / ${kpis.pendingPayments ?? 0}` }
   ];
+
+  const hasUserChartData = (charts.userGrowth || []).some((d: any) => d.totalUsers > 0 || d.newUsers > 0);
+  const hasRevenueChartData = (charts.revenueTrend || []).some((d: any) => d.revenue > 0 || d.releases > 0);
+  const hasReleasePieData = (charts.releaseStatusBreakdown || []).some((d: any) => d.value > 0);
+  const hasActivityChartData = (charts.platformActivity || []).some(
+    (d: any) => d.adminActions > 0 || d.releases > 0 || d.payments > 0
+  );
 
   return (
     <div className="min-h-screen bg-[#050507] text-slate-100 flex flex-row">
-      {/* Main Content (Left/Center Workspace) */}
-      <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-8 space-y-6 overflow-y-auto pb-24">
-        <header className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-800/80">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2 text-[11px] font-mono text-[#d4af37] uppercase tracking-wider">
-              <span>{activeCategoryObj?.label}</span>
-              <span className="text-slate-600">/</span>
-              <span className="text-slate-300">{activeSubmenuObj?.label || activeSubmenu}</span>
-            </div>
-            <h1 className="text-xl font-bold text-white font-display mt-0.5">
-              Rudraatma Command Center 2.0
-            </h1>
-            <p className="text-xs text-slate-400">
-              Platform Governance · Absolute Database Integrity · Owner-Approved Execution
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setSessionModalOpen(true)}
-              className="px-3 py-2 rounded-xl bg-[#0b0c10] border border-slate-800 hover:border-[#d4af37]/40 text-xs text-slate-300 inline-flex items-center gap-1.5 whitespace-nowrap"
-            >
-              <UserCheck className="w-3.5 h-3.5 text-[#d4af37]" />
-              <span className="hidden sm:inline">Executive Session</span>
-            </button>
-
-            <button
-              onClick={() => {
-                loadTabData(activeTab);
-                loadCommandCenterMeta();
-              }}
-              className="px-3.5 py-2 rounded-xl bg-[#0b0c10] border border-[#d4af37]/30 hover:border-[#d4af37] text-xs text-[#f0cf65] flex items-center gap-2 transition whitespace-nowrap"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-              Sync Live DB
-            </button>
-
-            <button
-              onClick={() => setMobileMenuOpen(true)}
-              className="lg:hidden px-3 py-2 rounded-xl bg-[#0b0c10] border border-[#d4af37]/40 text-[#f0cf65] inline-flex items-center gap-1.5 text-xs"
-              aria-label="Open right navigation drawer"
-            >
-              <Menu className="w-4 h-4" /> Menu
-            </button>
-          </div>
-        </header>
-
-        {/* Data Integrity Banner */}
-        <DataIntegrityBanner
-          integrity={integrity}
-          dataUnavailable={dataUnavailable}
-          errorMessage={dataErrorMsg}
+      {/* Main Content Workspace */}
+      <div className="flex-1 min-w-0 flex flex-col">
+        {/* Top Enterprise Navigation Bar */}
+        <AdminTopNav
+          token={token}
           includeTest={includeTest}
-          onToggleIncludeTest={() => setIncludeTest(v => !v)}
-          pendingApprovalsCount={pendingApprovalsCount}
-          onOpenApprovals={() => {
-            setActiveTab('overview');
-            setShowApprovalsDrawer(true);
+          loading={loading}
+          categoryLabel={activeCategoryObj?.label || 'Dashboard'}
+          submenuLabel={activeSubmenuObj?.label || activeSubmenu}
+          sessionInfo={sessionInfo}
+          userEmail={user?.email}
+          onRefreshAll={() => {
+            loadTabData(activeTab);
+            loadCommandCenterMeta();
+          }}
+          onNavigateTab={handleSelectNavigation}
+          onInspectUserById={inspectUserDetail}
+          onInspectReleaseById={inspectReleaseById}
+          onOpenSessionModal={() => setSessionModalOpen(true)}
+          onOpenMobileDrawer={() => setMobileMenuOpen(true)}
+          onSignOut={() => {
+            logout();
+            navigate('/super-admin/login');
           }}
         />
 
-        {toast && (
-          <div
-            className={`p-3.5 rounded-xl border text-xs flex items-center justify-between ${
-              toast.type === 'ok'
-                ? 'bg-emerald-950/60 border-emerald-700/50 text-emerald-200'
-                : 'bg-red-950/60 border-red-700/50 text-red-200'
-            }`}
-          >
-            <span>{toast.text}</span>
-            <button onClick={() => setToast(null)} className="text-slate-400 hover:text-white ml-4">
-              Dismiss
-            </button>
-          </div>
-        )}
+        <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-8 space-y-6 overflow-y-auto pb-24">
+          {/* Data Integrity Banner */}
+          <DataIntegrityBanner
+            integrity={integrity}
+            dataUnavailable={dataUnavailable}
+            errorMessage={dataErrorMsg}
+            includeTest={includeTest}
+            onToggleIncludeTest={() => setIncludeTest(v => !v)}
+            pendingApprovalsCount={pendingApprovalsCount}
+            onOpenApprovals={() => {
+              setActiveTab('security');
+              setActiveSubmenu('owner-approvals');
+              setShowApprovalsDrawer(true);
+            }}
+          />
 
-        {/* ==================== 1. OVERVIEW & ANALYTICS ==================== */}
-        {activeTab === 'overview' && (
-          <div className="space-y-6">
-            <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-4 gap-3.5">
-              {kpiCards.map(card => (
-                <div
-                  key={card.label}
-                  className={`p-4 rounded-xl bg-[#0b0c10] border ${
-                    card.accent === 'gold' ? 'border-[#d4af37]/40' : 'border-slate-800/90'
-                  }`}
-                >
-                  <p className="text-[11px] text-slate-400 mb-1.5">{card.label}</p>
-                  <p
-                    className={`text-xl sm:text-2xl font-bold font-mono tabular-nums ${
-                      dataUnavailable
-                        ? 'text-red-300 text-sm'
-                        : card.accent === 'gold'
-                          ? 'text-[#f0cf65]'
-                          : 'text-white'
+          {toast && (
+            <div
+              className={`p-3.5 rounded-xl border text-xs flex items-center justify-between ${
+                toast.type === 'ok'
+                  ? 'bg-emerald-950/60 border-emerald-700/50 text-emerald-200'
+                  : 'bg-red-950/60 border-red-700/50 text-red-200'
+              }`}
+            >
+              <span>{toast.text}</span>
+              <button onClick={() => setToast(null)} className="text-slate-400 hover:text-white ml-4">
+                Dismiss
+              </button>
+            </div>
+          )}
+
+          {/* ==================== 1. OVERVIEW / DASHBOARD ==================== */}
+          {activeTab === 'overview' && (
+            <div className="space-y-6">
+              <WelcomeOverviewBanner
+                intelligence={intelligence}
+                kpis={kpis}
+                dataUnavailable={dataUnavailable}
+                range={overviewRange}
+                onChangeRange={r => setOverviewRange(r)}
+                onNavigateTab={handleSelectNavigation}
+              />
+
+              {/* Headline 4 KPI Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+                {headlineKpis.map(card => (
+                  <div
+                    key={card.label}
+                    className={`p-5 rounded-xl bg-[#0b0c10] border ${
+                      card.gold ? 'border-[#d4af37]/45' : 'border-slate-800/90'
                     }`}
                   >
-                    {card.value}
-                  </p>
-                </div>
-              ))}
-            </div>
-
-            {/* Real-DB Charts */}
-            {!dataUnavailable && (
-              <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
-                {(activeSubmenu === 'executive-overview' || activeSubmenu === 'user-analytics') && (
-                  <div className="p-5 rounded-2xl bg-[#0b0c10] border border-slate-800/90">
-                    <h3 className="text-sm font-semibold text-white mb-4">
-                      User Growth Trajectory (Database Verified)
-                    </h3>
-                    <div className="h-64">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart data={charts.userGrowth || []}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                          <XAxis dataKey="month" stroke="#64748b" fontSize={11} />
-                          <YAxis stroke="#64748b" fontSize={11} allowDecimals={false} />
-                          <Tooltip contentStyle={{ backgroundColor: '#0b0c10', borderColor: '#d4af37', fontSize: 12 }} />
-                          <Area type="monotone" dataKey="totalUsers" stroke="#d4af37" fill="#d4af37" fillOpacity={0.18} name="Total Users" />
-                          <Area type="monotone" dataKey="newUsers" stroke="#38bdf8" fill="#38bdf8" fillOpacity={0.12} name="New Signups" />
-                        </AreaChart>
-                      </ResponsiveContainer>
-                    </div>
+                    <p className="text-xs text-slate-400">{card.label}</p>
+                    <p
+                      className={`text-2xl sm:text-3xl font-bold font-mono tabular-nums mt-2 ${
+                        dataUnavailable
+                          ? 'text-red-300 text-sm'
+                          : card.gold
+                            ? 'text-[#f0cf65]'
+                            : 'text-white'
+                      }`}
+                    >
+                      {card.value}
+                    </p>
+                    <p className="text-[11px] font-mono text-slate-500 mt-1.5">{card.sub}</p>
                   </div>
-                )}
-
-                {(activeSubmenu === 'executive-overview' || activeSubmenu === 'revenue-analytics') && (
-                  <div className="p-5 rounded-2xl bg-[#0b0c10] border border-slate-800/90">
-                    <h3 className="text-sm font-semibold text-white mb-4">
-                      Verified Paid Revenue (INR) & Releases
-                    </h3>
-                    <div className="h-64">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={charts.revenueTrend || []}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                          <XAxis dataKey="month" stroke="#64748b" fontSize={11} />
-                          <YAxis stroke="#64748b" fontSize={11} allowDecimals={false} />
-                          <Tooltip contentStyle={{ backgroundColor: '#0b0c10', borderColor: '#d4af37', fontSize: 12 }} />
-                          <Bar dataKey="revenue" fill="#d4af37" radius={[4, 4, 0, 0]} name="Paid Revenue (₹)" />
-                          <Bar dataKey="releases" fill="#60a5fa" radius={[4, 4, 0, 0]} name="Releases" />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
-                  </div>
-                )}
-
-                {(activeSubmenu === 'executive-overview' || activeSubmenu === 'release-analytics') && (
-                  <div className="p-5 rounded-2xl bg-[#0b0c10] border border-slate-800/90">
-                    <h3 className="text-sm font-semibold text-white mb-4">Catalog Release Status</h3>
-                    <div className="h-64 flex items-center">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                          <Pie
-                            data={charts.releaseStatusBreakdown || []}
-                            dataKey="value"
-                            nameKey="name"
-                            cx="50%"
-                            cy="50%"
-                            innerRadius={52}
-                            outerRadius={84}
-                            paddingAngle={3}
-                          >
-                            {(charts.releaseStatusBreakdown || []).map((entry: any, idx: number) => (
-                              <Cell key={idx} fill={entry.color || '#d4af37'} />
-                            ))}
-                          </Pie>
-                          <Tooltip contentStyle={{ backgroundColor: '#0b0c10', borderColor: '#d4af37', fontSize: 12 }} />
-                        </PieChart>
-                      </ResponsiveContainer>
-                    </div>
-                  </div>
-                )}
-
-                {(activeSubmenu === 'executive-overview' || activeSubmenu === 'platform-activity') && (
-                  <div className="p-5 rounded-2xl bg-[#0b0c10] border border-slate-800/90">
-                    <h3 className="text-sm font-semibold text-white mb-4">7-Day Platform Activity</h3>
-                    <div className="h-64">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={charts.platformActivity || []}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                          <XAxis dataKey="day" stroke="#64748b" fontSize={11} />
-                          <YAxis stroke="#64748b" fontSize={11} allowDecimals={false} />
-                          <Tooltip contentStyle={{ backgroundColor: '#0b0c10', borderColor: '#d4af37', fontSize: 12 }} />
-                          <Bar dataKey="adminActions" fill="#d4af37" name="Admin Actions" />
-                          <Bar dataKey="releases" fill="#10b981" name="Releases" />
-                          <Bar dataKey="payments" fill="#f59e0b" name="Paid Orders" />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
-                  </div>
-                )}
+                ))}
               </div>
-            )}
 
-            {/* Next-Step Recommendation Engine & Platform Intelligence */}
-            <PlatformIntelligencePanel
-              intelligence={intelligence}
-              loading={intelLoading}
-              onRefresh={loadCommandCenterMeta}
-              onNavigateTab={handleSelectNavigation}
-              onTriggerApproval={prop => setPendingProposal(prop)}
-            />
+              {/* Detailed Operational Breakdown */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
+                {detailedKpis.map(card => (
+                  <div
+                    key={card.label}
+                    className={`p-4 rounded-xl bg-[#0b0c10] border ${
+                      card.accent === 'gold' ? 'border-[#d4af37]/35' : 'border-slate-800/90'
+                    }`}
+                  >
+                    <p className="text-[11px] text-slate-400 mb-1">{card.label}</p>
+                    <p
+                      className={`text-lg sm:text-xl font-bold font-mono tabular-nums ${
+                        dataUnavailable
+                          ? 'text-red-300 text-sm'
+                          : card.accent === 'gold'
+                            ? 'text-[#f0cf65]'
+                            : 'text-white'
+                      }`}
+                    >
+                      {card.value}
+                    </p>
+                  </div>
+                ))}
+              </div>
 
-            {/* Owner Approvals Queue */}
-            {(showApprovalsDrawer || approvals.length > 0) && (
-              <OwnerApprovalsQueue
-                approvals={approvals}
-                onExecute={executeQueuedProposalById}
-                onDismiss={dismissQueuedProposalById}
+              {/* Real-DB Charts with Honest Empty States */}
+              {!dataUnavailable && (
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+                  {(activeSubmenu === 'executive-overview' || activeSubmenu === 'user-analytics') && (
+                    <div className="p-5 rounded-2xl bg-[#0b0c10] border border-slate-800/90">
+                      <h3 className="text-sm font-semibold text-white mb-4">
+                        User Growth ({overviewRange})
+                      </h3>
+                      {!hasUserChartData ? (
+                        <div className="h-64 flex items-center justify-center rounded-xl bg-[#050507] border border-slate-800/80 text-xs text-slate-500">
+                          No Data Available — 0 user registrations recorded in this period.
+                        </div>
+                      ) : (
+                        <div className="h-64">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <AreaChart data={charts.userGrowth || []}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                              <XAxis dataKey="month" stroke="#64748b" fontSize={11} />
+                              <YAxis stroke="#64748b" fontSize={11} allowDecimals={false} />
+                              <Tooltip contentStyle={{ backgroundColor: '#0b0c10', borderColor: '#d4af37', fontSize: 12 }} />
+                              <Area type="monotone" dataKey="totalUsers" stroke="#d4af37" fill="#d4af37" fillOpacity={0.18} name="Total Users" />
+                              <Area type="monotone" dataKey="newUsers" stroke="#38bdf8" fill="#38bdf8" fillOpacity={0.12} name="New Signups" />
+                            </AreaChart>
+                          </ResponsiveContainer>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {(activeSubmenu === 'executive-overview' || activeSubmenu === 'revenue-analytics') && (
+                    <div className="p-5 rounded-2xl bg-[#0b0c10] border border-slate-800/90">
+                      <h3 className="text-sm font-semibold text-white mb-4">
+                        Verified Revenue (INR) & Releases ({overviewRange})
+                      </h3>
+                      {!hasRevenueChartData ? (
+                        <div className="h-64 flex items-center justify-center rounded-xl bg-[#050507] border border-slate-800/80 text-xs text-slate-500">
+                          No Data Available — 0 paid orders or releases recorded in this window.
+                        </div>
+                      ) : (
+                        <div className="h-64">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={charts.revenueTrend || []}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                              <XAxis dataKey="month" stroke="#64748b" fontSize={11} />
+                              <YAxis stroke="#64748b" fontSize={11} allowDecimals={false} />
+                              <Tooltip contentStyle={{ backgroundColor: '#0b0c10', borderColor: '#d4af37', fontSize: 12 }} />
+                              <Bar dataKey="revenue" fill="#d4af37" radius={[4, 4, 0, 0]} name="Paid Revenue (₹)" />
+                              <Bar dataKey="releases" fill="#60a5fa" radius={[4, 4, 0, 0]} name="Releases" />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {(activeSubmenu === 'executive-overview' || activeSubmenu === 'release-analytics') && (
+                    <div className="p-5 rounded-2xl bg-[#0b0c10] border border-slate-800/90">
+                      <h3 className="text-sm font-semibold text-white mb-4">Catalog Release Status</h3>
+                      {!hasReleasePieData ? (
+                        <div className="h-64 flex items-center justify-center rounded-xl bg-[#050507] border border-slate-800/80 text-xs text-slate-500">
+                          No Data Available — 0 releases uploaded to catalog.
+                        </div>
+                      ) : (
+                        <div className="h-64 flex items-center">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                              <Pie
+                                data={(charts.releaseStatusBreakdown || []).filter((x: any) => x.value > 0)}
+                                dataKey="value"
+                                nameKey="name"
+                                cx="50%"
+                                cy="50%"
+                                innerRadius={52}
+                                outerRadius={84}
+                                paddingAngle={3}
+                              >
+                                {(charts.releaseStatusBreakdown || [])
+                                  .filter((x: any) => x.value > 0)
+                                  .map((entry: any, idx: number) => (
+                                    <Cell key={idx} fill={entry.color || '#d4af37'} />
+                                  ))}
+                              </Pie>
+                              <Tooltip contentStyle={{ backgroundColor: '#0b0c10', borderColor: '#d4af37', fontSize: 12 }} />
+                            </PieChart>
+                          </ResponsiveContainer>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {(activeSubmenu === 'executive-overview' || activeSubmenu === 'platform-activity') && (
+                    <div className="p-5 rounded-2xl bg-[#0b0c10] border border-slate-800/90">
+                      <h3 className="text-sm font-semibold text-white mb-4">
+                        Platform Activity ({overviewRange})
+                      </h3>
+                      {!hasActivityChartData ? (
+                        <div className="h-64 flex items-center justify-center rounded-xl bg-[#050507] border border-slate-800/80 text-xs text-slate-500">
+                          No Data Available — 0 recorded events in this period.
+                        </div>
+                      ) : (
+                        <div className="h-64">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={charts.platformActivity || []}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                              <XAxis dataKey="day" stroke="#64748b" fontSize={11} />
+                              <YAxis stroke="#64748b" fontSize={11} allowDecimals={false} />
+                              <Tooltip contentStyle={{ backgroundColor: '#0b0c10', borderColor: '#d4af37', fontSize: 12 }} />
+                              <Bar dataKey="adminActions" fill="#d4af37" name="Admin Actions" />
+                              <Bar dataKey="releases" fill="#10b981" name="Releases" />
+                              <Bar dataKey="payments" fill="#f59e0b" name="Paid Orders" />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Top-Performing Content & Recent Activity */}
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 text-xs">
+                <div className="p-5 rounded-2xl bg-[#0b0c10] border border-slate-800/90 space-y-3">
+                  <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
+                    <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+                      <Disc3 className="w-4 h-4 text-[#d4af37]" /> Top Catalog Content
+                    </h3>
+                    <button
+                      onClick={() => handleSelectNavigation('releases', 'all-releases')}
+                      className="text-[11px] text-[#f0cf65] hover:underline"
+                    >
+                      View All Releases
+                    </button>
+                  </div>
+                  {topContent.length === 0 ? (
+                    <p className="py-6 text-center text-slate-500">
+                      No Data Available — 0 catalog releases submitted.
+                    </p>
+                  ) : (
+                    <div className="divide-y divide-slate-800/70">
+                      {topContent.map(item => (
+                        <div key={item.id} className="py-2.5 flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="font-semibold text-white truncate">{item.title}</p>
+                            <p className="text-[11px] text-slate-400 truncate">
+                              {item.artist} · {item.type} · {item.tracksCount} track(s)
+                            </p>
+                          </div>
+                          <div className="text-right shrink-0 font-mono tabular-nums">
+                            <p className="text-[#f0cf65] text-[11px]">{item.status}</p>
+                            <p className="text-[10px] text-slate-500">
+                              {item.streams > 0 ? `${item.streams.toLocaleString()} streams` : 'Streams pending DSP'}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="p-5 rounded-2xl bg-[#0b0c10] border border-slate-800/90 space-y-3">
+                  <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
+                    <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+                      <Clock className="w-4 h-4 text-[#d4af37]" /> Recent Activity Feed
+                    </h3>
+                    <button
+                      onClick={() => handleSelectNavigation('security', 'audit-logs')}
+                      className="text-[11px] text-[#f0cf65] hover:underline"
+                    >
+                      Full Audit Trail
+                    </button>
+                  </div>
+                  {recentActivity.length === 0 ? (
+                    <p className="py-6 text-center text-slate-500">
+                      No Data Available — 0 recent system events logged.
+                    </p>
+                  ) : (
+                    <div className="divide-y divide-slate-800/70 max-h-72 overflow-y-auto">
+                      {recentActivity.map(act => (
+                        <div key={act.id} className="py-2.5 flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-slate-200 font-medium truncate">{act.title}</p>
+                            <p className="text-[11px] text-slate-400 truncate">{act.subtitle}</p>
+                          </div>
+                          <span className="text-[10px] font-mono text-slate-500 shrink-0">
+                            {new Date(act.timestamp).toLocaleDateString()}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Next-Step Recommendation Engine & Platform Intelligence */}
+              <PlatformIntelligencePanel
+                intelligence={intelligence}
+                loading={intelLoading}
                 onRefresh={loadCommandCenterMeta}
+                onNavigateTab={handleSelectNavigation}
+                onTriggerApproval={prop => setPendingProposal(prop)}
               />
-            )}
 
-            {/* 8 Real-DB Executive Reports */}
-            <ExecutiveReportsPanel
-              token={token}
-              includeTest={includeTest}
-              showToast={showToast}
-            />
-          </div>
-        )}
+              {/* Owner Approvals Queue */}
+              {(showApprovalsDrawer || approvals.length > 0) && (
+                <OwnerApprovalsQueue
+                  approvals={approvals}
+                  onExecute={executeQueuedProposalById}
+                  onDismiss={dismissQueuedProposalById}
+                  onRefresh={loadCommandCenterMeta}
+                />
+              )}
 
-        {/* ==================== 2. AI REVIEW CENTER ==================== */}
-        {activeTab === 'ai-review' && (
-          <SuperAdminAiReviewCenter
-            token={token}
-            showToast={showToast}
-            activeSubmenu={activeSubmenu}
-            includeTest={includeTest}
-            onProposeOwnerApproval={prop => setPendingProposal(prop)}
-          />
-        )}
+              {/* 8 Real-DB Executive Reports */}
+              <ExecutiveReportsPanel
+                token={token}
+                includeTest={includeTest}
+                showToast={showToast}
+              />
+            </div>
+          )}
 
-        {/* ==================== 3. AI CONFIGURATION SETTINGS ==================== */}
-        {activeTab === 'ai-settings' && (
-          <SuperAdminAiSettings
-            token={token}
-            showToast={showToast}
-            activeSubmenu={activeSubmenu}
-            onProposeOwnerApproval={prop => setPendingProposal(prop)}
-          />
-        )}
-
-        {/* ==================== 4. USER MANAGEMENT & ARTIST ONBOARDING ==================== */}
-        {activeTab === 'users' && (
-          [
-            'artist-onboarding',
-            'incomplete-profiles',
-            'pending-profile-reviews',
-            'approved-artists',
-            'rejected-profiles'
-          ].includes(activeSubmenu) ? (
+          {/* ==================== 2. USER MANAGEMENT (USERS, ONBOARDING & KYC) ==================== */}
+          {activeTab === 'users' && isUserOnboardingView && (
             <ArtistOnboardingPanel
               token={token}
               includeTest={includeTest}
@@ -947,963 +1097,897 @@ export const SuperAdminDashboardPage: React.FC = () => {
               showToast={showToast}
               onProposeOwnerApproval={prop => setPendingProposal(prop)}
             />
-          ) : (
-          <div className="space-y-4">
-            <div className="p-4 rounded-2xl bg-[#0b0c10] border border-slate-800/90 flex flex-wrap items-center gap-3">
-              <div className="relative flex-1 min-w-[220px]">
-                <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+          )}
+
+          {activeTab === 'users' && isUserKycView && (
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <select
+                  value={kycStatusFilter}
+                  onChange={e => setKycStatusFilter(e.target.value)}
+                  className="px-3 py-2 rounded-xl bg-[#0b0c10] border border-slate-800 text-xs text-white"
+                >
+                  <option value="all">All Submitted KYCs</option>
+                  <option value="pending">Pending Review</option>
+                  <option value="approved">Approved</option>
+                  <option value="rejected">Rejected</option>
+                  <option value="reupload required">Reupload Required</option>
+                </select>
+                <span className="text-xs font-mono text-slate-400">
+                  {kycRecords.length} KYC record(s)
+                </span>
+              </div>
+
+              <div className="rounded-2xl bg-[#0b0c10] border border-slate-800/90 overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="border-b border-slate-800 text-slate-400">
+                      <th className="py-3 px-4">Applicant</th>
+                      <th className="py-3 px-4">Legal Name</th>
+                      <th className="py-3 px-4">Mobile / PAN</th>
+                      <th className="py-3 px-4">Submitted</th>
+                      <th className="py-3 px-4">Status</th>
+                      <th className="py-3 px-4 text-right">Review</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/70">
+                    {kycRecords.map(rec => (
+                      <tr key={rec.userId} className="hover:bg-white/[0.02]">
+                        <td className="py-3 px-4">
+                          <div className="font-semibold text-white">{rec.fullName}</div>
+                          <div className="text-[11px] text-slate-400 font-mono">{rec.email}</div>
+                        </td>
+                        <td className="py-3 px-4 text-slate-200">{rec.kyc?.fullLegalName || '—'}</td>
+                        <td className="py-3 px-4 font-mono text-slate-300">
+                          {rec.kyc?.mobileNumber || '—'}
+                          {rec.kyc?.panNumber ? ` · ${rec.kyc.panNumber}` : ''}
+                        </td>
+                        <td className="py-3 px-4 text-slate-400 font-mono">
+                          {rec.kyc?.submittedAt ? new Date(rec.kyc.submittedAt).toLocaleDateString() : '—'}
+                        </td>
+                        <td className="py-3 px-4 font-mono font-semibold">
+                          <span
+                            className={
+                              rec.kyc?.status === 'Approved'
+                                ? 'text-emerald-300'
+                                : rec.kyc?.status === 'Pending'
+                                  ? 'text-amber-300'
+                                  : 'text-red-300'
+                            }
+                          >
+                            {rec.kyc?.status}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          <button
+                            onClick={() => openKycInspector(rec)}
+                            className="px-3 py-1.5 rounded-lg bg-[#d4af37]/15 border border-[#d4af37]/40 text-[#f0cf65] hover:bg-[#d4af37]/25 font-medium whitespace-nowrap"
+                          >
+                            Verify Documents
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                    {kycRecords.length === 0 && (
+                      <tr>
+                        <td colSpan={6} className="py-10 text-center text-slate-500">
+                          {dataUnavailable ? 'Data Unavailable.' : 'No KYC submissions found for this filter.'}
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'users' && !isUserOnboardingView && !isUserKycView && (
+            <div className="space-y-4">
+              <div className="p-4 rounded-2xl bg-[#0b0c10] border border-slate-800/90 flex flex-wrap items-center gap-3">
+                <div className="relative flex-1 min-w-[220px]">
+                  <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={userSearch}
+                    onChange={e => setUserSearch(e.target.value)}
+                    placeholder="Search by name, email, or user ID..."
+                    className="w-full pl-9 pr-3 py-2 rounded-xl bg-[#050507] border border-slate-800 text-xs text-white"
+                  />
+                </div>
+                <select
+                  value={userStatusFilter}
+                  onChange={e => setUserStatusFilter(e.target.value)}
+                  className="px-3 py-2 rounded-xl bg-[#050507] border border-slate-800 text-xs text-white"
+                >
+                  <option value="all">All Statuses</option>
+                  <option value="active">Active</option>
+                  <option value="suspended">Suspended</option>
+                  <option value="terminated">Terminated</option>
+                </select>
                 <input
-                  type="text"
-                  value={userSearch}
-                  onChange={e => setUserSearch(e.target.value)}
-                  placeholder="Search by name, email, or user ID..."
-                  className="w-full pl-9 pr-3 py-2 rounded-xl bg-[#050507] border border-slate-800 text-xs text-white"
+                  type="date"
+                  value={userDateFrom}
+                  onChange={e => setUserDateFrom(e.target.value)}
+                  className="px-3 py-2 rounded-xl bg-[#050507] border border-slate-800 text-xs text-white"
+                  title="Registered From"
+                />
+                <input
+                  type="date"
+                  value={userDateTo}
+                  onChange={e => setUserDateTo(e.target.value)}
+                  className="px-3 py-2 rounded-xl bg-[#050507] border border-slate-800 text-xs text-white"
+                  title="Registered To"
                 />
               </div>
-              <select
-                value={userStatusFilter}
-                onChange={e => setUserStatusFilter(e.target.value)}
-                className="px-3 py-2 rounded-xl bg-[#050507] border border-slate-800 text-xs text-white"
-              >
-                <option value="all">All Statuses</option>
-                <option value="active">Active</option>
-                <option value="suspended">Suspended</option>
-                <option value="terminated">Terminated</option>
-              </select>
-              <input
-                type="date"
-                value={userDateFrom}
-                onChange={e => setUserDateFrom(e.target.value)}
-                className="px-3 py-2 rounded-xl bg-[#050507] border border-slate-800 text-xs text-white"
-                title="Registered From"
-              />
-              <input
-                type="date"
-                value={userDateTo}
-                onChange={e => setUserDateTo(e.target.value)}
-                className="px-3 py-2 rounded-xl bg-[#050507] border border-slate-800 text-xs text-white"
-                title="Registered To"
-              />
-            </div>
 
-            <div className="rounded-2xl bg-[#0b0c10] border border-slate-800/90 overflow-x-auto">
-              <table className="w-full text-left border-collapse text-xs">
-                <thead>
-                  <tr className="border-b border-slate-800 text-slate-400">
-                    <th className="py-3 px-4 font-medium">User</th>
-                    <th className="py-3 px-4 font-medium">Completion</th>
-                    <th className="py-3 px-4 font-medium">KYC</th>
-                    <th className="py-3 px-4 font-medium">Plan</th>
-                    <th className="py-3 px-4 font-medium">Releases</th>
-                    <th className="py-3 px-4 font-medium">Status</th>
-                    <th className="py-3 px-4 font-medium text-right">Actions (Owner Approved)</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800/70">
-                  {paginatedUsers.map(u => (
-                    <tr key={u.id} className="hover:bg-white/[0.02]">
-                      <td className="py-3 px-4">
-                        <div className="font-semibold text-white">
-                          {u.fullName}{' '}
-                          {u.isTestRecord && (
-                            <span className="font-mono text-[10px] text-amber-300">[TEST/DEMO]</span>
+              <div className="rounded-2xl bg-[#0b0c10] border border-slate-800/90 overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="border-b border-slate-800 text-slate-400">
+                      <th className="py-3 px-4 font-medium">User</th>
+                      <th className="py-3 px-4 font-medium">Registered</th>
+                      <th className="py-3 px-4 font-medium">Completion</th>
+                      <th className="py-3 px-4 font-medium">KYC</th>
+                      <th className="py-3 px-4 font-medium">Plan</th>
+                      <th className="py-3 px-4 font-medium">Releases</th>
+                      <th className="py-3 px-4 font-medium">Status</th>
+                      <th className="py-3 px-4 font-medium text-right">Actions (Owner Approved)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/70">
+                    {paginatedUsers.map(u => (
+                      <tr key={u.id} className="hover:bg-white/[0.02]">
+                        <td className="py-3 px-4">
+                          <div className="font-semibold text-white">
+                            {u.fullName}{' '}
+                            {u.isTestRecord && (
+                              <span className="font-mono text-[10px] text-amber-300">[TEST/DEMO]</span>
+                            )}
+                          </div>
+                          <div className="text-[11px] text-slate-400 font-mono">{u.email}</div>
+                        </td>
+                        <td className="py-3 px-4 font-mono text-[11px] text-slate-400 whitespace-nowrap">
+                          {u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '—'}
+                        </td>
+                        <td className="py-3 px-4 font-mono tabular-nums text-[#f0cf65]">{u.profileCompletion}%</td>
+                        <td className="py-3 px-4 font-mono text-[11px]">
+                          <span
+                            className={
+                              u.kycStatus === 'Approved'
+                                ? 'text-emerald-300'
+                                : u.kycStatus === 'Pending'
+                                  ? 'text-amber-300'
+                                  : 'text-slate-400'
+                            }
+                          >
+                            {u.kycStatus}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-slate-300">{u.planName}</td>
+                        <td className="py-3 px-4 font-mono tabular-nums text-slate-300">{u.releasesCount}</td>
+                        <td className="py-3 px-4 font-mono uppercase text-[11px]">
+                          <span
+                            className={
+                              u.accountStatus === 'active'
+                                ? 'text-emerald-300'
+                                : u.accountStatus === 'suspended'
+                                  ? 'text-amber-300'
+                                  : 'text-red-300'
+                            }
+                          >
+                            {u.accountStatus}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-right space-x-2 whitespace-nowrap">
+                          <button
+                            onClick={() => inspectUserDetail(u.id)}
+                            className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 inline-flex items-center gap-1"
+                          >
+                            <Eye className="w-3 h-3" /> Inspect
+                          </button>
+                          {u.accountStatus === 'active' && (
+                            <button
+                              onClick={() =>
+                                setPendingProposal({
+                                  actionType: 'USER_SUSPEND',
+                                  targetType: 'user',
+                                  targetId: u.id,
+                                  title: `Suspend Account · ${u.email}`,
+                                  explanation: `Suspends user ${u.email} and revokes all active login tokens immediately.`,
+                                  consequences: 'Artist loses dashboard access until explicitly reactivated; financial/audit records remain intact.',
+                                  proposedChanges: { userId: u.id, email: u.email, newStatus: 'suspended' },
+                                  payload: {},
+                                  requiresReason: true
+                                })
+                              }
+                              className="px-2.5 py-1 rounded-lg bg-amber-950/70 hover:bg-amber-900 text-amber-300 border border-amber-700/40"
+                            >
+                              Suspend
+                            </button>
                           )}
-                        </div>
-                        <div className="text-[11px] text-slate-400 font-mono">{u.email}</div>
-                      </td>
-                      <td className="py-3 px-4 font-mono tabular-nums text-[#f0cf65]">{u.profileCompletion}%</td>
-                      <td className="py-3 px-4 font-mono text-[11px]">
-                        <span
-                          className={
-                            u.kycStatus === 'Approved'
-                              ? 'text-emerald-300'
-                              : u.kycStatus === 'Pending'
-                                ? 'text-amber-300'
-                                : 'text-slate-400'
-                          }
-                        >
-                          {u.kycStatus}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-slate-300">{u.planName}</td>
-                      <td className="py-3 px-4 font-mono tabular-nums text-slate-300">{u.releasesCount}</td>
-                      <td className="py-3 px-4 font-mono uppercase text-[11px]">
-                        <span
-                          className={
-                            u.accountStatus === 'active'
-                              ? 'text-emerald-300'
-                              : u.accountStatus === 'suspended'
-                                ? 'text-amber-300'
-                                : 'text-red-300'
-                          }
-                        >
-                          {u.accountStatus}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-right space-x-2 whitespace-nowrap">
-                        <button
-                          onClick={() => inspectUserDetail(u.id)}
-                          className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 inline-flex items-center gap-1"
-                        >
-                          <Eye className="w-3 h-3" /> Inspect
-                        </button>
-                        {u.accountStatus === 'active' && (
-                          <button
-                            onClick={() =>
-                              setPendingProposal({
-                                actionType: 'USER_SUSPEND',
-                                targetType: 'user',
-                                targetId: u.id,
-                                title: `Suspend Account · ${u.email}`,
-                                explanation: `Suspends user ${u.email} and revokes all active login tokens immediately.`,
-                                consequences: 'Artist loses dashboard access until explicitly reactivated; financial/audit records remain intact.',
-                                proposedChanges: { userId: u.id, email: u.email, newStatus: 'suspended' },
-                                payload: {},
-                                requiresReason: true
-                              })
-                            }
-                            className="px-2.5 py-1 rounded-lg bg-amber-950/70 hover:bg-amber-900 text-amber-300 border border-amber-700/40"
-                          >
-                            Suspend
-                          </button>
-                        )}
-                        {u.accountStatus !== 'active' && (
-                          <button
-                            onClick={() =>
-                              setPendingProposal({
-                                actionType: 'USER_REACTIVATE',
-                                targetType: 'user',
-                                targetId: u.id,
-                                title: `Reactivate Account · ${u.email}`,
-                                explanation: `Restores login & distribution access for ${u.email}.`,
-                                consequences: 'User can authenticate again using verified credentials & 2FA.',
-                                proposedChanges: { userId: u.id, email: u.email, newStatus: 'active' },
-                                payload: {}
-                              })
-                            }
-                            className="px-2.5 py-1 rounded-lg bg-emerald-950/70 hover:bg-emerald-900 text-emerald-300 border border-emerald-700/40"
-                          >
-                            Reactivate
-                          </button>
-                        )}
-                        {u.accountStatus !== 'terminated' && (
-                          <button
-                            onClick={() =>
-                              setPendingProposal({
-                                actionType: 'USER_TERMINATE',
-                                targetType: 'user',
-                                targetId: u.id,
-                                title: `Terminate Account · ${u.email}`,
-                                explanation: `Permanently terminates account ${u.email} and invalidates all active sessions.`,
-                                consequences: 'Blocks future logins permanently unless explicitly restored by Super Admin. Financial ledger stays preserved.',
-                                proposedChanges: { userId: u.id, email: u.email, newStatus: 'terminated' },
-                                payload: {},
-                                requiresReason: true
-                              })
-                            }
-                            className="px-2.5 py-1 rounded-lg bg-red-950/70 hover:bg-red-900 text-red-300 border border-red-700/40"
-                          >
-                            Terminate
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                  {filteredUsers.length === 0 && (
-                    <tr>
-                      <td colSpan={7} className="py-10 text-center text-slate-500">
-                        {dataUnavailable ? 'Data Unavailable — database error.' : '0 users match your current filter.'}
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-              {filteredUsers.length > PAGE_SIZE && (
-                <div className="p-3 border-t border-slate-800 flex items-center justify-between text-xs font-mono text-slate-400">
-                  <span>
-                    Page {userPage} of {Math.ceil(filteredUsers.length / PAGE_SIZE)} ({filteredUsers.length} users)
-                  </span>
-                  <div className="space-x-2">
-                    <button
-                      disabled={userPage <= 1}
-                      onClick={() => setUserPage(p => Math.max(1, p - 1))}
-                      className="px-2.5 py-1 rounded bg-slate-800 disabled:opacity-40 text-white"
-                    >
-                      Prev
-                    </button>
-                    <button
-                      disabled={userPage >= Math.ceil(filteredUsers.length / PAGE_SIZE)}
-                      onClick={() => setUserPage(p => p + 1)}
-                      className="px-2.5 py-1 rounded bg-slate-800 disabled:opacity-40 text-white"
-                    >
-                      Next
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-          )
-        )}
-
-        {/* ==================== 5. KYC VERIFICATION ==================== */}
-        {activeTab === 'kyc' && (
-          <div className="space-y-4">
-            <div className="flex items-center gap-3">
-              <select
-                value={kycStatusFilter}
-                onChange={e => setKycStatusFilter(e.target.value)}
-                className="px-3 py-2 rounded-xl bg-[#0b0c10] border border-slate-800 text-xs text-white"
-              >
-                <option value="all">All Submitted KYCs</option>
-                <option value="pending">Pending Review</option>
-                <option value="approved">Approved</option>
-                <option value="rejected">Rejected</option>
-                <option value="reupload required">Reupload Required</option>
-              </select>
-            </div>
-
-            <div className="rounded-2xl bg-[#0b0c10] border border-slate-800/90 overflow-x-auto">
-              <table className="w-full text-left border-collapse text-xs">
-                <thead>
-                  <tr className="border-b border-slate-800 text-slate-400">
-                    <th className="py-3 px-4">Applicant</th>
-                    <th className="py-3 px-4">Legal Name</th>
-                    <th className="py-3 px-4">Mobile / PAN</th>
-                    <th className="py-3 px-4">Submitted</th>
-                    <th className="py-3 px-4">Status</th>
-                    <th className="py-3 px-4 text-right">Review</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800/70">
-                  {kycRecords.map(rec => (
-                    <tr key={rec.userId} className="hover:bg-white/[0.02]">
-                      <td className="py-3 px-4">
-                        <div className="font-semibold text-white">{rec.fullName}</div>
-                        <div className="text-[11px] text-slate-400 font-mono">{rec.email}</div>
-                      </td>
-                      <td className="py-3 px-4 text-slate-200">{rec.kyc?.fullLegalName || '—'}</td>
-                      <td className="py-3 px-4 font-mono text-slate-300">
-                        {rec.kyc?.mobileNumber || '—'}
-                        {rec.kyc?.panNumber ? ` · ${rec.kyc.panNumber}` : ''}
-                      </td>
-                      <td className="py-3 px-4 text-slate-400 font-mono">
-                        {rec.kyc?.submittedAt ? new Date(rec.kyc.submittedAt).toLocaleDateString() : '—'}
-                      </td>
-                      <td className="py-3 px-4 font-mono font-semibold">
-                        <span
-                          className={
-                            rec.kyc?.status === 'Approved'
-                              ? 'text-emerald-300'
-                              : rec.kyc?.status === 'Pending'
-                                ? 'text-amber-300'
-                                : 'text-red-300'
-                          }
-                        >
-                          {rec.kyc?.status}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-right">
-                        <button
-                          onClick={() => openKycInspector(rec)}
-                          className="px-3 py-1.5 rounded-lg bg-[#d4af37]/15 border border-[#d4af37]/40 text-[#f0cf65] hover:bg-[#d4af37]/25 font-medium"
-                        >
-                          Verify Documents
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                  {kycRecords.length === 0 && (
-                    <tr>
-                      <td colSpan={6} className="py-10 text-center text-slate-500">
-                        {dataUnavailable ? 'Data Unavailable.' : 'No KYC submissions found for this filter.'}
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {/* ==================== 6. RELEASE MANAGEMENT ==================== */}
-        {activeTab === 'releases' && (
-          <div className="space-y-4">
-            {activeSubmenu === 'takedown-requests' ? (
-              <div className="rounded-2xl bg-[#0b0c10] border border-slate-800/90 p-5 space-y-3">
-                <h3 className="text-sm font-semibold text-white">Takedown Requests ({takedownsList.length})</h3>
-                {takedownsList.length === 0 ? (
-                  <p className="text-xs text-slate-500">0 takedown requests found in database.</p>
-                ) : (
-                  <div className="space-y-2">
-                    {takedownsList.map((td: any) => (
-                      <div key={td.id} className="p-3.5 rounded-xl bg-[#050507] border border-slate-800 text-xs flex justify-between gap-3">
-                        <div>
-                          <p className="font-semibold text-white">{td.userName} ({td.userEmail})</p>
-                          <p className="text-slate-300 mt-0.5">{td.details}</p>
-                        </div>
-                        <span className="font-mono text-amber-300 shrink-0">{td.status} · {td.date}</span>
-                      </div>
+                          {u.accountStatus !== 'active' && (
+                            <button
+                              onClick={() =>
+                                setPendingProposal({
+                                  actionType: 'USER_REACTIVATE',
+                                  targetType: 'user',
+                                  targetId: u.id,
+                                  title: `Reactivate Account · ${u.email}`,
+                                  explanation: `Restores login & distribution access for ${u.email}.`,
+                                  consequences: 'User can authenticate again using verified credentials & 2FA.',
+                                  proposedChanges: { userId: u.id, email: u.email, newStatus: 'active' },
+                                  payload: {}
+                                })
+                              }
+                              className="px-2.5 py-1 rounded-lg bg-emerald-950/70 hover:bg-emerald-900 text-emerald-300 border border-emerald-700/40"
+                            >
+                              Reactivate
+                            </button>
+                          )}
+                          {u.accountStatus !== 'terminated' && (
+                            <button
+                              onClick={() =>
+                                setPendingProposal({
+                                  actionType: 'USER_TERMINATE',
+                                  targetType: 'user',
+                                  targetId: u.id,
+                                  title: `Terminate Account · ${u.email}`,
+                                  explanation: `Permanently terminates account ${u.email} and invalidates all active sessions.`,
+                                  consequences: 'Blocks future logins permanently unless explicitly restored by Super Admin. Financial ledger stays preserved.',
+                                  proposedChanges: { userId: u.id, email: u.email, newStatus: 'terminated' },
+                                  payload: {},
+                                  requiresReason: true
+                                })
+                              }
+                              className="px-2.5 py-1 rounded-lg bg-red-950/70 hover:bg-red-900 text-red-300 border border-red-700/40"
+                            >
+                              Terminate
+                            </button>
+                          )}
+                        </td>
+                      </tr>
                     ))}
+                    {filteredUsers.length === 0 && (
+                      <tr>
+                        <td colSpan={8} className="py-10 text-center text-slate-500">
+                          {dataUnavailable ? 'Data Unavailable — database error.' : '0 users match your current filter.'}
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+                {filteredUsers.length > PAGE_SIZE && (
+                  <div className="p-3 border-t border-slate-800 flex items-center justify-between text-xs font-mono text-slate-400">
+                    <span>
+                      Page {userPage} of {Math.ceil(filteredUsers.length / PAGE_SIZE)} ({filteredUsers.length} users)
+                    </span>
+                    <div className="space-x-2">
+                      <button
+                        disabled={userPage <= 1}
+                        onClick={() => setUserPage(p => Math.max(1, p - 1))}
+                        className="px-2.5 py-1 rounded bg-slate-800 disabled:opacity-40 text-white"
+                      >
+                        Prev
+                      </button>
+                      <button
+                        disabled={userPage >= Math.ceil(filteredUsers.length / PAGE_SIZE)}
+                        onClick={() => setUserPage(p => p + 1)}
+                        className="px-2.5 py-1 rounded bg-slate-800 disabled:opacity-40 text-white"
+                      >
+                        Next
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
-            ) : (
-              <>
-                <div className="p-4 rounded-2xl bg-[#0b0c10] border border-slate-800/90 flex flex-wrap items-center gap-3">
-                  <div className="relative flex-1 min-w-[220px]">
-                    <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
-                    <input
-                      type="text"
-                      value={releaseSearch}
-                      onChange={e => setReleaseSearch(e.target.value)}
-                      placeholder="Search by release title, artist, UPC, or owner email..."
-                      className="w-full pl-9 pr-3 py-2 rounded-xl bg-[#050507] border border-slate-800 text-xs text-white"
-                    />
-                  </div>
-                  <select
-                    value={releaseStatusFilter}
-                    onChange={e => setReleaseStatusFilter(e.target.value)}
-                    className="px-3 py-2 rounded-xl bg-[#050507] border border-slate-800 text-xs text-white"
-                  >
-                    <option value="all">All Releases</option>
-                    <option value="pending">Pending / Under Review</option>
-                    <option value="approved">Approved</option>
-                    <option value="published">Published / Live</option>
-                    <option value="rejected">Rejected</option>
-                    <option value="action required">Action Required</option>
-                    <option value="draft">Draft</option>
-                  </select>
-                </div>
+            </div>
+          )}
 
-                <div className="rounded-2xl bg-[#0b0c10] border border-slate-800/90 overflow-x-auto">
-                  <table className="w-full text-left border-collapse text-xs">
-                    <thead>
-                      <tr className="border-b border-slate-800 text-slate-400">
-                        <th className="py-3 px-4">Release</th>
-                        <th className="py-3 px-4">Owner</th>
-                        <th className="py-3 px-4">UPC / Tracks</th>
-                        <th className="py-3 px-4">Release Date</th>
-                        <th className="py-3 px-4">Status</th>
-                        <th className="py-3 px-4 text-right">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-800/70">
-                      {paginatedReleases.map(r => (
-                        <tr key={r.id} className="hover:bg-white/[0.02]">
-                          <td className="py-3 px-4">
-                            <div className="font-semibold text-white">{r.title}</div>
-                            <div className="text-[11px] text-slate-400">
-                              {r.artist} · {r.type} · {r.primaryGenre}
-                            </div>
-                          </td>
-                          <td className="py-3 px-4">
-                            <div className="text-slate-200">{r.ownerName}</div>
-                            <div className="text-[11px] text-slate-500 font-mono">{r.ownerEmail}</div>
-                          </td>
-                          <td className="py-3 px-4 font-mono text-slate-300">
-                            {r.upc || 'Pending'} · {r.tracks?.length || 0} trk
-                          </td>
-                          <td className="py-3 px-4 font-mono text-slate-400">{r.releaseDate}</td>
-                          <td className="py-3 px-4 font-mono font-semibold">
-                            <span
-                              className={
-                                r.status === 'Approved' || r.status === 'Live' || r.status === 'Published'
-                                  ? 'text-emerald-300'
-                                  : r.status === 'Rejected'
-                                    ? 'text-red-300'
-                                    : 'text-amber-300'
-                              }
-                            >
-                              {r.status}
-                            </span>
-                          </td>
-                          <td className="py-3 px-4 text-right">
-                            <button
-                              onClick={() => setInspectedRelease(r)}
-                              className="px-3 py-1.5 rounded-lg bg-[#d4af37]/15 border border-[#d4af37]/40 text-[#f0cf65] hover:bg-[#d4af37]/25"
-                            >
-                              Inspect & Review
-                            </button>
-                          </td>
-                        </tr>
+          {/* ==================== 3. MUSIC & RELEASE MANAGEMENT ==================== */}
+          {activeTab === 'releases' && (
+            <div className="space-y-4">
+              {activeSubmenu === 'takedown-requests' ? (
+                <div className="rounded-2xl bg-[#0b0c10] border border-slate-800/90 p-5 space-y-3">
+                  <h3 className="text-sm font-semibold text-white">Takedown Requests ({takedownsList.length})</h3>
+                  {takedownsList.length === 0 ? (
+                    <p className="text-xs text-slate-500">0 takedown requests found in database.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {takedownsList.map((td: any) => (
+                        <div key={td.id} className="p-3.5 rounded-xl bg-[#050507] border border-slate-800 text-xs flex justify-between gap-3">
+                          <div>
+                            <p className="font-semibold text-white">{td.userName} ({td.userEmail})</p>
+                            <p className="text-slate-300 mt-0.5">{td.details}</p>
+                          </div>
+                          <span className="font-mono text-amber-300 shrink-0">{td.status} · {td.date}</span>
+                        </div>
                       ))}
-                      {releasesList.length === 0 && (
-                        <tr>
-                          <td colSpan={6} className="py-10 text-center text-slate-500">
-                            {dataUnavailable ? 'Data Unavailable.' : '0 releases match your filter.'}
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                  {releasesList.length > PAGE_SIZE && (
-                    <div className="p-3 border-t border-slate-800 flex items-center justify-between text-xs font-mono text-slate-400">
-                      <span>
-                        Page {releasePage} of {Math.ceil(releasesList.length / PAGE_SIZE)} ({releasesList.length} releases)
-                      </span>
-                      <div className="space-x-2">
-                        <button
-                          disabled={releasePage <= 1}
-                          onClick={() => setReleasePage(p => Math.max(1, p - 1))}
-                          className="px-2.5 py-1 rounded bg-slate-800 disabled:opacity-40 text-white"
-                        >
-                          Prev
-                        </button>
-                        <button
-                          disabled={releasePage >= Math.ceil(releasesList.length / PAGE_SIZE)}
-                          onClick={() => setReleasePage(p => p + 1)}
-                          className="px-2.5 py-1 rounded bg-slate-800 disabled:opacity-40 text-white"
-                        >
-                          Next
-                        </button>
-                      </div>
                     </div>
                   )}
                 </div>
-              </>
-            )}
-          </div>
-        )}
-
-        {/* ==================== 7. PAYMENTS & SUBSCRIPTIONS ==================== */}
-        {activeTab === 'payments' && (
-          <div className="space-y-6">
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3.5">
-              {[
-                { label: 'Total Orders', value: dataUnavailable || !paymentSummary ? 'Data Unavailable' : paymentSummary.totalOrders ?? 0 },
-                { label: 'Verified Paid Orders', value: dataUnavailable || !paymentSummary ? 'Data Unavailable' : paymentSummary.paidOrders ?? 0 },
-                { label: 'Failed / Pending', value: dataUnavailable || !paymentSummary ? 'Data Unavailable' : `${paymentSummary.failedOrders ?? 0} / ${paymentSummary.pendingOrders ?? 0}` },
-                { label: 'Refunded Orders', value: dataUnavailable || !paymentSummary ? 'Data Unavailable' : paymentSummary.refundedOrders ?? 0 },
-                { label: 'Verified Paid Revenue', value: dataUnavailable || !paymentSummary ? 'Data Unavailable' : `₹${Number(paymentSummary.totalRevenue ?? 0).toLocaleString('en-IN')}` }
-              ].map(s => (
-                <div key={s.label} className="p-4 rounded-xl bg-[#0b0c10] border border-slate-800">
-                  <p className="text-[11px] text-slate-400">{s.label}</p>
-                  <p className="text-lg font-bold font-mono tabular-nums text-[#f0cf65] mt-1">{s.value}</p>
-                </div>
-              ))}
-            </div>
-
-            {activeSubmenu === 'revenue-reports' ? (
-              <ExecutiveReportsPanel token={token} includeTest={includeTest} showToast={showToast} />
-            ) : activeSubmenu === 'promotional-program' ? (
-              <PromotionalProgramPanel
-                token={token}
-                includeTest={includeTest}
-                showToast={showToast}
-                onProposeOwnerApproval={prop => setPendingProposal(prop)}
-              />
-            ) : activeSubmenu === 'financial-governance' ? (
-              <FinancialGovernancePanel
-                token={token}
-                includeTest={includeTest}
-                showToast={showToast}
-                onProposeOwnerApproval={prop => setPendingProposal(prop)}
-              />
-            ) : (
-              <>
-                <div className="rounded-2xl bg-[#0b0c10] border border-slate-800/90 overflow-x-auto">
-                  <div className="p-4 border-b border-slate-800 flex items-center justify-between">
-                    <h3 className="text-sm font-semibold text-white">Razorpay Transactions</h3>
-                    <span className="text-[11px] text-slate-500 font-mono">
-                      Revenue sums paid orders only · Secrets isolated server-side
-                    </span>
+              ) : (
+                <>
+                  <div className="p-4 rounded-2xl bg-[#0b0c10] border border-slate-800/90 flex flex-wrap items-center gap-3">
+                    <div className="relative flex-1 min-w-[220px]">
+                      <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        value={releaseSearch}
+                        onChange={e => setReleaseSearch(e.target.value)}
+                        placeholder="Search by release title, artist, UPC, or owner email..."
+                        className="w-full pl-9 pr-3 py-2 rounded-xl bg-[#050507] border border-slate-800 text-xs text-white"
+                      />
+                    </div>
+                    <select
+                      value={releaseStatusFilter}
+                      onChange={e => setReleaseStatusFilter(e.target.value)}
+                      className="px-3 py-2 rounded-xl bg-[#050507] border border-slate-800 text-xs text-white"
+                    >
+                      <option value="all">All Releases</option>
+                      <option value="pending">Pending / Under Review</option>
+                      <option value="approved">Approved</option>
+                      <option value="published">Published / Live</option>
+                      <option value="rejected">Rejected</option>
+                      <option value="action required">Action Required</option>
+                      <option value="draft">Draft</option>
+                    </select>
                   </div>
-                  <table className="w-full text-left border-collapse text-xs">
-                    <thead>
-                      <tr className="border-b border-slate-800 text-slate-400">
-                        <th className="py-3 px-4">Order / Payment ID</th>
-                        <th className="py-3 px-4">Customer</th>
-                        <th className="py-3 px-4">Plan</th>
-                        <th className="py-3 px-4">Amount</th>
-                        <th className="py-3 px-4">Status</th>
-                        <th className="py-3 px-4 text-right">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-800/70">
-                      {paginatedOrders.map(o => (
-                        <tr key={o.orderId} className="hover:bg-white/[0.02]">
-                          <td className="py-3 px-4 font-mono">
-                            <div className="text-white">
-                              {o.orderId} {o.isTestMode && <span className="text-amber-300">[TEST]</span>}
-                            </div>
-                            <div className="text-[11px] text-slate-500">{o.paymentId || o.failureReason || '—'}</div>
-                          </td>
-                          <td className="py-3 px-4">
-                            <div className="text-slate-200">{o.userName}</div>
-                            <div className="text-[11px] text-slate-500">{o.userEmail}</div>
-                          </td>
-                          <td className="py-3 px-4 text-slate-300">{o.planName}</td>
-                          <td className="py-3 px-4 font-mono tabular-nums text-[#f0cf65]">₹{o.amount}</td>
-                          <td className="py-3 px-4 font-mono uppercase text-[11px]">
-                            <span
-                              className={
-                                o.status === 'paid'
-                                  ? 'text-emerald-300'
-                                  : o.status === 'refunded'
-                                    ? 'text-blue-300'
-                                    : 'text-red-300'
-                              }
-                            >
-                              {o.status}
-                            </span>
-                          </td>
-                          <td className="py-3 px-4 text-right space-x-2">
-                            <button
-                              onClick={() => setInvoiceModal(o)}
-                              className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 inline-flex items-center gap-1"
-                            >
-                              <FileText className="w-3 h-3" /> Invoice
-                            </button>
-                            {o.status === 'paid' && (
-                              <button
-                                onClick={() =>
-                                  setPendingProposal({
-                                    actionType: 'PAYMENT_REFUND',
-                                    targetType: 'payment',
-                                    targetId: o.orderId,
-                                    title: `Refund Paid Order · ${o.orderId} (₹${o.amount})`,
-                                    explanation: `Marks verified paid order ${o.orderId} for ${o.userEmail} as refunded.`,
-                                    consequences: 'Deducts ₹' + o.amount + ' from verified revenue totals and writes an immutable financial audit entry.',
-                                    proposedChanges: { orderId: o.orderId, amountINR: o.amount, newStatus: 'refunded' },
-                                    payload: {},
-                                    requiresReason: true
-                                  })
-                                }
-                                className="px-2.5 py-1 rounded-lg bg-red-950/70 hover:bg-red-900 text-red-300 border border-red-700/40 inline-flex items-center gap-1"
-                              >
-                                <RotateCcw className="w-3 h-3" /> Refund
-                              </button>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                      {filteredOrders.length === 0 && (
-                        <tr>
-                          <td colSpan={6} className="py-10 text-center text-slate-500">
-                            {dataUnavailable ? 'Data Unavailable.' : '0 payment orders recorded.'}
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
 
-                <div className="rounded-2xl bg-[#0b0c10] border border-slate-800/90 overflow-x-auto">
-                  <div className="p-4 border-b border-slate-800">
-                    <h3 className="text-sm font-semibold text-white">User Subscriptions ({subscriptions.length})</h3>
-                  </div>
-                  <table className="w-full text-left border-collapse text-xs">
-                    <thead>
-                      <tr className="border-b border-slate-800 text-slate-400">
-                        <th className="py-3 px-4">User</th>
-                        <th className="py-3 px-4">Plan</th>
-                        <th className="py-3 px-4">Billing</th>
-                        <th className="py-3 px-4">Status</th>
-                        <th className="py-3 px-4">Expires / Renews</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-800/70">
-                      {subscriptions.map((s, idx) => (
-                        <tr key={idx}>
-                          <td className="py-3 px-4">
-                            <div className="text-white">{s.userName}</div>
-                            <div className="text-[11px] text-slate-500">{s.userEmail}</div>
-                          </td>
-                          <td className="py-3 px-4 text-slate-200">{s.planName}</td>
-                          <td className="py-3 px-4 font-mono text-slate-300">
-                            ₹{s.amount} / {s.billingFrequency}
-                          </td>
-                          <td className="py-3 px-4 font-mono uppercase text-[11px] text-[#f0cf65]">
-                            {s.status}
-                          </td>
-                          <td className="py-3 px-4 font-mono text-slate-400">
-                            {(s.expiresAt || s.renewsAt || '—').slice(0, 10)}
-                          </td>
+                  <div className="rounded-2xl bg-[#0b0c10] border border-slate-800/90 overflow-x-auto">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="border-b border-slate-800 text-slate-400">
+                          <th className="py-3 px-4">Release</th>
+                          <th className="py-3 px-4">Owner</th>
+                          <th className="py-3 px-4">UPC / Tracks</th>
+                          <th className="py-3 px-4">Release Date</th>
+                          <th className="py-3 px-4">Status</th>
+                          <th className="py-3 px-4 text-right">Actions</th>
                         </tr>
-                      ))}
-                      {subscriptions.length === 0 && (
-                        <tr>
-                          <td colSpan={5} className="py-8 text-center text-slate-500">
-                            0 subscriptions found in database.
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </>
-            )}
-          </div>
-        )}
-
-        {/* ==================== 8. REVIEWS & SUPPORT ==================== */}
-        {activeTab === 'support' && (
-          <div className="space-y-6">
-            {[
-              { title: 'Artist Support Tickets', items: supportData.tickets, sourceType: 'ticket' as const },
-              { title: 'Contact & Complaint Inquiries', items: supportData.contacts, sourceType: 'contact' as const },
-              { title: 'User Reviews & Feedback', items: supportData.feedbacks, sourceType: 'feedback' as const }
-            ]
-              .filter(sec => {
-                if (activeSubmenu === 'user-complaints') return sec.sourceType === 'contact';
-                if (activeSubmenu === 'platform-reviews') return sec.sourceType === 'feedback';
-                if (activeSubmenu === 'support-tickets') return sec.sourceType === 'ticket';
-                return true;
-              })
-              .map(section => {
-                const items =
-                  activeSubmenu === 'resolved-tickets'
-                    ? section.items.filter((i: any) => i.status === 'Resolved')
-                    : section.items;
-
-                return (
-                  <div key={section.title} className="rounded-2xl bg-[#0b0c10] border border-slate-800/90 p-5 space-y-3">
-                    <h3 className="text-sm font-semibold text-white">
-                      {section.title} ({items.length})
-                    </h3>
-                    {items.length === 0 ? (
-                      <p className="text-xs text-slate-500">No entries in this queue.</p>
-                    ) : (
-                      <div className="space-y-2.5">
-                        {items.map((item: any) => (
-                          <div
-                            key={item.id}
-                            className="p-4 rounded-xl bg-[#050507] border border-slate-800 flex flex-wrap items-start justify-between gap-4"
-                          >
-                            <div className="space-y-1 max-w-2xl">
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs font-semibold text-white">
-                                  {item.subject || item.name || 'Inquiry'}
-                                </span>
-                                <span className="font-mono text-[10px] text-[#f0cf65] uppercase">
-                                  · {item.status || 'Open'}
-                                </span>
-                                {item.rating && (
-                                  <span className="text-[11px] font-mono text-amber-400">
-                                    · Rating: {item.rating}/5
-                                  </span>
-                                )}
+                      </thead>
+                      <tbody className="divide-y divide-slate-800/70">
+                        {paginatedReleases.map(r => (
+                          <tr key={r.id} className="hover:bg-white/[0.02]">
+                            <td className="py-3 px-4">
+                              <div className="font-semibold text-white">{r.title}</div>
+                              <div className="text-[11px] text-slate-400">
+                                {r.artist} · {r.type} · {r.primaryGenre}
                               </div>
-                              <p className="text-[11px] text-slate-400 font-mono">
-                                {item.userEmail || item.email} · {item.category || item.role || 'General'}
-                              </p>
-                              <p className="text-xs text-slate-300">
-                                {item.message || item.feedback || item.messages?.[0]?.text || ''}
-                              </p>
-                              {item.adminResponse && (
-                                <p className="text-xs text-emerald-300 mt-1">
-                                  Admin Response: {item.adminResponse}
-                                </p>
-                              )}
-                            </div>
-                            <button
-                              onClick={() => {
-                                setReplyModal({
-                                  id: item.id,
-                                  sourceType: section.sourceType,
-                                  title: item.subject || item.name || item.id,
-                                  userEmail: item.userEmail || item.email,
-                                  category: item.category || item.role,
-                                  body: item.message || item.feedback || item.messages?.[0]?.text || ''
-                                });
-                                setReplyText(item.adminResponse || '');
-                              }}
-                              className="px-3 py-1.5 rounded-lg bg-[#d4af37]/15 border border-[#d4af37]/40 text-xs text-[#f0cf65] hover:bg-[#d4af37]/25"
-                            >
-                              Respond & Draft with AI
-                            </button>
-                          </div>
+                            </td>
+                            <td className="py-3 px-4">
+                              <div className="text-slate-200">{r.ownerName}</div>
+                              <div className="text-[11px] text-slate-500 font-mono">{r.ownerEmail}</div>
+                            </td>
+                            <td className="py-3 px-4 font-mono tabular-nums text-slate-300">
+                              {r.upc || 'Pending'} · {r.tracks?.length || 0} trk
+                            </td>
+                            <td className="py-3 px-4 font-mono text-slate-400">{r.releaseDate}</td>
+                            <td className="py-3 px-4 font-mono font-semibold">
+                              <span
+                                className={
+                                  r.status === 'Approved' || r.status === 'Live' || r.status === 'Published'
+                                    ? 'text-emerald-300'
+                                    : r.status === 'Rejected'
+                                      ? 'text-red-300'
+                                      : 'text-amber-300'
+                                }
+                              >
+                                {r.status}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 text-right">
+                              <button
+                                onClick={() => openReleaseInspector(r)}
+                                className="px-3 py-1.5 rounded-lg bg-[#d4af37]/15 border border-[#d4af37]/40 text-[#f0cf65] hover:bg-[#d4af37]/25 whitespace-nowrap"
+                              >
+                                Inspect & Correct
+                              </button>
+                            </td>
+                          </tr>
                         ))}
+                        {releasesList.length === 0 && (
+                          <tr>
+                            <td colSpan={6} className="py-10 text-center text-slate-500">
+                              {dataUnavailable ? 'Data Unavailable.' : '0 releases match your filter.'}
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                    {releasesList.length > PAGE_SIZE && (
+                      <div className="p-3 border-t border-slate-800 flex items-center justify-between text-xs font-mono text-slate-400">
+                        <span>
+                          Page {releasePage} of {Math.ceil(releasesList.length / PAGE_SIZE)} ({releasesList.length} releases)
+                        </span>
+                        <div className="space-x-2">
+                          <button
+                            disabled={releasePage <= 1}
+                            onClick={() => setReleasePage(p => Math.max(1, p - 1))}
+                            className="px-2.5 py-1 rounded bg-slate-800 disabled:opacity-40 text-white"
+                          >
+                            Prev
+                          </button>
+                          <button
+                            disabled={releasePage >= Math.ceil(releasesList.length / PAGE_SIZE)}
+                            onClick={() => setReleasePage(p => p + 1)}
+                            className="px-2.5 py-1 rounded bg-slate-800 disabled:opacity-40 text-white"
+                          >
+                            Next
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>
-                );
-              })}
-          </div>
-        )}
-
-        {/* ==================== 9. AUDIT & SECURITY LOGS ==================== */}
-        {activeTab === 'audit' && (
-          <div className="space-y-4">
-            <div className="p-4 rounded-2xl bg-[#0b0c10] border border-slate-800/90 flex items-center gap-3">
-              <Search className="w-4 h-4 text-slate-500" />
-              <input
-                type="text"
-                value={auditSearch}
-                onChange={e => setAuditSearch(e.target.value)}
-                placeholder="Filter audit logs by actor email, action, or details..."
-                className="flex-1 bg-transparent text-xs text-white focus:outline-none"
-              />
-            </div>
-
-            <div className="rounded-2xl bg-[#0b0c10] border border-slate-800/90 overflow-x-auto">
-              <table className="w-full text-left border-collapse text-xs">
-                <thead>
-                  <tr className="border-b border-slate-800 text-slate-400">
-                    <th className="py-3 px-4">Timestamp</th>
-                    <th className="py-3 px-4">Actor</th>
-                    <th className="py-3 px-4">Action</th>
-                    <th className="py-3 px-4">Details</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800/70">
-                  {paginatedAuditLogs.map(log => (
-                    <tr key={log.id} className="hover:bg-white/[0.02]">
-                      <td className="py-2.5 px-4 font-mono text-[11px] text-slate-400 whitespace-nowrap">
-                        {new Date(log.timestamp).toLocaleString()}
-                      </td>
-                      <td className="py-2.5 px-4 font-mono text-slate-300">
-                        {log.actorEmail}
-                        <span className="ml-2 text-[10px] text-[#d4af37]">({log.actorRole})</span>
-                      </td>
-                      <td className="py-2.5 px-4 font-mono text-[#f0cf65] whitespace-nowrap">{log.action}</td>
-                      <td className="py-2.5 px-4 text-slate-300">{log.details}</td>
-                    </tr>
-                  ))}
-                  {filteredAuditLogs.length === 0 && (
-                    <tr>
-                      <td colSpan={4} className="py-10 text-center text-slate-500">
-                        No audit entries found for "{activeSubmenu.replace(/-/g, ' ')}".
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-              {filteredAuditLogs.length > PAGE_SIZE && (
-                <div className="p-3 border-t border-slate-800 flex items-center justify-between text-xs font-mono text-slate-400">
-                  <span>
-                    Page {auditPage} of {Math.ceil(filteredAuditLogs.length / PAGE_SIZE)} ({filteredAuditLogs.length} events)
-                  </span>
-                  <div className="space-x-2">
-                    <button
-                      disabled={auditPage <= 1}
-                      onClick={() => setAuditPage(p => Math.max(1, p - 1))}
-                      className="px-2.5 py-1 rounded bg-slate-800 disabled:opacity-40 text-white"
-                    >
-                      Prev
-                    </button>
-                    <button
-                      disabled={auditPage >= Math.ceil(filteredAuditLogs.length / PAGE_SIZE)}
-                      onClick={() => setAuditPage(p => p + 1)}
-                      className="px-2.5 py-1 rounded bg-slate-800 disabled:opacity-40 text-white"
-                    >
-                      Next
-                    </button>
-                  </div>
-                </div>
+                </>
               )}
             </div>
-          </div>
-        )}
+          )}
 
-        {/* ==================== 10. PLATFORM SETTINGS & INTEGRATIONS ==================== */}
-        {activeTab === 'settings' && activeSubmenu === 'infrastructure-scalability' && (
-          <InfrastructurePanel token={token} showToast={showToast} />
-        )}
-        {activeTab === 'settings' && activeSubmenu !== 'infrastructure-scalability' && settings && (
-          <div className="space-y-6">
-            {/* Diagnostics Row for Email Relay & Gateway */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-              <div className="p-4 rounded-2xl bg-[#0b0c10] border border-slate-800/90 space-y-2">
-                <p className="font-semibold text-[#f0cf65] flex items-center gap-1.5">
-                  <Mail className="w-4 h-4" /> Email Relay & SMTP Status
-                </p>
-                <p className="font-mono text-[11px] text-slate-300">
-                  Provider: {emailConfig?.provider || 'Google Apps Script HTTPS Relay'}
-                </p>
-                <p
-                  className={`font-mono text-[11px] ${
-                    emailConfig?.configured && emailConfig?.validHttpsUrl ? 'text-emerald-300' : 'text-red-300'
-                  }`}
-                >
-                  Status:{' '}
-                  {emailConfig?.configured && emailConfig?.validHttpsUrl
-                    ? 'CONFIGURED & READY'
-                    : 'MISCONFIGURED / MISSING ENV'}
-                </p>
-                <button
-                  onClick={handleTestEmailRelay}
-                  disabled={testingEmail}
-                  className="px-3 py-1.5 rounded-lg bg-[#d4af37]/15 border border-[#d4af37]/40 text-[#f0cf65]"
-                >
-                  {testingEmail ? 'Checking...' : 'Test Email Relay'}
-                </button>
-                {emailTestResult && (
-                  <p className={`text-[11px] ${emailTestResult.ok ? 'text-emerald-300' : 'text-red-300'}`}>
-                    {emailTestResult.message}
-                  </p>
-                )}
-              </div>
-
-              <div className="p-4 rounded-2xl bg-[#0b0c10] border border-slate-800/90 space-y-2">
-                <p className="font-semibold text-[#f0cf65] flex items-center gap-1.5">
-                  <CreditCard className="w-4 h-4" /> Razorpay Payment Gateway
-                </p>
-                <p className="font-mono text-[11px] text-slate-300">
-                  Key ID: {gatewayConfig?.razorpayKeyConfigured ? 'Set (Server-Side)' : 'Not Set'}
-                </p>
-                <p className="font-mono text-[11px] text-slate-300">
-                  Secret: {gatewayConfig?.razorpaySecretConfigured ? 'Set (Isolated)' : 'Not Set'}
-                </p>
-                <p className="font-mono text-[11px] text-slate-300">
-                  Webhook Secret: {gatewayConfig?.webhookSecretConfigured ? 'Configured' : 'Not Set'}
-                </p>
-              </div>
-
-              <div className="p-4 rounded-2xl bg-[#0b0c10] border border-slate-800/90 space-y-2">
-                <p className="font-semibold text-[#f0cf65] flex items-center gap-1.5">
-                  <HardDrive className="w-4 h-4" /> Database & Storage Status
-                </p>
-                <p className="font-mono text-[11px] text-slate-300">
-                  Source: {integrity?.dataSource || 'Checking...'}
-                </p>
-                <p className="font-mono text-[11px] text-slate-300">
-                  Connection: {integrity?.connectionStatus || 'Checking...'}
-                </p>
-                <p className="text-[11px] text-slate-400">
-                  All secrets remain exclusively in server environment variables.
-                </p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-              <div className="p-6 rounded-2xl bg-[#0b0c10] border border-slate-800/90 space-y-5">
-                <h3 className="text-sm font-semibold text-white">Service Availability & Maintenance</h3>
-
-                <div className="flex items-center justify-between p-3.5 rounded-xl bg-[#050507] border border-slate-800">
-                  <div>
-                    <p className="text-xs font-semibold text-white">Maintenance Mode</p>
-                    <p className="text-[11px] text-slate-400">Display platform-wide maintenance notice</p>
+          {/* ==================== 4. ROYALTY & FINANCE ==================== */}
+          {activeTab === 'finance' && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3.5">
+                {[
+                  { label: 'Total Orders', value: dataUnavailable || !paymentSummary ? 'Data Unavailable' : paymentSummary.totalOrders ?? 0 },
+                  { label: 'Verified Paid Orders', value: dataUnavailable || !paymentSummary ? 'Data Unavailable' : paymentSummary.paidOrders ?? 0 },
+                  { label: 'Failed / Pending', value: dataUnavailable || !paymentSummary ? 'Data Unavailable' : `${paymentSummary.failedOrders ?? 0} / ${paymentSummary.pendingOrders ?? 0}` },
+                  { label: 'Refunded Orders', value: dataUnavailable || !paymentSummary ? 'Data Unavailable' : paymentSummary.refundedOrders ?? 0 },
+                  { label: 'Verified Paid Revenue', value: dataUnavailable || !paymentSummary ? 'Data Unavailable' : `₹${Number(paymentSummary.totalRevenue ?? 0).toLocaleString('en-IN')}` }
+                ].map(s => (
+                  <div key={s.label} className="p-4 rounded-xl bg-[#0b0c10] border border-slate-800">
+                    <p className="text-[11px] text-slate-400">{s.label}</p>
+                    <p className="text-lg font-bold font-mono tabular-nums text-[#f0cf65] mt-1">{s.value}</p>
                   </div>
-                  <input
-                    type="checkbox"
-                    checked={Boolean(settings.maintenanceMode)}
-                    onChange={e => setSettings({ ...settings, maintenanceMode: e.target.checked })}
-                    className="w-4 h-4 accent-[#d4af37]"
-                  />
-                </div>
+                ))}
+              </div>
 
-                <div>
-                  <label className="block text-xs text-slate-300 mb-1">Website Announcement Banner</label>
-                  <input
-                    type="text"
-                    value={settings.websiteAnnouncement || ''}
-                    onChange={e => setSettings({ ...settings, websiteAnnouncement: e.target.value })}
-                    placeholder="Optional global announcement shown to users..."
-                    className="w-full px-3 py-2 rounded-xl bg-[#050507] border border-slate-800 text-xs text-white"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <p className="text-xs font-medium text-slate-300">Module Toggles</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    {Object.entries(settings.services || {}).map(([key, val]) => (
-                      <label
-                        key={key}
-                        className="flex items-center justify-between p-2.5 rounded-xl bg-[#050507] border border-slate-800 text-xs text-slate-200"
-                      >
-                        <span className="capitalize">{key}</span>
-                        <input
-                          type="checkbox"
-                          checked={Boolean(val)}
-                          onChange={e =>
-                            setSettings({
-                              ...settings,
-                              services: { ...settings.services, [key]: e.target.checked }
-                            })
-                          }
-                          className="accent-[#d4af37]"
-                        />
-                      </label>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="p-3.5 rounded-xl bg-[#050507] border border-[#d4af37]/30 space-y-3">
-                  <div className="flex items-center justify-between">
+              {activeSubmenu === 'revenue-reports' ? (
+                <ExecutiveReportsPanel token={token} includeTest={includeTest} showToast={showToast} />
+              ) : activeSubmenu === 'financial-governance' ? (
+                <FinancialGovernancePanel
+                  token={token}
+                  includeTest={includeTest}
+                  showToast={showToast}
+                  onProposeOwnerApproval={prop => setPendingProposal(prop)}
+                />
+              ) : (
+                <>
+                  {/* Date Filter Bar */}
+                  <div className="p-4 rounded-2xl bg-[#0b0c10] border border-slate-800/90 flex flex-wrap items-center justify-between gap-3 text-xs">
                     <div>
-                      <p className="text-xs font-semibold text-[#f0cf65] flex items-center gap-1.5">
-                        <Lock className="w-3.5 h-3.5" /> Optional Super Admin 2FA PIN
-                      </p>
+                      <h3 className="text-sm font-semibold text-white">Razorpay Transactions Ledger</h3>
                       <p className="text-[11px] text-slate-400">
-                        Extra security PIN setting (Super Admin login bypasses email OTP)
+                        Revenue totals sum verified paid orders only.
                       </p>
                     </div>
-                    <input
-                      type="checkbox"
-                      checked={Boolean(settings.adminTwoFactorEnabled)}
-                      onChange={e => setSettings({ ...settings, adminTwoFactorEnabled: e.target.checked })}
-                      className="w-4 h-4 accent-[#d4af37]"
-                    />
+                    <div className="flex flex-wrap items-center gap-2">
+                      <input
+                        type="date"
+                        value={paymentDateFrom}
+                        onChange={e => setPaymentDateFrom(e.target.value)}
+                        className="px-3 py-1.5 rounded-xl bg-[#050507] border border-slate-800 text-xs text-white"
+                        title="From Date"
+                      />
+                      <input
+                        type="date"
+                        value={paymentDateTo}
+                        onChange={e => setPaymentDateTo(e.target.value)}
+                        className="px-3 py-1.5 rounded-xl bg-[#050507] border border-slate-800 text-xs text-white"
+                        title="To Date"
+                      />
+                    </div>
                   </div>
-                  <input
-                    type="password"
-                    value={new2faPin}
-                    onChange={e => setNew2faPin(e.target.value)}
-                    placeholder="Set or update 4+ digit 2FA PIN"
-                    className="w-full px-3 py-2 rounded-lg bg-[#0b0c10] border border-slate-800 text-xs text-white font-mono"
+
+                  <div className="rounded-2xl bg-[#0b0c10] border border-slate-800/90 overflow-x-auto">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="border-b border-slate-800 text-slate-400">
+                          <th className="py-3 px-4">Order / Payment ID</th>
+                          <th className="py-3 px-4">Customer</th>
+                          <th className="py-3 px-4">Plan</th>
+                          <th className="py-3 px-4">Amount</th>
+                          <th className="py-3 px-4">Status</th>
+                          <th className="py-3 px-4 text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-800/70">
+                        {paginatedOrders.map(o => (
+                          <tr key={o.orderId} className="hover:bg-white/[0.02]">
+                            <td className="py-3 px-4 font-mono">
+                              <div className="text-white">
+                                {o.orderId} {o.isTestMode && <span className="text-amber-300">[TEST]</span>}
+                              </div>
+                              <div className="text-[11px] text-slate-500">{o.paymentId || o.failureReason || '—'}</div>
+                            </td>
+                            <td className="py-3 px-4">
+                              <div className="text-slate-200">{o.userName}</div>
+                              <div className="text-[11px] text-slate-500">{o.userEmail}</div>
+                            </td>
+                            <td className="py-3 px-4 text-slate-300">{o.planName}</td>
+                            <td className="py-3 px-4 font-mono tabular-nums text-[#f0cf65]">₹{o.amount}</td>
+                            <td className="py-3 px-4 font-mono uppercase text-[11px]">
+                              <span
+                                className={
+                                  o.status === 'paid'
+                                    ? 'text-emerald-300'
+                                    : o.status === 'refunded'
+                                      ? 'text-blue-300'
+                                      : 'text-red-300'
+                                }
+                              >
+                                {o.status}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 text-right space-x-2 whitespace-nowrap">
+                              <button
+                                onClick={() => setInvoiceModal(o)}
+                                className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 inline-flex items-center gap-1"
+                              >
+                                <FileText className="w-3 h-3" /> Invoice
+                              </button>
+                              {o.status === 'paid' && (
+                                <button
+                                  onClick={() =>
+                                    setPendingProposal({
+                                      actionType: 'PAYMENT_REFUND',
+                                      targetType: 'payment',
+                                      targetId: o.orderId,
+                                      title: `Refund Paid Order · ${o.orderId} (₹${o.amount})`,
+                                      explanation: `Marks verified paid order ${o.orderId} for ${o.userEmail} as refunded.`,
+                                      consequences: 'Deducts ₹' + o.amount + ' from verified revenue totals and writes an immutable financial audit entry.',
+                                      proposedChanges: { orderId: o.orderId, amountINR: o.amount, newStatus: 'refunded' },
+                                      payload: {},
+                                      requiresReason: true
+                                    })
+                                  }
+                                  className="px-2.5 py-1 rounded-lg bg-red-950/70 hover:bg-red-900 text-red-300 border border-red-700/40 inline-flex items-center gap-1"
+                                >
+                                  <RotateCcw className="w-3 h-3" /> Refund
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                        {filteredOrders.length === 0 && (
+                          <tr>
+                            <td colSpan={6} className="py-10 text-center text-slate-500">
+                              {dataUnavailable ? 'Data Unavailable.' : '0 payment orders match this date filter.'}
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Embed Financial Governance directly on financial-overview for complete royalty & payout visibility */}
+                  <FinancialGovernancePanel
+                    token={token}
+                    includeTest={includeTest}
+                    showToast={showToast}
+                    onProposeOwnerApproval={prop => setPendingProposal(prop)}
                   />
+                </>
+              )}
+            </div>
+          )}
+
+          {/* ==================== 5. SUBSCRIPTION MANAGEMENT ==================== */}
+          {activeTab === 'subscriptions' && (
+            <SubscriptionManagementPanel
+              token={token}
+              includeTest={includeTest}
+              activeSubmenu={activeSubmenu}
+              subscriptions={subscriptions}
+              orders={orders}
+              plans={plans}
+              onUpdatePlansState={setPlans}
+              showToast={showToast}
+              onProposeOwnerApproval={prop => setPendingProposal(prop)}
+            />
+          )}
+
+          {/* ==================== 6. AI CONTROL CENTRE ==================== */}
+          {activeTab === 'ai-center' && (
+            <div className="space-y-6">
+              {activeSubmenu === 'ai-system-analysis' && (
+                <PlatformIntelligencePanel
+                  intelligence={intelligence}
+                  loading={intelLoading}
+                  onRefresh={loadCommandCenterMeta}
+                  onNavigateTab={handleSelectNavigation}
+                  onTriggerApproval={prop => setPendingProposal(prop)}
+                />
+              )}
+              {aiCenterMode === 'settings' ? (
+                <SuperAdminAiSettings
+                  token={token}
+                  showToast={showToast}
+                  activeSubmenu={activeSubmenu}
+                  onProposeOwnerApproval={prop => setPendingProposal(prop)}
+                />
+              ) : (
+                <SuperAdminAiReviewCenter
+                  token={token}
+                  showToast={showToast}
+                  activeSubmenu={activeSubmenu}
+                  includeTest={includeTest}
+                  onProposeOwnerApproval={prop => setPendingProposal(prop)}
+                />
+              )}
+            </div>
+          )}
+
+          {/* ==================== 7. DISTRIBUTION MANAGEMENT ==================== */}
+          {activeTab === 'distribution' && (
+            <DistributionManagementPanel
+              token={token}
+              includeTest={includeTest}
+              activeSubmenu={activeSubmenu}
+              showToast={showToast}
+              onInspectReleaseById={inspectReleaseById}
+            />
+          )}
+
+          {/* ==================== 8. SUPPORT & COMPLAINTS ==================== */}
+          {activeTab === 'support' && (
+            <div className="space-y-6">
+              {[
+                { title: 'Artist Support Tickets', items: supportData.tickets, sourceType: 'ticket' as const },
+                { title: 'Contact & Complaint Inquiries', items: supportData.contacts, sourceType: 'contact' as const },
+                { title: 'User Reviews & Feedback', items: supportData.feedbacks, sourceType: 'feedback' as const }
+              ]
+                .filter(sec => {
+                  if (activeSubmenu === 'user-complaints') return sec.sourceType === 'contact';
+                  if (activeSubmenu === 'platform-reviews') return sec.sourceType === 'feedback';
+                  if (activeSubmenu === 'open-tickets') return sec.sourceType === 'ticket' || sec.sourceType === 'contact';
+                  return true;
+                })
+                .map(section => {
+                  const items =
+                    activeSubmenu === 'resolved-tickets'
+                      ? section.items.filter((i: any) => i.status === 'Resolved')
+                      : section.items;
+
+                  return (
+                    <div key={section.title} className="rounded-2xl bg-[#0b0c10] border border-slate-800/90 p-5 space-y-3">
+                      <h3 className="text-sm font-semibold text-white">
+                        {section.title} ({items.length})
+                      </h3>
+                      {items.length === 0 ? (
+                        <p className="text-xs text-slate-500">No entries in this queue.</p>
+                      ) : (
+                        <div className="space-y-2.5">
+                          {items.map((item: any) => (
+                            <div
+                              key={item.id}
+                              className="p-4 rounded-xl bg-[#050507] border border-slate-800 flex flex-wrap items-start justify-between gap-4"
+                            >
+                              <div className="space-y-1 max-w-2xl">
+                                <div className="flex flex-wrap items-center gap-2 text-xs">
+                                  <span className="font-semibold text-white">
+                                    {item.subject || item.name || 'Inquiry'}
+                                  </span>
+                                  <span className="font-mono text-[10px] text-[#f0cf65] uppercase">
+                                    · {item.status || 'Open'}
+                                  </span>
+                                  <span className="font-mono text-[10px] text-amber-300 uppercase">
+                                    · Priority: {item.priority || 'Medium'}
+                                  </span>
+                                  <span className="font-mono text-[10px] text-slate-400">
+                                    · Owner: {item.assignedTo || 'Unassigned'}
+                                  </span>
+                                  {item.rating && (
+                                    <span className="text-[11px] font-mono text-amber-400">
+                                      · Rating: {item.rating}/5
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-[11px] text-slate-400 font-mono">
+                                  {item.userEmail || item.email} · {item.category || item.role || 'General'}
+                                </p>
+                                <p className="text-xs text-slate-300">
+                                  {item.message || item.feedback || item.messages?.[0]?.text || ''}
+                                </p>
+                                {item.adminResponse && (
+                                  <p className="text-xs text-emerald-300 mt-1">
+                                    Admin Response: {item.adminResponse}
+                                  </p>
+                                )}
+                                {Array.isArray(item.resolutionHistory) && item.resolutionHistory.length > 0 && (
+                                  <p className="text-[11px] font-mono text-slate-500">
+                                    Last Updated by {item.resolutionHistory[0].actor} ·{' '}
+                                    {new Date(item.resolutionHistory[0].timestamp).toLocaleString()}
+                                  </p>
+                                )}
+                              </div>
+                              <button
+                                onClick={() => {
+                                  setReplyModal({
+                                    id: item.id,
+                                    sourceType: section.sourceType,
+                                    title: item.subject || item.name || item.id,
+                                    userEmail: item.userEmail || item.email,
+                                    category: item.category || item.role,
+                                    body: item.message || item.feedback || item.messages?.[0]?.text || '',
+                                    priority: item.priority || 'Medium',
+                                    assignedTo: item.assignedTo || ''
+                                  });
+                                  setReplyStatus((item.status as any) || 'Resolved');
+                                  setReplyPriority((item.priority as any) || 'Medium');
+                                  setReplyAssignedTo(item.assignedTo || '');
+                                  setReplyText(item.adminResponse || '');
+                                }}
+                                className="px-3 py-1.5 rounded-lg bg-[#d4af37]/15 border border-[#d4af37]/40 text-xs text-[#f0cf65] hover:bg-[#d4af37]/25 whitespace-nowrap"
+                              >
+                                Respond / Assign
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+            </div>
+          )}
+
+          {/* ==================== 9. WEBSITE MANAGEMENT ==================== */}
+          {activeTab === 'website' && (
+            <WebsiteManagementPanel
+              settings={settings}
+              onChangeSettings={setSettings}
+              onProposeOwnerApproval={prop => setPendingProposal(prop)}
+            />
+          )}
+
+          {/* ==================== 10. SECURITY & PERMISSIONS ==================== */}
+          {activeTab === 'security' && (
+            <SecurityPermissionsPanel
+              token={token}
+              activeSubmenu={activeSubmenu}
+              auditLogs={auditLogs}
+              auditSearch={auditSearch}
+              onChangeAuditSearch={setAuditSearch}
+              approvals={approvals}
+              onExecuteApproval={executeQueuedProposalById}
+              onDismissApproval={dismissQueuedProposalById}
+              onRefreshApprovals={loadCommandCenterMeta}
+            />
+          )}
+
+          {/* ==================== 11. SYSTEM HEALTH ==================== */}
+          {activeTab === 'health' && (
+            <SystemHealthPanel
+              token={token}
+              activeSubmenu={activeSubmenu}
+              showToast={showToast}
+              onTestEmailRelay={handleTestEmailRelay}
+              testingEmail={testingEmail}
+              emailTestResult={emailTestResult}
+            />
+          )}
+
+          {/* ==================== 12. SETTINGS ==================== */}
+          {activeTab === 'settings' && settings && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+                <div className="p-4 rounded-2xl bg-[#0b0c10] border border-slate-800/90 space-y-2">
+                  <p className="font-semibold text-[#f0cf65] flex items-center gap-1.5">
+                    <Mail className="w-4 h-4" /> Email Relay & SMTP Status
+                  </p>
+                  <p className="font-mono text-[11px] text-slate-300">
+                    Provider: {emailConfig?.provider || 'Google Apps Script HTTPS Relay'}
+                  </p>
+                  <p
+                    className={`font-mono text-[11px] ${
+                      emailConfig?.configured && emailConfig?.validHttpsUrl ? 'text-emerald-300' : 'text-red-300'
+                    }`}
+                  >
+                    Status:{' '}
+                    {emailConfig?.configured && emailConfig?.validHttpsUrl
+                      ? 'CONFIGURED & READY'
+                      : 'MISCONFIGURED / MISSING ENV'}
+                  </p>
+                  <button
+                    onClick={handleTestEmailRelay}
+                    disabled={testingEmail}
+                    className="px-3 py-1.5 rounded-lg bg-[#d4af37]/15 border border-[#d4af37]/40 text-[#f0cf65]"
+                  >
+                    {testingEmail ? 'Checking...' : 'Test Email Relay'}
+                  </button>
+                  {emailTestResult && (
+                    <p className={`text-[11px] ${emailTestResult.ok ? 'text-emerald-300' : 'text-red-300'}`}>
+                      {emailTestResult.message}
+                    </p>
+                  )}
                 </div>
 
-                <button
-                  onClick={() =>
-                    setPendingProposal({
-                      actionType: 'SETTINGS_UPDATE',
-                      targetType: 'settings',
-                      targetId: 'global',
-                      title: 'Save Platform Settings & Subscription Pricing',
-                      explanation:
-                        'Updates global Maintenance Mode, Service Module switches, Payment Gateway preferences, and Plan Pricing.',
-                      consequences:
-                        'Changes apply immediately across the Rudraatma Music storefront and checkout APIs.',
-                      proposedChanges: {
-                        maintenanceMode: settings.maintenanceMode,
-                        services: settings.services,
-                        planUpdates: plans.map(p => ({ id: p.id, priceINR: Number(p.priceINR) }))
-                      },
-                      payload: {
-                        settings,
-                        ...(new2faPin.trim().length >= 4 ? { newAdminTwoFactorPin: new2faPin.trim() } : {}),
-                        planUpdates: plans.map(p => ({ id: p.id, name: p.name, priceINR: Number(p.priceINR) }))
-                      }
-                    })
-                  }
-                  className="w-full py-2.5 rounded-xl bg-gradient-to-r from-[#d4af37] to-[#b8891b] text-black font-bold text-xs"
-                >
-                  Save Settings & Pricing (Owner Approval)
-                </button>
+                <div className="p-4 rounded-2xl bg-[#0b0c10] border border-slate-800/90 space-y-2">
+                  <p className="font-semibold text-[#f0cf65] flex items-center gap-1.5">
+                    <CreditCard className="w-4 h-4" /> Razorpay Payment Gateway
+                  </p>
+                  <p className="font-mono text-[11px] text-slate-300">
+                    Key ID: {gatewayConfig?.razorpayKeyConfigured ? 'Set (Server-Side)' : 'Not Set'}
+                  </p>
+                  <p className="font-mono text-[11px] text-slate-300">
+                    Secret: {gatewayConfig?.razorpaySecretConfigured ? 'Set (Isolated)' : 'Not Set'}
+                  </p>
+                  <p className="font-mono text-[11px] text-slate-300">
+                    Webhook Secret: {gatewayConfig?.webhookSecretConfigured ? 'Configured' : 'Not Set'}
+                  </p>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-[#0b0c10] border border-slate-800/90 space-y-2">
+                  <p className="font-semibold text-[#f0cf65] flex items-center gap-1.5">
+                    <HardDrive className="w-4 h-4" /> Database & Storage Status
+                  </p>
+                  <p className="font-mono text-[11px] text-slate-300">
+                    Source: {integrity?.dataSource || 'Checking...'}
+                  </p>
+                  <p className="font-mono text-[11px] text-slate-300">
+                    Connection: {integrity?.connectionStatus || 'Checking...'}
+                  </p>
+                  <p className="text-[11px] text-slate-400">
+                    All credentials remain isolated in server environment variables.
+                  </p>
+                </div>
               </div>
 
-              <div className="space-y-6">
-                {/* Plan Pricing Editor */}
-                <div className="p-6 rounded-2xl bg-[#0b0c10] border border-slate-800/90 space-y-3">
-                  <h3 className="text-sm font-semibold text-white">Subscription Plans & Pricing (INR)</h3>
-                  <div className="space-y-2.5">
-                    {plans.map((p, idx) => (
-                      <div
-                        key={p.id}
-                        className="flex items-center justify-between gap-3 p-3 rounded-xl bg-[#050507] border border-slate-800"
-                      >
-                        <div className="min-w-0">
-                          <p className="text-xs font-semibold text-white truncate">{p.name}</p>
-                          <p className="text-[11px] text-slate-500 font-mono">
-                            {p.id} · {p.type}
-                          </p>
-                        </div>
-                        <input
-                          type="number"
-                          value={p.priceINR}
-                          onChange={e => {
-                            const next = [...plans];
-                            next[idx] = { ...p, priceINR: Number(e.target.value) };
-                            setPlans(next);
-                          }}
-                          className="w-28 px-2.5 py-1.5 rounded-lg bg-[#0b0c10] border border-slate-700 text-xs text-[#f0cf65] font-mono text-right"
-                        />
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                <div className="p-6 rounded-2xl bg-[#0b0c10] border border-slate-800/90 space-y-5">
+                  <h3 className="text-sm font-semibold text-white">Executive Security & Platform Policies</h3>
+
+                  <div className="p-3.5 rounded-xl bg-[#050507] border border-[#d4af37]/30 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-xs font-semibold text-[#f0cf65] flex items-center gap-1.5">
+                          <Lock className="w-3.5 h-3.5" /> Optional Super Admin 2FA PIN
+                        </p>
+                        <p className="text-[11px] text-slate-400">
+                          Enforced during Super Admin sign-in when enabled with a 4+ digit PIN
+                        </p>
                       </div>
-                    ))}
+                      <input
+                        type="checkbox"
+                        checked={Boolean(settings.adminTwoFactorEnabled)}
+                        onChange={e => setSettings({ ...settings, adminTwoFactorEnabled: e.target.checked })}
+                        className="w-4 h-4 accent-[#d4af37]"
+                      />
+                    </div>
+                    <input
+                      type="password"
+                      value={new2faPin}
+                      onChange={e => setNew2faPin(e.target.value)}
+                      placeholder="Set or update 4+ digit 2FA PIN"
+                      className="w-full px-3 py-2 rounded-lg bg-[#0b0c10] border border-slate-800 text-xs text-white font-mono"
+                    />
                   </div>
+
+                  <button
+                    onClick={() =>
+                      setPendingProposal({
+                        actionType: 'SETTINGS_UPDATE',
+                        targetType: 'settings',
+                        targetId: 'global',
+                        title: 'Save General & Security Settings',
+                        explanation:
+                          'Updates executive 2FA PIN settings and global platform policies.',
+                        consequences:
+                          'Applies immediately to Super Admin authentication and public policies.',
+                        proposedChanges: {
+                          adminTwoFactorEnabled: settings.adminTwoFactorEnabled,
+                          pinUpdated: new2faPin.trim().length >= 4
+                        },
+                        payload: {
+                          settings,
+                          ...(new2faPin.trim().length >= 4 ? { newAdminTwoFactorPin: new2faPin.trim() } : {})
+                        }
+                      })
+                    }
+                    className="w-full min-h-[40px] py-2.5 rounded-xl bg-[#d4af37] hover:bg-[#f0cf65] text-black font-bold text-xs"
+                  >
+                    Save Security Settings (Owner Approval)
+                  </button>
                 </div>
 
                 {/* Platform Broadcast */}
@@ -1936,11 +2020,11 @@ export const SuperAdminDashboardPage: React.FC = () => {
                 </form>
               </div>
             </div>
-          </div>
-        )}
-      </main>
+          )}
+        </main>
+      </div>
 
-      {/* Right-Side Collapsible Admin Navigation */}
+      {/* Right-Side Collapsible Admin Navigation (12 Modules) */}
       <RightAdminSidebar
         activeTab={activeTab}
         activeSubmenu={activeSubmenu}
@@ -2103,7 +2187,12 @@ export const SuperAdminDashboardPage: React.FC = () => {
                 <div key={d.key} className="p-3 rounded-xl bg-[#050507] border border-slate-800 space-y-2">
                   <p className="text-xs font-semibold text-[#f0cf65]">{d.label}</p>
                   {kycDocPreviews[d.key] ? (
-                    <img src={kycDocPreviews[d.key]} alt={d.label} className="w-full h-44 object-contain rounded-lg bg-black" />
+                    <img
+                      src={kycDocPreviews[d.key]}
+                      alt={d.label}
+                      referrerPolicy="no-referrer"
+                      className="w-full h-44 object-contain rounded-lg bg-black"
+                    />
                   ) : (
                     <div className="h-24 flex items-center justify-center text-[11px] text-slate-500 border border-dashed border-slate-800 rounded-lg">
                       Not uploaded or preview loading
@@ -2172,7 +2261,7 @@ export const SuperAdminDashboardPage: React.FC = () => {
         </div>
       )}
 
-      {/* Release Inspector Modal (Routes Actions to 6-Step Owner Approval) */}
+      {/* Release Inspector & Metadata Correction Modal */}
       {inspectedRelease && (
         <div className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-4">
           <div className="max-w-3xl w-full max-h-[88vh] overflow-y-auto rounded-2xl bg-[#0b0c10] border border-[#d4af37]/40 p-6 space-y-5">
@@ -2183,49 +2272,178 @@ export const SuperAdminDashboardPage: React.FC = () => {
                   {inspectedRelease.artist} · Label: {inspectedRelease.label} · UPC: {inspectedRelease.upc || 'Pending'}
                 </p>
               </div>
-              <button onClick={() => setInspectedRelease(null)} className="text-xs text-slate-400 hover:text-white">
-                Close
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-              {(inspectedRelease.artworkUrl || inspectedRelease.coverUrl) && (
-                <img
-                  src={inspectedRelease.artworkUrl || inspectedRelease.coverUrl}
-                  alt={inspectedRelease.title}
-                  className="w-40 h-40 object-cover rounded-xl border border-slate-800"
-                />
-              )}
-              <div className="space-y-1.5 text-slate-300">
-                <p>
-                  <span className="text-slate-500">Copyright:</span> © {inspectedRelease.copyrightYear} {inspectedRelease.copyrightOwner}
-                </p>
-                <p>
-                  <span className="text-slate-500">Recording Owner:</span> ℗ {inspectedRelease.recordingOwner}
-                </p>
-                <p>
-                  <span className="text-slate-500">Territories:</span> {inspectedRelease.territories}
-                </p>
-                <p>
-                  <span className="text-slate-500">Language / Genre:</span> {inspectedRelease.language} / {inspectedRelease.primaryGenre}
-                </p>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setEditingMetadata(v => !v)}
+                  className="px-3 py-1.5 rounded-lg bg-[#050507] border border-[#d4af37]/40 text-xs text-[#f0cf65] inline-flex items-center gap-1.5"
+                >
+                  <Pencil className="w-3 h-3" /> {editingMetadata ? 'View Details' : 'Correct Metadata'}
+                </button>
+                <button onClick={() => setInspectedRelease(null)} className="text-xs text-slate-400 hover:text-white">
+                  Close
+                </button>
               </div>
             </div>
 
-            <div className="space-y-2">
-              <h4 className="text-xs font-semibold text-[#f0cf65]">Tracks ({inspectedRelease.tracks?.length || 0})</h4>
-              {(inspectedRelease.tracks || []).map((t: any, idx: number) => (
-                <div key={idx} className="p-3 rounded-xl bg-[#050507] border border-slate-800 space-y-2 text-xs">
-                  <div className="flex justify-between">
-                    <span className="font-semibold text-white">
-                      {t.trackNumber}. {t.title} {t.explicit ? '[E]' : ''}
-                    </span>
-                    <span className="font-mono text-slate-400">ISRC: {t.isrc || 'Auto'}</span>
+            {editingMetadata ? (
+              <div className="p-4 rounded-xl bg-[#050507] border border-slate-800 space-y-3 text-xs">
+                <p className="font-semibold text-[#f0cf65]">Metadata Correction (Owner Approval Required)</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-slate-400 mb-1">Release Title</label>
+                    <input
+                      type="text"
+                      value={metadataForm.title}
+                      onChange={e => setMetadataForm({ ...metadataForm, title: e.target.value })}
+                      className="w-full px-3 py-2 rounded-lg bg-[#0b0c10] border border-slate-800 text-white"
+                    />
                   </div>
-                  {t.audioFileUrl && <audio controls src={apiUrl(t.audioFileUrl)} className="w-full h-8" />}
+                  <div>
+                    <label className="block text-slate-400 mb-1">Primary Artist</label>
+                    <input
+                      type="text"
+                      value={metadataForm.artist}
+                      onChange={e => setMetadataForm({ ...metadataForm, artist: e.target.value })}
+                      className="w-full px-3 py-2 rounded-lg bg-[#0b0c10] border border-slate-800 text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-400 mb-1">UPC Code</label>
+                    <input
+                      type="text"
+                      value={metadataForm.upc}
+                      onChange={e => setMetadataForm({ ...metadataForm, upc: e.target.value })}
+                      className="w-full px-3 py-2 rounded-lg bg-[#0b0c10] border border-slate-800 text-white font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-400 mb-1">Record Label</label>
+                    <input
+                      type="text"
+                      value={metadataForm.label}
+                      onChange={e => setMetadataForm({ ...metadataForm, label: e.target.value })}
+                      className="w-full px-3 py-2 rounded-lg bg-[#0b0c10] border border-slate-800 text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-400 mb-1">Primary Genre</label>
+                    <input
+                      type="text"
+                      value={metadataForm.primaryGenre}
+                      onChange={e => setMetadataForm({ ...metadataForm, primaryGenre: e.target.value })}
+                      className="w-full px-3 py-2 rounded-lg bg-[#0b0c10] border border-slate-800 text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-400 mb-1">Language</label>
+                    <input
+                      type="text"
+                      value={metadataForm.language}
+                      onChange={e => setMetadataForm({ ...metadataForm, language: e.target.value })}
+                      className="w-full px-3 py-2 rounded-lg bg-[#0b0c10] border border-slate-800 text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-400 mb-1">Release Date</label>
+                    <input
+                      type="text"
+                      value={metadataForm.releaseDate}
+                      onChange={e => setMetadataForm({ ...metadataForm, releaseDate: e.target.value })}
+                      className="w-full px-3 py-2 rounded-lg bg-[#0b0c10] border border-slate-800 text-white font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-400 mb-1">Territories</label>
+                    <input
+                      type="text"
+                      value={metadataForm.territories}
+                      onChange={e => setMetadataForm({ ...metadataForm, territories: e.target.value })}
+                      className="w-full px-3 py-2 rounded-lg bg-[#0b0c10] border border-slate-800 text-white"
+                    />
+                  </div>
                 </div>
-              ))}
-            </div>
+                <div className="flex justify-end pt-2">
+                  <button
+                    onClick={() =>
+                      setPendingProposal({
+                        actionType: 'RELEASE_METADATA_UPDATE',
+                        targetType: 'release',
+                        targetId: inspectedRelease.id,
+                        title: `Correct Release Metadata · ${inspectedRelease.title}`,
+                        explanation: `Updates catalog metadata fields (Title, Artist, UPC, Genre, Language, Territories) for release ${inspectedRelease.id}.`,
+                        consequences: 'Writes metadata changes directly to artist dashboard storage and logs correction history.',
+                        proposedChanges: metadataForm,
+                        payload: { updates: metadataForm }
+                      })
+                    }
+                    className="px-4 py-2 rounded-xl bg-[#d4af37] hover:bg-[#f0cf65] text-black font-bold"
+                  >
+                    Save Metadata Changes (Owner Approval)
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                  {(inspectedRelease.artworkUrl || inspectedRelease.coverUrl) ? (
+                    <img
+                      src={inspectedRelease.artworkUrl || inspectedRelease.coverUrl}
+                      alt={inspectedRelease.title}
+                      referrerPolicy="no-referrer"
+                      className="w-40 h-40 object-cover rounded-xl border border-slate-800"
+                    />
+                  ) : (
+                    <div className="w-40 h-40 rounded-xl bg-[#050507] border border-slate-800 flex flex-col items-center justify-center text-slate-500 gap-1.5">
+                      <Disc3 className="w-8 h-8 text-[#d4af37]/60" />
+                      <span>No Artwork Uploaded</span>
+                    </div>
+                  )}
+                  <div className="space-y-1.5 text-slate-300">
+                    <p>
+                      <span className="text-slate-500">Copyright:</span> © {inspectedRelease.copyrightYear} {inspectedRelease.copyrightOwner}
+                    </p>
+                    <p>
+                      <span className="text-slate-500">Recording Owner:</span> ℗ {inspectedRelease.recordingOwner}
+                    </p>
+                    <p>
+                      <span className="text-slate-500">Territories:</span> {inspectedRelease.territories}
+                    </p>
+                    <p>
+                      <span className="text-slate-500">Language / Genre:</span> {inspectedRelease.language} / {inspectedRelease.primaryGenre}
+                    </p>
+                    <p>
+                      <span className="text-slate-500">Release Date:</span> {inspectedRelease.releaseDate || '—'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <h4 className="text-xs font-semibold text-[#f0cf65]">Tracks ({inspectedRelease.tracks?.length || 0})</h4>
+                  {(inspectedRelease.tracks || []).map((t: any, idx: number) => (
+                    <div key={idx} className="p-3 rounded-xl bg-[#050507] border border-slate-800 space-y-2 text-xs">
+                      <div className="flex justify-between">
+                        <span className="font-semibold text-white">
+                          {t.trackNumber}. {t.title} {t.explicit ? '[E]' : ''}
+                        </span>
+                        <span className="font-mono text-slate-400">ISRC: {t.isrc || 'Auto'}</span>
+                      </div>
+                      {t.audioFileUrl && <audio controls src={apiUrl(t.audioFileUrl)} className="w-full h-8" />}
+                    </div>
+                  ))}
+                </div>
+
+                {Array.isArray(inspectedRelease.metadataHistory) && inspectedRelease.metadataHistory.length > 0 && (
+                  <div className="space-y-1.5 text-[11px] font-mono text-slate-400">
+                    <p className="text-[#f0cf65]">Metadata Audit History</p>
+                    {inspectedRelease.metadataHistory.slice(0, 5).map((mh: any, idx: number) => (
+                      <div key={idx} className="p-2 rounded bg-[#050507] border border-slate-800">
+                        {new Date(mh.updatedAt).toLocaleString()} by {mh.updatedBy}: {Object.keys(mh.changes || {}).join(', ')}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
 
             <div className="flex flex-wrap justify-end gap-2 pt-3 border-t border-slate-800">
               <button
@@ -2330,7 +2548,7 @@ export const SuperAdminDashboardPage: React.FC = () => {
         </div>
       )}
 
-      {/* Support Reply Modal with AI Draft Assistant */}
+      {/* Support Reply, Priority & Assignment Modal */}
       {replyModal && (
         <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
           <div className="max-w-md w-full rounded-2xl bg-[#0b0c10] border border-[#d4af37]/40 p-6 space-y-4">
@@ -2345,15 +2563,46 @@ export const SuperAdminDashboardPage: React.FC = () => {
                 {draftingAiReply ? 'Drafting...' : 'AI Draft Reply'}
               </button>
             </div>
-            <select
-              value={replyStatus}
-              onChange={e => setReplyStatus(e.target.value as any)}
-              className="w-full px-3 py-2 rounded-xl bg-[#050507] border border-slate-800 text-xs text-white"
-            >
-              <option value="Open">Open</option>
-              <option value="Pending">Pending</option>
-              <option value="Resolved">Resolved</option>
-            </select>
+
+            <div className="grid grid-cols-2 gap-2.5 text-xs">
+              <div>
+                <label className="block text-[11px] text-slate-400 mb-1">Ticket Status</label>
+                <select
+                  value={replyStatus}
+                  onChange={e => setReplyStatus(e.target.value as any)}
+                  className="w-full px-3 py-2 rounded-xl bg-[#050507] border border-slate-800 text-white"
+                >
+                  <option value="Open">Open</option>
+                  <option value="Pending">Pending</option>
+                  <option value="Resolved">Resolved</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-[11px] text-slate-400 mb-1">Priority</label>
+                <select
+                  value={replyPriority}
+                  onChange={e => setReplyPriority(e.target.value as any)}
+                  className="w-full px-3 py-2 rounded-xl bg-[#050507] border border-slate-800 text-white"
+                >
+                  <option value="Low">Low</option>
+                  <option value="Medium">Medium</option>
+                  <option value="High">High</option>
+                  <option value="Urgent">Urgent</option>
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-[11px] text-slate-400 mb-1">Assigned Desk / Owner</label>
+              <input
+                type="text"
+                value={replyAssignedTo}
+                onChange={e => setReplyAssignedTo(e.target.value)}
+                placeholder="e.g., Super Admin Desk, Royalty Desk..."
+                className="w-full px-3 py-2 rounded-xl bg-[#050507] border border-slate-800 text-xs text-white"
+              />
+            </div>
+
             <textarea
               rows={5}
               value={replyText}

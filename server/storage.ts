@@ -25,7 +25,7 @@ const s3Client = isS3Configured
     })
   : null;
 
-const s3MemoryIndex = new Map<string, { originalName: string; mimeType: string; storageKey: string }>();
+const s3MemoryIndex = new Map<string, { category: string; originalName: string; mimeType: string; storageKey: string }>();
 
 export interface StoredMediaResult {
   id: string;
@@ -80,7 +80,7 @@ export async function saveUploadedMedia(params: {
         [fileId, userId, category, originalName, mimeType, buffer.length, storageKey]
       );
     } else {
-      s3MemoryIndex.set(fileId, { originalName, mimeType, storageKey });
+      s3MemoryIndex.set(fileId, { category, originalName, mimeType, storageKey });
     }
 
     const fileUrl =
@@ -149,7 +149,9 @@ export async function getStoredMedia(fileId: string): Promise<{
   buffer: Buffer;
   mimeType: string;
   originalName: string;
+  category: string;
 } | null> {
+  const inferredCategory = fileId.match(/^([a-z]+)-/)?.[1] || 'unknown';
   if (!isDatabaseEnabled()) {
     const memEntry = s3MemoryIndex.get(fileId);
     if (memEntry && s3Client && s3Bucket) {
@@ -164,7 +166,8 @@ export async function getStoredMedia(fileId: string): Promise<{
       return {
         buffer: Buffer.from(byteArray),
         mimeType: memEntry.mimeType,
-        originalName: memEntry.originalName
+        originalName: memEntry.originalName,
+        category: memEntry.category || inferredCategory
       };
     }
     return null;
@@ -172,7 +175,7 @@ export async function getStoredMedia(fileId: string): Promise<{
 
   const pool = getDbPool();
   const result = await pool.query(
-    'SELECT original_name, mime_type, storage_provider, storage_key, file_bytes FROM uploaded_files WHERE id = $1',
+    'SELECT category, original_name, mime_type, storage_provider, storage_key, file_bytes FROM uploaded_files WHERE id = $1',
     [fileId]
   );
 
@@ -191,7 +194,8 @@ export async function getStoredMedia(fileId: string): Promise<{
     return {
       buffer: Buffer.from(byteArray),
       mimeType: row.mime_type,
-      originalName: row.original_name
+      originalName: row.original_name,
+      category: row.category || inferredCategory
     };
   }
 
@@ -199,7 +203,8 @@ export async function getStoredMedia(fileId: string): Promise<{
     return {
       buffer: Buffer.isBuffer(row.file_bytes) ? row.file_bytes : Buffer.from(row.file_bytes),
       mimeType: row.mime_type,
-      originalName: row.original_name
+      originalName: row.original_name,
+      category: row.category || inferredCategory
     };
   }
 

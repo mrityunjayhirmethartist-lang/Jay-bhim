@@ -14,11 +14,11 @@ import { apiUrl } from '../../utils/api';
 import type { AdminTab, OwnerApprovalProposalInput } from './adminTypes';
 
 const RUDRA_DISPLAY_NAME = 'Rudra AI';
-const RUDRA_SUBTITLE = 'Intelligent Music Distribution Assistant';
+const RUDRA_SUBTITLE = 'RUDRAATMA AI Assistant · Distribution & Governance';
 const RUDRA_LOGO_SRC = '/assets/aistudio/file_00000000ae888210a9a69884425ffe03_0a3d75a3.png';
 
 const RUDRA_WELCOME_MESSAGE =
-  'Namaste! Main Rudra hoon. Aapka Intelligent Music Distribution Assistant. Main aapko music distribution, releases, royalties, analytics aur platform management mein help karunga.';
+  'Namaste! I am Rudra AI — your RUDRAATMA Music executive assistant. Ask about system health, pending KYC/releases, revenue, DSP readiness, or operational blockers.';
 
 const LEGACY_GREETING_PREFIX = 'Namaste! Welcome back to Rudraatma Command Center.';
 
@@ -230,10 +230,10 @@ export const AiExecutiveAssistant: React.FC<Props> = ({
   };
 
   const quickPrompts = [
-    'Summarize current platform status & blockers',
-    'What are my top recommended next steps?',
+    'Summarize completed work, system status & next steps',
+    'Detect any system errors or failed logins',
     'Check Email OTP, Database & Payment gateway health',
-    'List pending KYC & Release review priorities'
+    'Summarize pending KYC, releases & royalty payouts'
   ];
 
   const hasUserMessages = messages.some(m => m.role === 'user');

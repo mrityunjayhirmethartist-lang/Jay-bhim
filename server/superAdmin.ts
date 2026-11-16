@@ -45,6 +45,12 @@ export interface PlatformSettings {
   maintenanceMode: boolean;
   maintenanceMessage: string;
   websiteAnnouncement: string;
+  homepageBannerTitle: string;
+  homepageBannerSubtitle: string;
+  seoTitle: string;
+  seoDescription: string;
+  adsEnabled: boolean;
+  analyticsId: string;
   services: {
     distribution: boolean;
     youtubeContentId: boolean;
@@ -72,6 +78,12 @@ export const DEFAULT_PLATFORM_SETTINGS: PlatformSettings = {
   maintenanceMode: false,
   maintenanceMessage: 'Rudraatma Music Distribution is undergoing scheduled maintenance. Please check back shortly.',
   websiteAnnouncement: '',
+  homepageBannerTitle: 'Distribution · Devotion · Beyond',
+  homepageBannerSubtitle: 'Global music distribution, 100% artist royalties, YouTube Content ID, and studio-grade catalog control.',
+  seoTitle: 'RUDRAATMA Music — Global Music Distribution',
+  seoDescription: 'Independent Indian and global music distribution platform with 100% royalty transparency.',
+  adsEnabled: false,
+  analyticsId: '',
   services: {
     distribution: true,
     youtubeContentId: true,
@@ -118,6 +130,7 @@ export interface SuperAdminDeps {
   dbSaveNotification: (notif: any) => Promise<void>;
   dbSavePlatformSetting: (key: string, value: any) => Promise<void>;
   localKycDir: string;
+  getRecentServerLogs?: () => Array<any>;
 }
 
 export function getMainSuperAdminEmail(): string {
@@ -295,6 +308,14 @@ export function registerSuperAdminRoutes(app: express.Express, deps: SuperAdminD
       curr.lastAttempt = Date.now();
       if (curr.count >= 5) curr.lockedUntil = Date.now() + 15 * 60 * 1000;
       deps.failedLoginAttempts.set(attemptKey, curr);
+      await deps.recordAudit(
+        normalizedEmail,
+        'UNKNOWN',
+        'SUPER_ADMIN_LOGIN_FAILED',
+        'security',
+        attemptKey,
+        `Failed Super Admin login attempt (${curr.count}/5) from IP ${req.ip || 'unknown'}: account not found or insufficient role.`
+      );
       return res.status(401).json({ error: 'Invalid Super Admin credentials.' });
     }
 
@@ -305,10 +326,50 @@ export function registerSuperAdminRoutes(app: express.Express, deps: SuperAdminD
       curr.lastAttempt = Date.now();
       if (curr.count >= 5) curr.lockedUntil = Date.now() + 15 * 60 * 1000;
       deps.failedLoginAttempts.set(attemptKey, curr);
+      await deps.recordAudit(
+        normalizedEmail,
+        'SUPER_ADMIN',
+        'SUPER_ADMIN_LOGIN_FAILED',
+        'security',
+        user.id,
+        `Failed Super Admin password verification (${curr.count}/5) from IP ${req.ip || 'unknown'}.`
+      );
       return res.status(401).json({ error: 'Invalid Super Admin credentials.' });
     }
 
-    // Super Admin authenticates directly with verified credentials (never requires Email OTP or 2FA prompt)
+    const twoFactorConfigured = Boolean(
+      deps.platformSettings.adminTwoFactorEnabled && deps.platformSettings.adminTotpPinHash
+    );
+    if (twoFactorConfigured) {
+      if (!twoFactorPin || !String(twoFactorPin).trim()) {
+        return res.json({
+          success: false,
+          requiresTwoFactor: true,
+          message: 'Two-Factor Security PIN is required.'
+        });
+      }
+      const pinValid = await bcrypt.compare(
+        String(twoFactorPin).trim(),
+        String(deps.platformSettings.adminTotpPinHash)
+      );
+      if (!pinValid) {
+        const curr = deps.failedLoginAttempts.get(attemptKey) || { count: 0, lockedUntil: 0, lastAttempt: Date.now() };
+        curr.count += 1;
+        curr.lastAttempt = Date.now();
+        if (curr.count >= 5) curr.lockedUntil = Date.now() + 15 * 60 * 1000;
+        deps.failedLoginAttempts.set(attemptKey, curr);
+        await deps.recordAudit(
+          normalizedEmail,
+          'SUPER_ADMIN',
+          'SUPER_ADMIN_LOGIN_FAILED',
+          'security',
+          user.id,
+          `Failed Super Admin 2FA PIN check (${curr.count}/5) from IP ${req.ip || 'unknown'}.`
+        );
+        return res.status(401).json({ error: 'Invalid Two-Factor Security PIN.', requiresTwoFactor: true });
+      }
+    }
+
     deps.failedLoginAttempts.delete(attemptKey);
 
     const sessionToken = 'sa_sess_' + crypto.randomBytes(28).toString('hex');
@@ -318,7 +379,7 @@ export function registerSuperAdminRoutes(app: express.Express, deps: SuperAdminD
       expiresAt: Date.now() + 12 * 60 * 60 * 1000 // 12-hour executive session
     };
     deps.sessions.set(sessionToken, sessionRecord);
-    recordAdminSessionMeta(sessionToken, user, req.ip);
+    recordAdminSessionMeta(sessionToken, user, req.ip, twoFactorConfigured);
     await deps.dbSaveSession(sessionRecord);
 
     await deps.recordAudit(
@@ -327,7 +388,7 @@ export function registerSuperAdminRoutes(app: express.Express, deps: SuperAdminD
       'SUPER_ADMIN_LOGIN',
       'session',
       user.id,
-      `Super Admin authenticated from IP ${req.ip || 'unknown'} (no email OTP required).`
+      `Super Admin authenticated from IP ${req.ip || 'unknown'}${twoFactorConfigured ? ' (2FA PIN verified)' : ''}.`
     );
 
     return res.json({
@@ -373,6 +434,8 @@ export function registerSuperAdminRoutes(app: express.Express, deps: SuperAdminD
 
   app.get('/api/super-admin/overview', requireSuperAdmin, async (req, res) => {
     const includeTest = req.query.includeTest === 'true';
+    const rawRange = String(req.query.range || '30d').toLowerCase();
+    const range: '7d' | '30d' | '90d' = rawRange === '7d' || rawRange === '90d' ? rawRange : '30d';
     const emptyAiCtx = {
       aiJobs: new Map(),
       aiResults: new Map(),
@@ -404,6 +467,14 @@ export function registerSuperAdminRoutes(app: express.Express, deps: SuperAdminD
     const pendingOrders = snapshot.pendingOrders;
     const totalRevenue = successfulOrders.reduce((sum, o) => sum + Number(o.amount || 0), 0);
 
+    const openTicketsCount =
+      Array.from(snapshot.dashboards.values()).reduce(
+        (acc, d: any) => acc + (d.tickets || []).filter((t: any) => (t.status || 'Open') !== 'Resolved').length,
+        0
+      ) +
+      snapshot.contactSubmissions.filter(c => (c.status || 'Open') !== 'Resolved').length +
+      snapshot.artistFeedbacks.filter(f => (f.status || 'Open') !== 'Resolved').length;
+
     const kpis = {
       totalRegisteredUsers: allUsers.length,
       activeUsers: allUsers.filter(u => u.isActive && (u.accountStatus || 'active') === 'active').length,
@@ -425,35 +496,54 @@ export function registerSuperAdminRoutes(app: express.Express, deps: SuperAdminD
       pendingPayments: pendingOrders.length,
       failedPayments: failedOrders.length,
       refundedPayments: refundedOrders.length,
-      totalRevenue
+      totalRevenue,
+      openSupportTickets: openTicketsCount
     };
 
-    // Build real DB-backed 6-month trend (strictly 0 when empty — never synthetic)
-    const now = new Date();
-    const months: Array<{ key: string; label: string }> = [];
-    for (let i = 5; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      const label = d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
-      months.push({ key, label });
+    // Build honest time-bucketed charts for 7d / 30d / 90d (strictly real DB records, 0 when empty)
+    const nowMs = Date.now();
+    const daysCount = range === '7d' ? 7 : range === '30d' ? 30 : 90;
+    const bucketSizeDays = range === '7d' ? 1 : range === '30d' ? 5 : 15;
+    const bucketCount = Math.ceil(daysCount / bucketSizeDays);
+
+    const buckets: Array<{ label: string; startMs: number; endMs: number }> = [];
+    for (let i = bucketCount - 1; i >= 0; i--) {
+      const endMs = nowMs - i * bucketSizeDays * 86400000;
+      const startMs = endMs - bucketSizeDays * 86400000;
+      const d = new Date(endMs);
+      const label =
+        range === '7d'
+          ? d.toLocaleDateString('en-US', { weekday: 'short' })
+          : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      buckets.push({ label, startMs, endMs });
     }
 
+    const firstStartMs = buckets[0]?.startMs ?? 0;
     let cumulativeUsers = allUsers.filter(u => {
-      const ym = (u.createdAt || '').slice(0, 7);
-      return ym && ym < months[0].key;
+      const ts = new Date(u.createdAt || 0).getTime();
+      return ts > 0 && ts < firstStartMs;
     }).length;
 
-    const userGrowth = months.map(m => {
-      const newUsers = allUsers.filter(u => (u.createdAt || '').slice(0, 7) === m.key).length;
+    const userGrowth = buckets.map(b => {
+      const newUsers = allUsers.filter(u => {
+        const ts = new Date(u.createdAt || 0).getTime();
+        return ts >= b.startMs && ts <= b.endMs;
+      }).length;
       cumulativeUsers += newUsers;
-      return { month: m.label, newUsers, totalUsers: cumulativeUsers };
+      return { month: b.label, newUsers, totalUsers: cumulativeUsers };
     });
 
-    const revenueTrend = months.map(m => {
-      const monthOrders = successfulOrders.filter(o => (o.paidAt || o.createdAt || '').slice(0, 7) === m.key);
-      const revenue = monthOrders.reduce((s, o) => s + Number(o.amount || 0), 0);
-      const releasesCount = allReleases.filter(r => (r.submittedAt || '').slice(0, 7) === m.key).length;
-      return { month: m.label, revenue, orders: monthOrders.length, releases: releasesCount };
+    const revenueTrend = buckets.map(b => {
+      const bucketOrders = successfulOrders.filter(o => {
+        const ts = new Date(o.paidAt || o.createdAt || 0).getTime();
+        return ts >= b.startMs && ts <= b.endMs;
+      });
+      const revenue = bucketOrders.reduce((s, o) => s + Number(o.amount || 0), 0);
+      const releasesCount = allReleases.filter(r => {
+        const ts = new Date(r.submittedAt || r.releaseDate || 0).getTime();
+        return ts >= b.startMs && ts <= b.endMs;
+      }).length;
+      return { month: b.label, revenue, orders: bucketOrders.length, releases: releasesCount };
     });
 
     const releaseStatusBreakdown = [
@@ -464,19 +554,79 @@ export function registerSuperAdminRoutes(app: express.Express, deps: SuperAdminD
       { name: 'Draft', value: kpis.draftReleases, color: '#64748b' }
     ];
 
-    const platformActivity = [];
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date(Date.now() - i * 86400000);
-      const dayKey = d.toISOString().slice(0, 10);
-      const dayLabel = d.toLocaleDateString('en-US', { weekday: 'short' });
-      const adminActions = snapshot.auditLogs.filter(l => (l.timestamp || '').slice(0, 10) === dayKey).length;
-      const releases = allReleases.filter(r => (r.submittedAt || '').slice(0, 10) === dayKey).length;
-      const payments = successfulOrders.filter(o => (o.paidAt || o.createdAt || '').slice(0, 10) === dayKey).length;
-      platformActivity.push({ day: dayLabel, adminActions, releases, payments });
-    }
+    const platformActivity = buckets.map(b => {
+      const adminActions = snapshot.auditLogs.filter(l => {
+        const ts = new Date(l.timestamp || 0).getTime();
+        return ts >= b.startMs && ts <= b.endMs;
+      }).length;
+      const releases = allReleases.filter(r => {
+        const ts = new Date(r.submittedAt || r.releaseDate || 0).getTime();
+        return ts >= b.startMs && ts <= b.endMs;
+      }).length;
+      const payments = successfulOrders.filter(o => {
+        const ts = new Date(o.paidAt || o.createdAt || 0).getTime();
+        return ts >= b.startMs && ts <= b.endMs;
+      }).length;
+      return { day: b.label, adminActions, releases, payments };
+    });
+
+    // Top-performing content from real catalog & verified tracks
+    const topContent = allReleases
+      .map(r => {
+        const tracksCount = Array.isArray(r.tracks) ? r.tracks.length : 1;
+        const verifiedStreams = Number(r.streams || r.totalStreams || 0);
+        return {
+          id: r.id,
+          title: r.title,
+          artist: r.artist,
+          type: r.type || 'Single',
+          status: r.status,
+          tracksCount,
+          streams: verifiedStreams,
+          submittedAt: r.submittedAt || r.releaseDate || ''
+        };
+      })
+      .sort((a, b) => (b.streams - a.streams) || (new Date(b.submittedAt || 0).getTime() - new Date(a.submittedAt || 0).getTime()))
+      .slice(0, 6);
+
+    // Real recent activity stream across users, releases, orders, and audits
+    const recentActivity = [
+      ...allUsers.map(u => ({
+        id: `act_u_${u.id}`,
+        kind: 'user' as const,
+        title: `Artist registered: ${u.fullName}`,
+        subtitle: `${u.email} · ${u.country || 'India'}`,
+        timestamp: u.createdAt
+      })),
+      ...allReleases.map(r => ({
+        id: `act_r_${r.id}`,
+        kind: 'release' as const,
+        title: `Release ${r.status}: ${r.title}`,
+        subtitle: `${r.artist} · ${r.ownerEmail || ''}`,
+        timestamp: r.lastReviewedAt || r.submittedAt || r.releaseDate || new Date().toISOString()
+      })),
+      ...orders.map(o => ({
+        id: `act_o_${o.orderId}`,
+        kind: 'payment' as const,
+        title: `Order ${o.status}: ₹${Number(o.amount || 0).toLocaleString('en-IN')}`,
+        subtitle: `${o.planName || o.planId} · ${o.userEmail || ''}`,
+        timestamp: o.paidAt || o.createdAt
+      })),
+      ...snapshot.auditLogs.slice(-20).map(l => ({
+        id: `act_a_${l.id}`,
+        kind: 'audit' as const,
+        title: l.action,
+        subtitle: `${l.actorEmail} · ${l.details}`,
+        timestamp: l.timestamp
+      }))
+    ]
+      .filter(item => item.timestamp)
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+      .slice(0, 10);
 
     return res.json({
       dataUnavailable: false,
+      range,
       kpis,
       charts: {
         userGrowth,
@@ -484,6 +634,8 @@ export function registerSuperAdminRoutes(app: express.Express, deps: SuperAdminD
         releaseStatusBreakdown,
         platformActivity
       },
+      topContent,
+      recentActivity,
       _integrity: {
         dataSource: snapshot.dataSource,
         connectionStatus: snapshot.connectionStatus,
@@ -740,13 +892,8 @@ export function registerSuperAdminRoutes(app: express.Express, deps: SuperAdminD
     return res.json({ success: true, kyc: target.kyc });
   });
 
-  // Private audit-logged KYC document endpoint (ONLY Super Admin or owning user)
+  // Private audit-logged KYC document endpoint (ONLY Super Admin or owning user via Authorization Bearer header)
   app.get('/api/super-admin/kyc/document/:fileId', async (req, res) => {
-    const authReq = req as any;
-    // Support Bearer header or ?token= for img/iframe preview
-    if (!req.headers.authorization && req.query.token) {
-      authReq.headers.authorization = `Bearer ${String(req.query.token)}`;
-    }
     const viewer = deps.getAuthenticatedUser(req);
     if (!viewer) return res.status(401).json({ error: 'Unauthorized.' });
 
@@ -1059,6 +1206,9 @@ export function registerSuperAdminRoutes(app: express.Express, deps: SuperAdminD
         tickets.push({
           ...t,
           sourceType: 'ticket',
+          priority: t.priority || 'Medium',
+          assignedTo: t.assignedTo || 'Unassigned',
+          resolutionHistory: t.resolutionHistory || [],
           userId: u.id,
           userName: u.fullName,
           userEmail: u.email
@@ -1069,12 +1219,18 @@ export function registerSuperAdminRoutes(app: express.Express, deps: SuperAdminD
     const contacts = deps.contactSubmissions.map(c => ({
       ...c,
       sourceType: 'contact',
+      priority: c.priority || 'Medium',
+      assignedTo: c.assignedTo || 'Unassigned',
+      resolutionHistory: c.resolutionHistory || [],
       status: c.status || 'Open'
     }));
 
     const feedbacks = deps.artistFeedbacks.map(f => ({
       ...f,
       sourceType: 'feedback',
+      priority: f.priority || 'Low',
+      assignedTo: f.assignedTo || 'Unassigned',
+      resolutionHistory: f.resolutionHistory || [],
       status: f.status || 'Open'
     }));
 
@@ -1084,18 +1240,35 @@ export function registerSuperAdminRoutes(app: express.Express, deps: SuperAdminD
   app.post('/api/super-admin/support/:id/respond', requireSuperAdmin, async (req, res) => {
     const admin = (req as any).superAdmin;
     const { id } = req.params;
-    const { sourceType, status, response } = req.body || {};
+    const { sourceType, status, response, priority, assignedTo } = req.body || {};
 
     if (!response || !String(response).trim()) {
       return res.status(400).json({ error: 'Admin response message is required.' });
     }
+
+    const validPriority = ['Low', 'Medium', 'High', 'Urgent'].includes(String(priority))
+      ? String(priority)
+      : undefined;
+    const historyEntry = {
+      id: 'hist_' + Date.now(),
+      actor: admin.email,
+      status: status || 'Resolved',
+      priority: validPriority,
+      assignedTo: assignedTo ? String(assignedTo).trim() : undefined,
+      note: String(response).trim(),
+      timestamp: new Date().toISOString()
+    };
 
     if (sourceType === 'ticket') {
       for (const [uid, dash] of deps.userDashboards.entries()) {
         const ticket = (dash.tickets || []).find((t: any) => t.id === id);
         if (ticket) {
           ticket.status = status || 'Resolved';
+          if (validPriority) ticket.priority = validPriority;
+          if (assignedTo !== undefined) ticket.assignedTo = String(assignedTo).trim() || 'Unassigned';
           ticket.updatedAt = new Date().toISOString();
+          ticket.resolutionHistory = ticket.resolutionHistory || [];
+          ticket.resolutionHistory.unshift(historyEntry);
           ticket.messages = ticket.messages || [];
           ticket.messages.push({
             sender: 'Rudraatma Support (Super Admin)',
@@ -1103,7 +1276,7 @@ export function registerSuperAdminRoutes(app: express.Express, deps: SuperAdminD
             time: new Date().toISOString()
           });
           await deps.dbSaveDashboard(uid, dash);
-          await deps.recordAudit(admin.email, 'SUPER_ADMIN', 'SUPPORT_TICKET_RESPONDED', 'ticket', id, `Updated ticket ${id} to ${ticket.status}`);
+          await deps.recordAudit(admin.email, 'SUPER_ADMIN', 'SUPPORT_TICKET_RESPONDED', 'ticket', id, `Updated ticket ${id} to ${ticket.status}${validPriority ? ` (Priority: ${validPriority})` : ''}`);
           return res.json({ success: true, item: ticket });
         }
       }
@@ -1114,8 +1287,12 @@ export function registerSuperAdminRoutes(app: express.Express, deps: SuperAdminD
       const contact = deps.contactSubmissions.find(c => c.id === id);
       if (!contact) return res.status(404).json({ error: 'Contact inquiry not found.' });
       contact.status = status || 'Resolved';
+      if (validPriority) contact.priority = validPriority;
+      if (assignedTo !== undefined) contact.assignedTo = String(assignedTo).trim() || 'Unassigned';
       contact.adminResponse = String(response).trim();
       contact.respondedAt = new Date().toISOString();
+      contact.resolutionHistory = contact.resolutionHistory || [];
+      contact.resolutionHistory.unshift(historyEntry);
       await deps.dbSavePlatformSetting('contact_submissions', deps.contactSubmissions);
       await deps.recordAudit(admin.email, 'SUPER_ADMIN', 'CONTACT_RESPONDED', 'contact', id, `Responded to contact inquiry ${id}`);
       return res.json({ success: true, item: contact });
@@ -1125,8 +1302,12 @@ export function registerSuperAdminRoutes(app: express.Express, deps: SuperAdminD
       const fb = deps.artistFeedbacks.find(f => f.id === id);
       if (!fb) return res.status(404).json({ error: 'Feedback entry not found.' });
       fb.status = status || 'Resolved';
+      if (validPriority) fb.priority = validPriority;
+      if (assignedTo !== undefined) fb.assignedTo = String(assignedTo).trim() || 'Unassigned';
       fb.adminResponse = String(response).trim();
       fb.respondedAt = new Date().toISOString();
+      fb.resolutionHistory = fb.resolutionHistory || [];
+      fb.resolutionHistory.unshift(historyEntry);
       await deps.dbSavePlatformSetting('artist_feedbacks', deps.artistFeedbacks);
       await deps.recordAudit(admin.email, 'SUPER_ADMIN', 'FEEDBACK_RESPONDED', 'feedback', id, `Responded to artist review/feedback ${id}`);
       return res.json({ success: true, item: fb });
@@ -1204,6 +1385,12 @@ export function registerSuperAdminRoutes(app: express.Express, deps: SuperAdminD
     if (typeof body.maintenanceMode === 'boolean') deps.platformSettings.maintenanceMode = body.maintenanceMode;
     if (typeof body.maintenanceMessage === 'string') deps.platformSettings.maintenanceMessage = body.maintenanceMessage;
     if (typeof body.websiteAnnouncement === 'string') deps.platformSettings.websiteAnnouncement = body.websiteAnnouncement;
+    if (typeof body.homepageBannerTitle === 'string') deps.platformSettings.homepageBannerTitle = body.homepageBannerTitle;
+    if (typeof body.homepageBannerSubtitle === 'string') deps.platformSettings.homepageBannerSubtitle = body.homepageBannerSubtitle;
+    if (typeof body.seoTitle === 'string') deps.platformSettings.seoTitle = body.seoTitle;
+    if (typeof body.seoDescription === 'string') deps.platformSettings.seoDescription = body.seoDescription;
+    if (typeof body.adsEnabled === 'boolean') deps.platformSettings.adsEnabled = body.adsEnabled;
+    if (typeof body.analyticsId === 'string') deps.platformSettings.analyticsId = body.analyticsId.trim();
 
     if (body.services && typeof body.services === 'object') {
       deps.platformSettings.services = { ...deps.platformSettings.services, ...body.services };
@@ -1221,13 +1408,22 @@ export function registerSuperAdminRoutes(app: express.Express, deps: SuperAdminD
       deps.platformSettings.adminTotpPinHash = await bcrypt.hash(String(body.newAdminTwoFactorPin).trim(), 10);
     }
 
-    // Optional plan price updates
+    // Optional plan price & catalog configuration updates
     if (Array.isArray(body.planUpdates)) {
       for (const upd of body.planUpdates) {
-        if (upd.id && deps.PLAN_CATALOG[upd.id] && typeof upd.priceINR === 'number' && upd.priceINR >= 0) {
-          deps.PLAN_CATALOG[upd.id].priceINR = upd.priceINR;
+        if (upd.id && deps.PLAN_CATALOG[upd.id]) {
+          if (typeof upd.priceINR === 'number' && upd.priceINR >= 0) {
+            deps.PLAN_CATALOG[upd.id].priceINR = upd.priceINR;
+            deps.PLAN_CATALOG[upd.id].amountPaise = Math.round(upd.priceINR * 100);
+          }
           if (typeof upd.name === 'string' && upd.name.trim()) {
             deps.PLAN_CATALOG[upd.id].name = upd.name.trim();
+          }
+          if (typeof upd.enabled === 'boolean') {
+            deps.PLAN_CATALOG[upd.id].enabled = upd.enabled;
+          }
+          if (typeof upd.validityDays === 'number' && upd.validityDays > 0) {
+            deps.PLAN_CATALOG[upd.id].validityDays = upd.validityDays;
           }
         }
       }
@@ -1294,12 +1490,17 @@ export function registerSuperAdminRoutes(app: express.Express, deps: SuperAdminD
     return res.json({ success: true, deliveredCount: count });
   });
 
-  // Public platform status endpoint (for maintenance banner & announcements)
+  // Public platform status endpoint (for maintenance banner, announcements & safe public website config)
   app.get('/api/public/platform-status', (_req, res) => {
     return res.json({
       maintenanceMode: deps.platformSettings.maintenanceMode,
       maintenanceMessage: deps.platformSettings.maintenanceMessage,
       websiteAnnouncement: deps.platformSettings.websiteAnnouncement,
+      homepageBannerTitle: deps.platformSettings.homepageBannerTitle,
+      homepageBannerSubtitle: deps.platformSettings.homepageBannerSubtitle,
+      seoTitle: deps.platformSettings.seoTitle,
+      seoDescription: deps.platformSettings.seoDescription,
+      adsEnabled: deps.platformSettings.adsEnabled,
       services: deps.platformSettings.services
     });
   });

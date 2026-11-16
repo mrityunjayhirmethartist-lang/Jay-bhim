@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ShieldCheck,
   AlertTriangle,
@@ -36,6 +36,11 @@ export const OwnerApprovalModal: React.FC<OwnerApprovalModalProps> = ({
 }) => {
   const [confirmedCheck, setConfirmedCheck] = useState(false);
   const [reasonText, setReasonText] = useState('');
+
+  useEffect(() => {
+    setConfirmedCheck(false);
+    setReasonText('');
+  }, [proposal?.actionType, proposal?.targetId, proposal?.title]);
 
   if (!proposal) return null;
 
@@ -321,8 +326,8 @@ export const PlatformIntelligencePanel: React.FC<{
                 <div className="flex items-center gap-2">
                   {step.category === 'KYC Verification' && (
                     <button
-                      onClick={() => onNavigateTab('kyc', 'pending-verification')}
-                      className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 font-sans"
+                      onClick={() => onNavigateTab('users', 'kyc-pending')}
+                      className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 font-sans whitespace-nowrap"
                     >
                       Open Pending KYC
                     </button>
@@ -330,15 +335,15 @@ export const PlatformIntelligencePanel: React.FC<{
                   {step.category === 'Release Operations' && (
                     <button
                       onClick={() => onNavigateTab('releases', 'pending-releases')}
-                      className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 font-sans"
+                      className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 font-sans whitespace-nowrap"
                     >
                       Open Pending Releases
                     </button>
                   )}
                   {step.category === 'Email & Auth' && (
                     <button
-                      onClick={() => onNavigateTab('settings', 'email-configuration')}
-                      className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 font-sans"
+                      onClick={() => onNavigateTab('health', 'email-status')}
+                      className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 font-sans whitespace-nowrap"
                     >
                       Check Email Diagnostics
                     </button>

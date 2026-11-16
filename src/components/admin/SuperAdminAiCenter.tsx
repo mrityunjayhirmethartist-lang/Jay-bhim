@@ -802,8 +802,8 @@ export const SuperAdminAiSettings: React.FC<Props> = ({
               className="w-full px-3 py-2 rounded-lg bg-[#0b0c10] border border-slate-700 text-xs text-white font-mono"
             >
               <option value="gemini-4-hydrogen">gemini-4-hydrogen (Recommended Executive Reasoning)</option>
-              <option value="gemini-3.8-flash">gemini-3.8-flash</option>
-              <option value="gemini-2.5-flash">gemini-2.5-flash</option>
+              <option value="gemini-4-argon">gemini-4-argon</option>
+              <option value="gemini-3.1-flash-lite">gemini-3.1-flash-lite</option>
             </select>
           </div>
 
