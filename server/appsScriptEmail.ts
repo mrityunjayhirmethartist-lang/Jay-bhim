@@ -196,7 +196,7 @@ export async function verifyAppsScriptNetworkReadiness(): Promise<{
   }
 }
 
-export const OFFICIAL_WEBSITE_URL = 'https://rudraatma-music-w7ql.onrender.com/';
+export const OFFICIAL_WEBSITE_URL = 'https://rudraatma-music.onrender.com';
 export const OTP_EMAIL_SUBJECT = 'Your Rudraatma Music Verification Code';
 export const OTP_EXPIRY_MINUTES = 10;
 
@@ -219,22 +219,9 @@ export function buildOtpEmailTemplate(params: {
   htmlBody: string;
   textBody: string;
 } {
-  const cleanOtp = escapeHtml(String(params.otp || '').trim());
+  const rawOtp = String(params.otp || '').trim();
+  const cleanOtp = escapeHtml(rawOtp);
   const expiryMinutes = params.expiryMinutes ?? OTP_EXPIRY_MINUTES;
-  const purposeLabel =
-    params.purpose === 'login'
-      ? 'Secure Login Verification'
-      : params.purpose === 'reset'
-        ? 'Password Reset Verification'
-        : 'Account Email Verification';
-  const purposeDescription =
-    params.purpose === 'login'
-      ? 'Use this one-time verification code to complete your secure login to Rudraatma Music Distribution.'
-      : params.purpose === 'reset'
-        ? 'Use this one-time verification code to verify your identity and reset your account password.'
-        : 'Use this one-time verification code to complete your email verification and activate your Rudraatma Music Distribution account.';
-  const spacedOtp = cleanOtp.split('').join('&#8202;');
-  const year = new Date().getUTCFullYear();
 
   const htmlBody = `<!doctype html>
 <html lang="en">
@@ -248,83 +235,91 @@ export function buildOtpEmailTemplate(params: {
   <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color:#07070a;padding:32px 12px;">
     <tr>
       <td align="center">
-        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:580px;background-color:#0d0d12;border:1px solid #8a6d1f;border-radius:16px;overflow:hidden;box-shadow:0 16px 40px rgba(0,0,0,0.6);">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:600px;background-color:#0d0d12;border:1px solid #8a6d1f;border-radius:16px;overflow:hidden;box-shadow:0 16px 40px rgba(0,0,0,0.65);">
           <!-- Gold Top Accent Bar -->
           <tr>
             <td style="height:4px;background:linear-gradient(90deg,#926f1c,#facc15,#d4af37,#926f1c);background-color:#d4af37;font-size:0;line-height:0;">&nbsp;</td>
           </tr>
 
-          <!-- Header -->
+          <!-- Brand Header -->
           <tr>
-            <td style="padding:28px 32px 20px 32px;border-bottom:1px solid #262115;text-align:center;background-color:#0a0a0e;">
-              <div style="display:inline-block;padding:6px 14px;border:1px solid #715919;border-radius:999px;background-color:#15120a;color:#facc15;font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;">
+            <td style="padding:28px 32px 22px 32px;border-bottom:1px solid #262115;text-align:center;background-color:#0a0a0e;">
+              <div style="display:inline-block;padding:6px 16px;border:1px solid #8a6d1f;border-radius:999px;background-color:#15120a;color:#facc15;font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;">
                 RUDRAATMA MUSIC DISTRIBUTION
               </div>
-              <h1 style="margin:16px 0 4px 0;font-size:22px;line-height:1.3;font-weight:700;color:#ffffff;letter-spacing:-0.3px;">
-                Welcome to Rudraatma Music Distribution
-              </h1>
-              <p style="margin:0;font-size:13px;line-height:1.5;color:#d4af37;font-weight:600;letter-spacing:0.4px;text-transform:uppercase;">
-                ${purposeLabel}
-              </p>
             </td>
           </tr>
 
-          <!-- Main Body -->
+          <!-- Main Body (Exact Wording & Paragraph Order) -->
           <tr>
-            <td style="padding:30px 32px 26px 32px;">
-              <p style="margin:0 0 12px 0;font-size:15px;line-height:1.6;color:#e2e8f0;">
-                Your OTP for email verification or secure login is provided below. ${purposeDescription}
+            <td style="padding:30px 32px 28px 32px;">
+              <p style="margin:0 0 16px 0;font-size:15px;line-height:1.6;color:#f8fafc;font-weight:600;">
+                Hello,
               </p>
 
-              <!-- Highlighted OTP Box -->
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:24px 0;">
+              <p style="margin:0 0 16px 0;font-size:18px;line-height:1.45;font-weight:700;color:#facc15;">
+                Welcome to Rudraatma Music Distribution!
+              </p>
+
+              <p style="margin:0 0 22px 0;font-size:15px;line-height:1.65;color:#e2e8f0;">
+                Your One-Time Password (OTP) for verifying your email address and securely accessing your Rudraatma account is:
+              </p>
+
+              <!-- Gold-Bordered OTP Box -->
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 26px 0;">
                 <tr>
-                  <td align="center" style="background-color:#131008;border:1.5px solid #d4af37;border-radius:12px;padding:24px 16px;">
-                    <div style="font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#ca9f2a;margin-bottom:10px;">
-                      One-Time Verification Code
-                    </div>
-                    <div style="font-family:'Courier New',Courier,monospace;font-size:36px;line-height:1.1;font-weight:800;letter-spacing:10px;color:#facc15;margin:0;padding-left:10px;">
-                      ${spacedOtp}
-                    </div>
-                    <div style="margin-top:12px;font-size:12px;color:#cbd5e1;">
-                      Valid for <strong style="color:#facc15;">${expiryMinutes} minutes</strong> &middot; Single-use only
+                  <td align="center" style="background-color:#131008;border:2px solid #d4af37;border-radius:12px;padding:24px 16px;">
+                    <div style="font-family:'Courier New',Courier,monospace;font-size:38px;line-height:1.15;font-weight:800;letter-spacing:10px;color:#facc15;margin:0;padding-left:10px;">
+                      ${cleanOtp}
                     </div>
                   </td>
                 </tr>
               </table>
 
-              <!-- Security Warning Panel -->
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:20px 0 0 0;background-color:#111118;border:1px solid #2b2517;border-left:3px solid #d4af37;border-radius:8px;">
+              <!-- Security Information Panel -->
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 24px 0;background-color:#111118;border:1px solid #2b2517;border-left:3px solid #d4af37;border-radius:8px;">
                 <tr>
-                  <td style="padding:16px 18px;">
-                    <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#facc15;margin-bottom:8px;">
-                      Security Notice
-                    </div>
-                    <ul style="margin:0;padding-left:18px;font-size:13px;line-height:1.65;color:#cbd5e1;">
-                      <li>Never share your OTP with anyone.</li>
-                      <li>Rudraatma staff will never ask for your OTP.</li>
-                      <li>This code expires automatically in ${expiryMinutes} minutes.</li>
-                      <li>If you did not request this code, ignore this email.</li>
+                  <td style="padding:18px 20px;">
+                    <p style="margin:0 0 10px 0;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:#facc15;">
+                      Security Information:
+                    </p>
+                    <ul style="margin:0;padding-left:18px;font-size:13.5px;line-height:1.7;color:#cbd5e1;">
+                      <li>This OTP is valid for ${expiryMinutes} minutes only.</li>
+                      <li>Do not share this verification code with anyone.</li>
+                      <li>Rudraatma representatives will never ask you to disclose your OTP.</li>
+                      <li>If you did not request this verification code, please ignore this email.</li>
+                      <li>For your security, never forward this email or disclose its contents to anyone.</li>
                     </ul>
                   </td>
                 </tr>
               </table>
+
+              <p style="margin:0 0 12px 0;font-size:15px;line-height:1.5;font-weight:700;color:#ffffff;">
+                Your Account Security Matters to Us.
+              </p>
+
+              <p style="margin:0 0 24px 0;font-size:14px;line-height:1.65;color:#cbd5e1;">
+                Thank you for choosing Rudraatma Music Distribution. We are committed to providing a secure, reliable and professional music distribution experience.
+              </p>
+
+              <div style="padding-top:18px;border-top:1px solid #262115;font-size:13.5px;line-height:1.7;color:#e2e8f0;">
+                <p style="margin:0;">Best Regards,</p>
+                <p style="margin:0;font-weight:700;color:#facc15;">Rudraatma Music Distribution</p>
+                <p style="margin:4px 0 0 0;color:#cbd5e1;">
+                  Official Website: <a href="${OFFICIAL_WEBSITE_URL}" style="color:#facc15;text-decoration:none;">${OFFICIAL_WEBSITE_URL}</a>
+                </p>
+                <p style="margin:2px 0 0 0;color:#cbd5e1;">
+                  Email: <a href="mailto:${OFFICIAL_COMPANY_EMAIL}" style="color:#facc15;text-decoration:none;">${OFFICIAL_COMPANY_EMAIL}</a>
+                </p>
+              </div>
             </td>
           </tr>
 
-          <!-- Footer -->
+          <!-- Automated Notification Footer -->
           <tr>
-            <td style="padding:20px 32px 26px 32px;background-color:#09090d;border-top:1px solid #262115;text-align:center;">
-              <p style="margin:0 0 8px 0;font-size:12px;line-height:1.5;color:#94a3b8;">
-                This is an automated security notification from <strong style="color:#e2e8f0;">Rudraatma Music Distribution</strong>. Please do not reply directly to this message.
-              </p>
-              <p style="margin:0 0 8px 0;font-size:12px;line-height:1.5;color:#94a3b8;">
-                Website: <a href="${OFFICIAL_WEBSITE_URL}" style="color:#facc15;text-decoration:none;">${OFFICIAL_WEBSITE_URL}</a>
-                &nbsp;|&nbsp;
-                Support: <a href="mailto:${OFFICIAL_SUPPORT_EMAIL}" style="color:#facc15;text-decoration:none;">${OFFICIAL_SUPPORT_EMAIL}</a>
-              </p>
-              <p style="margin:0;font-size:11px;color:#64748b;">
-                &copy; ${year} Rudraatma Music Distribution. All rights reserved.
+            <td style="padding:18px 32px 24px 32px;background-color:#09090d;border-top:1px solid #262115;text-align:center;">
+              <p style="margin:0;font-size:12px;line-height:1.55;color:#94a3b8;">
+                This is an automated security notification. Please do not reply to this email.
               </p>
             </td>
           </tr>
@@ -336,25 +331,32 @@ export function buildOtpEmailTemplate(params: {
 </html>`;
 
   const textBody = [
-    'Welcome to Rudraatma Music Distribution.',
+    'Hello,',
     '',
-    `Subject: ${OTP_EMAIL_SUBJECT}`,
-    `Purpose: ${purposeLabel}`,
+    'Welcome to Rudraatma Music Distribution!',
     '',
-    'Your OTP for email verification or secure login:',
-    `Verification Code: ${String(params.otp || '').trim()}`,
-    `OTP Validity: ${expiryMinutes} minutes (single-use only)`,
+    'Your One-Time Password (OTP) for verifying your email address and securely accessing your Rudraatma account is:',
     '',
-    purposeDescription,
+    rawOtp,
     '',
-    'Security Notice:',
-    '- Never share your OTP with anyone.',
-    '- Rudraatma staff will never ask for your OTP.',
-    '- If you did not request this code, ignore this email.',
+    'Security Information:',
     '',
-    'Automated security notification from Rudraatma Music Distribution.',
+    `- This OTP is valid for ${expiryMinutes} minutes only.`,
+    '- Do not share this verification code with anyone.',
+    '- Rudraatma representatives will never ask you to disclose your OTP.',
+    '- If you did not request this verification code, please ignore this email.',
+    '- For your security, never forward this email or disclose its contents to anyone.',
+    '',
+    'Your Account Security Matters to Us.',
+    '',
+    'Thank you for choosing Rudraatma Music Distribution. We are committed to providing a secure, reliable and professional music distribution experience.',
+    '',
+    'Best Regards,',
+    'Rudraatma Music Distribution',
     `Official Website: ${OFFICIAL_WEBSITE_URL}`,
-    `Support Email: ${OFFICIAL_SUPPORT_EMAIL}`
+    `Email: ${OFFICIAL_COMPANY_EMAIL}`,
+    '',
+    'This is an automated security notification. Please do not reply to this email.'
   ].join('\n');
 
   return {
@@ -417,7 +419,8 @@ export async function sendAppsScriptOtpEmail(params: {
         brandName: 'Rudraatma Music Distribution',
         expiresInMinutes: OTP_EXPIRY_MINUTES,
         websiteUrl: OFFICIAL_WEBSITE_URL,
-        supportEmail: OFFICIAL_SUPPORT_EMAIL,
+        supportEmail: OFFICIAL_COMPANY_EMAIL,
+        replyTo: OFFICIAL_COMPANY_EMAIL,
         subject: emailTemplate.subject,
         htmlBody: emailTemplate.htmlBody,
         html: emailTemplate.htmlBody,

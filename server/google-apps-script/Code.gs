@@ -73,9 +73,13 @@ function doPost(e) {
       });
     }
 
-    var replyTo = isValidRecipientEmail_(typeof data.supportEmail === 'string' ? data.supportEmail.trim() : '')
-      ? data.supportEmail.trim()
-      : 'support@rudraatmamusic.com';
+    var rawReplyTo =
+      typeof data.replyTo === 'string' && data.replyTo.trim()
+        ? data.replyTo.trim()
+        : typeof data.supportEmail === 'string'
+          ? data.supportEmail.trim()
+          : '';
+    var replyTo = isValidRecipientEmail_(rawReplyTo) ? rawReplyTo : 'rudraatmamusic@gmail.com';
 
     MailApp.sendEmail({
       to: recipient,
