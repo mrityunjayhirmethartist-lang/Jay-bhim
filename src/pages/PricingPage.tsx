@@ -51,10 +51,10 @@ export const PricingPage: React.FC = () => {
               Clear & Transparent Pricing
             </span>
             <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight text-white font-display mt-2 text-balance">
-              Predictable Plans for Independent Artists & Record Labels
+              RUDRAATMA Music Distribution Plans for Artists &amp; Labels
             </h1>
             <p className="text-sm sm:text-base text-slate-300 mt-4 leading-relaxed">
-              Choose standalone pay-per-release options or recurring monthly and discounted annual subscriptions. Every plan includes free ISRC & UPC barcodes, full copyright retention, and direct royalty reporting.
+              Choose standalone pay-per-release options or recurring monthly and discounted annual subscriptions with Rudraatma Distribution. Every plan includes free ISRC &amp; UPC barcodes, 100% copyright retention, and direct royalty reporting.
             </p>
 
             {/* Segmented Filter Control */}
@@ -207,6 +207,29 @@ export const PricingPage: React.FC = () => {
             <p>
               • <strong className="text-slate-300">Fair-Use Policy:</strong> Unlimited plans allow regular catalog expansion. To safeguard ingestion queues against automated bot spam, submissions undergo standard technical inspection and adhere to digital store duplicate-content prevention policies.
             </p>
+            <div className="pt-2 flex flex-wrap items-center gap-4 text-xs">
+              <a
+                href="/services"
+                onClick={(e) => { e.preventDefault(); navigate('/services'); }}
+                className="text-blue-400 hover:text-blue-300 font-semibold transition-colors"
+              >
+                Explore Included Distribution Services →
+              </a>
+              <a
+                href="/refund-policy"
+                onClick={(e) => { e.preventDefault(); navigate('/refund-policy'); }}
+                className="text-slate-400 hover:text-white underline underline-offset-4 transition-colors"
+              >
+                Refund Policy
+              </a>
+              <a
+                href="/cancellation-policy"
+                onClick={(e) => { e.preventDefault(); navigate('/cancellation-policy'); }}
+                className="text-slate-400 hover:text-white underline underline-offset-4 transition-colors"
+              >
+                Cancellation Policy
+              </a>
+            </div>
           </div>
         </section>
       </main>

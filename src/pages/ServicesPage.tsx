@@ -92,10 +92,10 @@ export const ServicesPage: React.FC = () => {
                 Core Offerings
               </span>
               <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight text-white font-display mt-2">
-                Our Distribution Services
+                RUDRAATMA Music Distribution Services
               </h1>
               <p className="text-base text-slate-300 mt-4 leading-relaxed">
-                Rudraatma Music delivers a comprehensive technical suite for independent artists, producers, and boutique record labels. Explore our distribution architecture, release validation tools, and royalty accounting.
+                Rudraatma Music delivers a comprehensive technical suite for independent artists, producers, and Rudraatma Music Label catalogs. Explore our distribution architecture, release validation tools, and transparent royalty accounting.
               </p>
             </div>
           </div>
@@ -155,12 +155,20 @@ export const ServicesPage: React.FC = () => {
               >
                 Create Account
               </button>
-              <button
-                onClick={() => navigate('/pricing')}
+              <a
+                href="/pricing"
+                onClick={(e) => { e.preventDefault(); navigate('/pricing'); }}
                 className="px-6 py-3 text-xs sm:text-sm font-semibold text-slate-300 hover:text-white bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-xl transition-colors"
               >
                 View Pricing
-              </button>
+              </a>
+              <a
+                href="/blogs"
+                onClick={(e) => { e.preventDefault(); navigate('/blogs'); }}
+                className="px-6 py-3 text-xs sm:text-sm font-medium text-blue-400 hover:text-blue-300 transition-colors"
+              >
+                Read Distribution Guides
+              </a>
             </div>
           </div>
         </section>

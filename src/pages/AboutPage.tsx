@@ -20,10 +20,10 @@ export const AboutPage: React.FC = () => {
               Our Ethos & Principles
             </span>
             <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight text-white font-display mt-2">
-              About Rudraatma Music
+              About RUDRAATMA Music Distribution
             </h1>
             <p className="text-base text-slate-300 mt-4 leading-relaxed">
-              Rudraatma Music provides independent recording artists, producers, and record labels with modern distribution infrastructure, rigorous metadata compliance, and transparent royalty reporting.
+              Rudraatma Music provides independent recording artists, producers, and Rudraatma Music Label partners with modern music distribution infrastructure, rigorous metadata compliance, and transparent royalty reporting.
             </p>
           </div>
         </section>
@@ -98,19 +98,34 @@ export const AboutPage: React.FC = () => {
             <p className="text-xs text-slate-300">
               Join independent creators releasing music on their own terms.
             </p>
-            <div className="flex justify-center gap-4 pt-2">
+            <div className="flex flex-wrap justify-center gap-4 pt-2">
               <button
                 onClick={() => navigate('/signup')}
                 className="px-5 py-2.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-500 rounded-lg transition-colors"
               >
                 Create Account
               </button>
-              <button
-                onClick={() => navigate('/contact')}
+              <a
+                href="/services"
+                onClick={(e) => { e.preventDefault(); navigate('/services'); }}
+                className="px-5 py-2.5 text-xs font-medium text-slate-300 hover:text-white bg-slate-900 border border-slate-800 rounded-lg transition-colors"
+              >
+                Explore Services
+              </a>
+              <a
+                href="/pricing"
+                onClick={(e) => { e.preventDefault(); navigate('/pricing'); }}
+                className="px-5 py-2.5 text-xs font-medium text-slate-300 hover:text-white bg-slate-900 border border-slate-800 rounded-lg transition-colors"
+              >
+                View Pricing
+              </a>
+              <a
+                href="/contact"
+                onClick={(e) => { e.preventDefault(); navigate('/contact'); }}
                 className="px-5 py-2.5 text-xs font-medium text-slate-300 hover:text-white bg-slate-900 border border-slate-800 rounded-lg transition-colors"
               >
                 Contact Artist Desk
-              </button>
+              </a>
             </div>
           </div>
         </section>

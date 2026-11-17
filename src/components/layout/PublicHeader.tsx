@@ -76,44 +76,50 @@ export const PublicHeader: React.FC = () => {
             </button>
           </div>
 
-          {/* Nav Links Desktop (Clean 4-link summary for Top Bar Contract + hamburger for exhaustive 8 routes) */}
-          <nav className="hidden lg:flex items-center gap-7 text-sm font-medium text-slate-300">
-            <button
-              onClick={() => handleNav('/')}
+          {/* Nav Links Desktop */}
+          <nav className="hidden lg:flex items-center gap-7 text-sm font-medium text-slate-300" aria-label="Main navigation">
+            <a
+              href="/"
+              onClick={(e) => { e.preventDefault(); handleNav('/'); }}
               className={`hover:text-white transition-colors focus:outline-none ${path === '/' ? 'text-blue-400 font-semibold' : ''}`}
             >
               Home
-            </button>
-            <button
-              onClick={() => handleNav('/services')}
+            </a>
+            <a
+              href="/services"
+              onClick={(e) => { e.preventDefault(); handleNav('/services'); }}
               className={`hover:text-white transition-colors focus:outline-none ${path === '/services' ? 'text-blue-400 font-semibold' : ''}`}
             >
               Our Services
-            </button>
-            <button
-              onClick={() => handleNav('/pricing')}
+            </a>
+            <a
+              href="/pricing"
+              onClick={(e) => { e.preventDefault(); handleNav('/pricing'); }}
               className={`hover:text-white transition-colors focus:outline-none ${path === '/pricing' ? 'text-blue-400 font-semibold' : ''}`}
             >
               Pricing
-            </button>
-            <button
-              onClick={() => handleNav('/blogs')}
+            </a>
+            <a
+              href="/blogs"
+              onClick={(e) => { e.preventDefault(); handleNav('/blogs'); }}
               className={`hover:text-white transition-colors focus:outline-none ${path === '/blogs' ? 'text-blue-400 font-semibold' : ''}`}
             >
               Blogs
-            </button>
-            <button
-              onClick={() => handleNav('/about')}
+            </a>
+            <a
+              href="/about"
+              onClick={(e) => { e.preventDefault(); handleNav('/about'); }}
               className={`hover:text-white transition-colors focus:outline-none ${path === '/about' ? 'text-blue-400 font-semibold' : ''}`}
             >
               About
-            </button>
-            <button
-              onClick={() => handleNav('/contact')}
+            </a>
+            <a
+              href="/contact"
+              onClick={(e) => { e.preventDefault(); handleNav('/contact'); }}
               className={`hover:text-white transition-colors focus:outline-none ${path === '/contact' ? 'text-blue-400 font-semibold' : ''}`}
             >
               Contact
-            </button>
+            </a>
           </nav>
 
           {/* Action Zone + Hamburger Trigger */}

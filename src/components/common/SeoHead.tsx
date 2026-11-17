@@ -85,59 +85,59 @@ function getSeoForPath(cleanPath: string): RouteSeoConfig {
   switch (cleanPath) {
     case '/services':
       return {
-        title: 'Music Distribution Services | Rudraatma Music',
-        description: 'Explore global DSP delivery, YouTube Content ID, ISRC & UPC codes, royalty tracking, and artist release support at Rudraatma Music.',
+        title: 'Distribution Services | RUDRAATMA Music Distribution',
+        description: 'Explore global streaming delivery, Rudraatma Music Label tools, free ISRC & UPC codes, and royalty reporting at RUDRAATMA Music Distribution.',
       };
     case '/pricing':
       return {
-        title: 'Pricing & Distribution Plans | Rudraatma Music',
-        description: 'Compare affordable single, EP, album, and unlimited artist distribution plans with transparent payouts on Rudraatma Music.',
+        title: 'Pricing Plans | RUDRAATMA Music Distribution',
+        description: 'Compare transparent single, EP, album, and unlimited release plans with direct royalty payouts on RUDRAATMA Music Distribution.',
       };
     case '/blogs':
       return {
-        title: 'Music Industry Blogs & Guides | Rudraatma Music',
-        description: 'Read practical guides on music distribution, royalties, audio mastering, metadata standards, and release promotion.',
+        title: 'Music Distribution Guides | RUDRAATMA Music Distribution',
+        description: 'Read practical guides on music distribution, audio mastering, metadata compliance, and royalties from Rudraatma Music.',
       };
     case '/about':
       return {
-        title: 'About Us | Rudraatma Music Distribution Platform',
-        description: 'Learn how Rudraatma Music empowers independent artists and record labels with 100% rights retention and transparent royalties.',
+        title: 'About RUDRAATMA Music Distribution | Rudraatma Music Label',
+        description: 'Learn how RUDRAATMA Music Distribution empowers independent artists and record labels with 100% copyright retention and clear payouts.',
       };
     case '/contact':
       return {
-        title: 'Contact Artist Support Desk | Rudraatma Music',
-        description: 'Reach the Rudraatma Music artist support desk for release assistance, label onboarding, royalty inquiries, and distribution help.',
+        title: 'Contact Support | RUDRAATMA Music Distribution',
+        description: 'Reach the RUDRAATMA Music Distribution artist desk for release support, label onboarding, royalty inquiries, and metadata help.',
       };
     case '/terms':
       return {
-        title: 'Terms & Conditions | Rudraatma Music',
-        description: 'Review the official Terms and Conditions governing music distribution, user verification, and platform usage at Rudraatma Music.',
+        title: 'Terms & Conditions | RUDRAATMA Music Distribution',
+        description: 'Review the Terms and Conditions for music distribution and artist accounts on RUDRAATMA Music Distribution.',
       };
     case '/privacy':
       return {
-        title: 'Privacy Policy | Rudraatma Music',
-        description: 'Read how Rudraatma Music collects, safeguards, and processes artist metadata, account information, and payout records.',
+        title: 'Privacy Policy | RUDRAATMA Music Distribution',
+        description: 'Read how RUDRAATMA Music Distribution protects artist metadata, account details, and payout information.',
       };
     case '/refund-policy':
       return {
-        title: 'Refund Policy | Rudraatma Music',
-        description: 'Understand release fee and subscription refund eligibility rules for Rudraatma Music distribution services.',
+        title: 'Refund Policy | RUDRAATMA Music Distribution',
+        description: 'Understand release fee and subscription refund policies for RUDRAATMA Music Distribution plans.',
       };
     case '/cancellation-policy':
       return {
-        title: 'Subscription & Cancellation Policy | Rudraatma Music',
-        description: 'Learn how subscription cancellations and catalog preservation work on Rudraatma Music.',
+        title: 'Cancellation Policy | RUDRAATMA Music Distribution',
+        description: 'Learn how subscription cancellations and catalog retention work at RUDRAATMA Music Distribution.',
       };
     case '/distribution-agreement':
       return {
-        title: 'Music Distribution Agreement | Rudraatma Music',
-        description: 'Read the non-exclusive digital music distribution agreement confirming 100% artist master copyright retention.',
+        title: 'Distribution Agreement | RUDRAATMA Music Distribution',
+        description: 'Read the non-exclusive RUDRAATMA Music Distribution agreement confirming 100% artist master copyright ownership.',
       };
     case '/':
     default:
       return {
-        title: 'Rudraatma Music – Music Distribution & Artist Platform',
-        description: 'Distribute your music to global and regional streaming platforms, manage releases, organize your artists, and track royalty reports with Rudraatma Music.',
+        title: 'RUDRAATMA Music Distribution – Artist & Label Platform',
+        description: 'Distribute music worldwide with RUDRAATMA Music Distribution. Independent music label services, free ISRC & UPC codes, and transparent royalty payouts.',
       };
   }
 }

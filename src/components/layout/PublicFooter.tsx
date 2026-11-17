@@ -12,11 +12,11 @@ export const PublicFooter: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-10">
           {/* Brand Column */}
           <div className="lg:col-span-2 space-y-4">
-            <button onClick={() => navigate('/')} className="text-left group focus:outline-none">
+            <a href="/" onClick={(e) => { e.preventDefault(); navigate('/'); }} className="inline-block text-left group focus:outline-none">
               <BrandLogo size="md" />
-            </button>
+            </a>
             <p className="text-slate-400 text-sm leading-relaxed max-w-sm">
-              Professional digital music distribution, rights administration, and consolidated royalty tracking built for independent artists, producers, and record labels.
+              RUDRAATMA Music Distribution is an independent digital music distribution and Rudraatma Music Label platform delivering global catalog administration and verified royalty tracking.
             </p>
             <div className="pt-2 space-y-2 text-xs text-slate-400">
               <div className="flex items-center gap-2">
@@ -43,34 +43,34 @@ export const PublicFooter: React.FC = () => {
             </div>
             <ul className="space-y-2.5 text-sm">
               <li>
-                <button onClick={() => navigate('/')} className="hover:text-white transition-colors text-left">
+                <a href="/" onClick={(e) => { e.preventDefault(); navigate('/'); }} className="hover:text-white transition-colors text-left inline-block">
                   Home Overview
-                </button>
+                </a>
               </li>
               <li>
-                <button onClick={() => navigate('/services')} className="hover:text-white transition-colors text-left">
-                  Our Services
-                </button>
+                <a href="/services" onClick={(e) => { e.preventDefault(); navigate('/services'); }} className="hover:text-white transition-colors text-left inline-block">
+                  Music Distribution Services
+                </a>
               </li>
               <li>
-                <button onClick={() => navigate('/pricing')} className="hover:text-white transition-colors text-left">
-                  Pricing & Plans
-                </button>
+                <a href="/pricing" onClick={(e) => { e.preventDefault(); navigate('/pricing'); }} className="hover:text-white transition-colors text-left inline-block">
+                  Pricing &amp; Plans
+                </a>
               </li>
               <li>
-                <button onClick={() => navigate('/blogs')} className="hover:text-white transition-colors text-left">
-                  Blogs & Knowledge Base
-                </button>
+                <a href="/blogs" onClick={(e) => { e.preventDefault(); navigate('/blogs'); }} className="hover:text-white transition-colors text-left inline-block">
+                  Blogs &amp; Knowledge Base
+                </a>
               </li>
               <li>
-                <button onClick={() => navigate('/about')} className="hover:text-white transition-colors text-left">
+                <a href="/about" onClick={(e) => { e.preventDefault(); navigate('/about'); }} className="hover:text-white transition-colors text-left inline-block">
                   About Rudraatma Music
-                </button>
+                </a>
               </li>
               <li>
-                <button onClick={() => navigate('/contact')} className="hover:text-white transition-colors text-left">
+                <a href="/contact" onClick={(e) => { e.preventDefault(); navigate('/contact'); }} className="hover:text-white transition-colors text-left inline-block">
                   Contact Artist Desk
-                </button>
+                </a>
               </li>
             </ul>
           </div>
@@ -121,29 +121,29 @@ export const PublicFooter: React.FC = () => {
             </div>
             <ul className="space-y-2.5 text-sm">
               <li>
-                <button onClick={() => navigate('/terms')} className="hover:text-white transition-colors text-left">
-                  Terms & Conditions
-                </button>
+                <a href="/terms" onClick={(e) => { e.preventDefault(); navigate('/terms'); }} className="hover:text-white transition-colors text-left inline-block">
+                  Terms &amp; Conditions
+                </a>
               </li>
               <li>
-                <button onClick={() => navigate('/privacy')} className="hover:text-white transition-colors text-left">
+                <a href="/privacy" onClick={(e) => { e.preventDefault(); navigate('/privacy'); }} className="hover:text-white transition-colors text-left inline-block">
                   Privacy Policy
-                </button>
+                </a>
               </li>
               <li>
-                <button onClick={() => navigate('/refund-policy')} className="hover:text-white transition-colors text-left">
+                <a href="/refund-policy" onClick={(e) => { e.preventDefault(); navigate('/refund-policy'); }} className="hover:text-white transition-colors text-left inline-block">
                   Refund Policy
-                </button>
+                </a>
               </li>
               <li>
-                <button onClick={() => navigate('/cancellation-policy')} className="hover:text-white transition-colors text-left">
-                  Subscription & Cancellation
-                </button>
+                <a href="/cancellation-policy" onClick={(e) => { e.preventDefault(); navigate('/cancellation-policy'); }} className="hover:text-white transition-colors text-left inline-block">
+                  Subscription &amp; Cancellation
+                </a>
               </li>
               <li>
-                <button onClick={() => navigate('/distribution-agreement')} className="hover:text-white transition-colors text-left">
+                <a href="/distribution-agreement" onClick={(e) => { e.preventDefault(); navigate('/distribution-agreement'); }} className="hover:text-white transition-colors text-left inline-block">
                   Music Distribution Agreement
-                </button>
+                </a>
               </li>
             </ul>
           </div>
@@ -152,7 +152,7 @@ export const PublicFooter: React.FC = () => {
         {/* Bottom bar */}
         <div className="mt-12 pt-8 border-t border-slate-900 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-400">
           <div>
-            © 2026 Rudraatma Music. All Rights Reserved.
+            © 2026 RUDRAATMA Music Distribution (Rudraatma Music). All Rights Reserved.
           </div>
           <div className="flex items-center gap-4 text-slate-400">
             <span>All visible content in English</span>
