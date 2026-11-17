@@ -75,40 +75,40 @@ export const PublicFooter: React.FC = () => {
             </ul>
           </div>
 
-          {/* Account & Portal */}
+          {/* Distribution Hubs (Crawlable Topic Cluster Links) */}
           <div>
             <div className="text-xs uppercase tracking-wider text-slate-300 font-mono font-semibold mb-4">
-              Artist Portal
+              Distribution Hubs
             </div>
             <ul className="space-y-2.5 text-sm">
               <li>
-                <button onClick={() => navigate('/login')} className="hover:text-white transition-colors text-left">
-                  Artist Login
-                </button>
+                <a href="/india-music-distribution" onClick={(e) => { e.preventDefault(); navigate('/india-music-distribution'); }} className="hover:text-white transition-colors text-left inline-block">
+                  India Music Distribution
+                </a>
               </li>
               <li>
-                <button onClick={() => navigate('/signup')} className="hover:text-white transition-colors text-left">
-                  Create Account (Sign Up)
-                </button>
+                <a href="/spotify-youtube-music-distribution" onClick={(e) => { e.preventDefault(); navigate('/spotify-youtube-music-distribution'); }} className="hover:text-white transition-colors text-left inline-block">
+                  Spotify &amp; YouTube Delivery
+                </a>
+              </li>
+              <li>
+                <a href="/free-music-distribution-india" onClick={(e) => { e.preventDefault(); navigate('/free-music-distribution-india'); }} className="hover:text-white transition-colors text-left inline-block">
+                  Free Setup &amp; ₹20 Releases
+                </a>
+              </li>
+              <li>
+                <a href="/music-label-services" onClick={(e) => { e.preventDefault(); navigate('/music-label-services'); }} className="hover:text-white transition-colors text-left inline-block">
+                  Music Label Services
+                </a>
+              </li>
+              <li>
+                <a href="/music-distribution-for-independent-artists" onClick={(e) => { e.preventDefault(); navigate('/music-distribution-for-independent-artists'); }} className="hover:text-white transition-colors text-left inline-block">
+                  For Independent Artists
+                </a>
               </li>
               <li>
                 <button onClick={() => navigate('/dashboard')} className="hover:text-white transition-colors text-left">
                   Artist Dashboard
-                </button>
-              </li>
-              <li>
-                <button onClick={() => navigate('/dashboard/releases')} className="hover:text-white transition-colors text-left">
-                  Release Management
-                </button>
-              </li>
-              <li>
-                <button onClick={() => navigate('/dashboard/reports')} className="hover:text-white transition-colors text-left">
-                  Royalty Reporting
-                </button>
-              </li>
-              <li>
-                <button onClick={() => navigate('/dashboard/support')} className="hover:text-white transition-colors text-left">
-                  Support Desk
                 </button>
               </li>
             </ul>

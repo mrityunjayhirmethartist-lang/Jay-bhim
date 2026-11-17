@@ -73,7 +73,11 @@ export const AboutPage: React.FC = () => {
                 <div className="rounded-2xl overflow-hidden border border-slate-800 bg-slate-900 shadow-xl">
                   <img
                     src={labVisualPath}
-                    alt="Music Producer Audio Lab Workstation"
+                    alt="Music Producer Audio Lab Workstation at RUDRAATMA Music Distribution"
+                    width={800}
+                    height={600}
+                    loading="lazy"
+                    decoding="async"
                     className="w-full h-auto aspect-4/3 object-cover"
                     referrerPolicy="no-referrer"
                   />

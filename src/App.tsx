@@ -39,6 +39,8 @@ import { GmailPage } from './pages/dashboard/GmailPage';
 import { SuperAdminLoginPage } from './pages/SuperAdminLoginPage';
 import { SuperAdminDashboardPage } from './pages/SuperAdminDashboardPage';
 import { SeoHead } from './components/common/SeoHead';
+import { SeoLandingPage } from './pages/SeoLandingPage';
+import { SEO_LANDING_PAGES } from './data/seoLandingPagesData';
 
 const RouteRenderer: React.FC = () => {
   const { path } = useRouter();
@@ -105,6 +107,17 @@ const RouteRenderer: React.FC = () => {
   if (path.startsWith('/link/')) {
     const slug = path.replace(/^\/link\//, '').split('?')[0].split('/')[0];
     return <SmartLandingPage slug={slug} />;
+  }
+
+  // Dedicated SEO Topic & India Distribution Landing Pages
+  if (SEO_LANDING_PAGES[path]) {
+    return <SeoLandingPage config={SEO_LANDING_PAGES[path]} />;
+  }
+
+  // Individual Blog Article Routes (/blogs/:slug)
+  if (path.startsWith('/blogs/')) {
+    const slug = path.replace(/^\/blogs\//, '').split('?')[0].split('/')[0];
+    return <BlogsPage articleSlug={slug} />;
   }
 
   // Public Routes

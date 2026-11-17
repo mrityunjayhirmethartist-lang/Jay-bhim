@@ -40,7 +40,10 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
         {!imgError ? (
           <img
             src="/logo.png"
-            alt="Rudraatma Music Logo"
+            alt="RUDRAATMA Music Distribution Logo"
+            width={64}
+            height={64}
+            decoding="async"
             className="w-full h-full object-cover rounded-lg"
             onError={() => setImgError(true)}
           />

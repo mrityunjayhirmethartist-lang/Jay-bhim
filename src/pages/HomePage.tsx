@@ -148,7 +148,11 @@ export const HomePage: React.FC = () => {
               <div className="relative rounded-2xl overflow-hidden border border-slate-800 bg-slate-950 shadow-2xl group">
                 <img
                   src={heroVisualPath}
-                  alt="Rudraatma Music Master Audio Visualizer and Studio Console"
+                  alt="RUDRAATMA Music Distribution Studio Console and Audio Mastering Interface"
+                  width={800}
+                  height={600}
+                  fetchPriority="high"
+                  decoding="async"
                   className="w-full h-auto aspect-video lg:aspect-4/3 object-cover group-hover:scale-[1.02] transition-transform duration-500"
                   referrerPolicy="no-referrer"
                 />
@@ -195,8 +199,11 @@ export const HomePage: React.FC = () => {
                       {!failedPlatformImages[p.id] ? (
                         <img
                           src={p.imageUrl}
-                          alt={`${p.name} app icon`}
+                          alt={`${p.name} digital music distribution platform`}
+                          width={36}
+                          height={36}
                           loading="lazy"
+                          decoding="async"
                           referrerPolicy="no-referrer"
                           onError={() => setFailedPlatformImages(prev => ({ ...prev, [p.id]: true }))}
                           className="w-full h-full object-cover"
@@ -365,7 +372,11 @@ export const HomePage: React.FC = () => {
               <div className="relative rounded-2xl overflow-hidden border border-slate-800 bg-slate-900 shadow-xl">
                 <img
                   src={studioVisualPath}
-                  alt="Acoustic Studio Mastering Console with Hardware Faders"
+                  alt="Acoustic Studio Mastering Console for Digital Music Distribution in India"
+                  width={800}
+                  height={600}
+                  loading="lazy"
+                  decoding="async"
                   className="w-full h-auto aspect-4/3 object-cover"
                   referrerPolicy="no-referrer"
                 />
@@ -759,11 +770,12 @@ export const HomePage: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
-            {BLOGS_DATA.map((article) => (
-              <div
+            {BLOGS_DATA.slice(0, 4).map((article) => (
+              <a
                 key={article.id}
-                onClick={() => navigate('/blogs')}
-                className="p-5 rounded-xl bg-slate-900/80 border border-slate-800 hover:border-blue-500/40 transition-all cursor-pointer flex flex-col justify-between group"
+                href={`/blogs/${article.slug}`}
+                onClick={(e) => { e.preventDefault(); navigate(`/blogs/${article.slug}`); }}
+                className="p-5 rounded-xl bg-slate-900/80 border border-slate-800 hover:border-blue-500/40 transition-all flex flex-col justify-between group"
               >
                 <div>
                   <div className="text-[10px] uppercase font-mono text-blue-400">{article.category}</div>
@@ -778,7 +790,72 @@ export const HomePage: React.FC = () => {
                   <span>{article.readTime}</span>
                   <span className="text-blue-400 group-hover:translate-x-1 transition-transform">Read →</span>
                 </div>
-              </div>
+              </a>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* SECTION 13B: DEDICATED DISTRIBUTION SOLUTIONS (INDIA & TOPIC CLUSTERS) */}
+      <section className="py-16 border-b border-slate-900 bg-[#070b14]">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="max-w-3xl mb-10">
+            <span className="text-xs font-mono uppercase tracking-widest text-blue-400">
+              India &amp; Global Distribution Guides
+            </span>
+            <h2 className="text-2xl sm:text-3xl font-bold text-white font-display mt-1">
+              Music Distribution Solutions for Every Artist &amp; Label
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-300 mt-2">
+              Explore tailored workflows for Indian artists, Spotify &amp; YouTube delivery, transparent zero-upfront onboarding, and multi-artist record label services.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+            {[
+              {
+                title: 'India Music Distribution',
+                href: '/india-music-distribution',
+                desc: 'INR pricing, JioSaavn & global DSPs, plus IMPS/UPI royalty payouts.'
+              },
+              {
+                title: 'Spotify & YouTube Music',
+                href: '/spotify-youtube-music-distribution',
+                desc: 'Lossless WAV mastering specs, 24–72h QC review, and ISRC migration.'
+              },
+              {
+                title: 'Free Setup & ₹20 Releases',
+                href: '/free-music-distribution-india',
+                desc: 'Free account, free ISRC/UPC, First-10 promo details, and ₹20 singles.'
+              },
+              {
+                title: 'Music Label Services',
+                href: '/music-label-services',
+                desc: 'My Labels imprints, team permissions, and multi-artist catalogs.'
+              },
+              {
+                title: 'For Independent Artists',
+                href: '/music-distribution-for-independent-artists',
+                desc: '100% master ownership, contributor credits, and release Smart Links.'
+              }
+            ].map((hub) => (
+              <a
+                key={hub.href}
+                href={hub.href}
+                onClick={(e) => { e.preventDefault(); navigate(hub.href); }}
+                className="p-5 rounded-xl bg-[#090e1a] border border-slate-800 hover:border-blue-500/50 transition-all flex flex-col justify-between group"
+              >
+                <div>
+                  <h3 className="text-sm font-bold text-white font-display group-hover:text-blue-300 transition-colors">
+                    {hub.title}
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-2 leading-relaxed">{hub.desc}</p>
+                </div>
+                <span className="mt-4 inline-flex items-center gap-1 text-[11px] font-semibold text-blue-400">
+                  <span>Explore Guide</span>
+                  <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+                </span>
+              </a>
             ))}
           </div>
         </div>

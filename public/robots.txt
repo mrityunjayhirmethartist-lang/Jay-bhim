@@ -1,8 +1,14 @@
 User-agent: Googlebot
 Allow: /
+Allow: /india-music-distribution
+Allow: /spotify-youtube-music-distribution
+Allow: /free-music-distribution-india
+Allow: /music-label-services
+Allow: /music-distribution-for-independent-artists
 Allow: /services
 Allow: /pricing
 Allow: /blogs
+Allow: /blogs/
 Allow: /about
 Allow: /contact
 Allow: /terms
