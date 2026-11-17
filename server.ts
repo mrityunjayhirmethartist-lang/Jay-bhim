@@ -5331,6 +5331,58 @@ registerAiRoutes(app, {
   localEvidenceDir
 });
 
+// Explicit SEO endpoints & private route X-Robots-Tag protection (works in dev, Cloud Run full-stack, and Render)
+const PRIVATE_SEO_PREFIXES = [
+  '/login',
+  '/signup',
+  '/verify-otp',
+  '/forgot-password',
+  '/checkout',
+  '/dashboard',
+  '/admin',
+  '/super-admin',
+  '/api'
+];
+
+app.use((req, res, next) => {
+  const cleanPath = (req.path || '/').toLowerCase();
+  const isPrivateRoute = PRIVATE_SEO_PREFIXES.some(
+    (prefix) => cleanPath === prefix || cleanPath.startsWith(`${prefix}/`)
+  );
+  if (isPrivateRoute) {
+    res.setHeader('X-Robots-Tag', 'noindex, nofollow');
+  }
+  next();
+});
+
+function resolvePublicOrDistFile(filename: string): string | null {
+  const distCandidate = path.join(__dirname, 'dist', filename);
+  if (fs.existsSync(distCandidate)) return distCandidate;
+  const publicCandidate = path.join(__dirname, 'public', filename);
+  if (fs.existsSync(publicCandidate)) return publicCandidate;
+  return null;
+}
+
+app.get('/sitemap.xml', (_req, res) => {
+  const filePath = resolvePublicOrDistFile('sitemap.xml');
+  if (!filePath) {
+    return res.status(404).type('text/plain').send('sitemap.xml not found');
+  }
+  res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+  res.setHeader('Cache-Control', 'public, max-age=3600');
+  return res.status(200).sendFile(filePath);
+});
+
+app.get('/robots.txt', (_req, res) => {
+  const filePath = resolvePublicOrDistFile('robots.txt');
+  if (!filePath) {
+    return res.status(404).type('text/plain').send('robots.txt not found');
+  }
+  res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+  res.setHeader('Cache-Control', 'public, max-age=3600');
+  return res.status(200).sendFile(filePath);
+});
+
 async function startServer() {
   await initDatabase();
   await hydrateFromDatabase();

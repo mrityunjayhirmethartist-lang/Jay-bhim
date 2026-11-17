@@ -38,6 +38,7 @@ import { GoogleSheetsPage } from './pages/dashboard/GoogleSheetsPage';
 import { GmailPage } from './pages/dashboard/GmailPage';
 import { SuperAdminLoginPage } from './pages/SuperAdminLoginPage';
 import { SuperAdminDashboardPage } from './pages/SuperAdminDashboardPage';
+import { SeoHead } from './components/common/SeoHead';
 
 const RouteRenderer: React.FC = () => {
   const { path } = useRouter();
@@ -138,6 +139,7 @@ export default function App() {
     <ThemeProvider>
       <RouterProvider>
         <AuthProvider>
+          <SeoHead />
           <RouteRenderer />
         </AuthProvider>
       </RouterProvider>
