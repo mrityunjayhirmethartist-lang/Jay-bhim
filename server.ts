@@ -102,7 +102,6 @@ const PORT = Number(process.env.PORT) || 3000;
 // ======================== CORS CONFIGURATION (NETLIFY + CUSTOM DOMAINS + LOCALHOST) ========================
 const configuredOrigins = [
   process.env.FRONTEND_URL,
-  process.env.NETLIFY_URL,
   process.env.APP_URL,
   'https://rudraatmamusic.netlify.app',
   'https://rudraatma-music.netlify.app',
@@ -5340,7 +5339,7 @@ async function startServer() {
 
   const isProduction = process.env.NODE_ENV === 'production';
   const isRender = Boolean(
-    process.env.RENDER || process.env.RENDER_SERVICE_ID || process.env.RENDER_EXTERNAL_URL || process.env.API_ONLY === 'true'
+    process.env.RENDER || process.env.RENDER_SERVICE_ID || process.env.RENDER_EXTERNAL_URL
   );
   const distDir = path.join(__dirname, 'dist');
   const hasBuiltFrontend = fs.existsSync(path.join(distDir, 'index.html'));

@@ -41,6 +41,7 @@ export const HomePage: React.FC = () => {
   const { user, setSelectedPlanId } = useAuth();
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [activeFaq, setActiveFaq] = useState<string | null>(null);
+  const [failedPlatformImages, setFailedPlatformImages] = useState<Record<string, boolean>>({});
 
   const handleSelectPlan = (planId: string) => {
     setSelectedPlanId(planId);
@@ -188,7 +189,25 @@ export const HomePage: React.FC = () => {
                 className="p-4 rounded-xl bg-slate-900/60 border border-slate-800/80 hover:border-blue-500/40 transition-colors flex flex-col justify-between"
               >
                 <div>
-                  <div className="text-sm font-bold text-white font-display">{p.name}</div>
+                  <div className="flex items-center gap-2.5 mb-2">
+                    <div className="w-9 h-9 rounded-xl overflow-hidden border border-slate-700/70 bg-slate-950 flex items-center justify-center shrink-0">
+                      {!failedPlatformImages[p.id] ? (
+                        <img
+                          src={p.imageUrl}
+                          alt={`${p.name} app icon`}
+                          loading="lazy"
+                          referrerPolicy="no-referrer"
+                          onError={() => setFailedPlatformImages(prev => ({ ...prev, [p.id]: true }))}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <Disc3 className="w-4 h-4 text-blue-400" />
+                      )}
+                    </div>
+                    <div className="text-sm font-bold text-white font-display leading-tight min-w-0">
+                      {p.name}
+                    </div>
+                  </div>
                   <div className="text-[11px] text-blue-400 mt-0.5">{p.type}</div>
                 </div>
                 <div className="mt-4 pt-3 border-t border-slate-800/60 text-[10px] text-slate-400 font-mono">

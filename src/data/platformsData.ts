@@ -1,6 +1,7 @@
 export interface PlatformDestination {
   id: string;
   name: string;
+  imageUrl: string;
   region: string;
   type: 'Global Streaming' | 'Regional Streaming' | 'Hi-Fi / Audiophile' | 'Video & Social';
   description: string;
@@ -12,6 +13,7 @@ export const PLATFORMS_DIRECTORY: PlatformDestination[] = [
   {
     id: 'spotify',
     name: 'Spotify',
+    imageUrl: '/assets/platforms/spotify.jpg',
     region: 'Global (180+ Markets)',
     type: 'Global Streaming',
     category: 'Major Global',
@@ -21,6 +23,7 @@ export const PLATFORMS_DIRECTORY: PlatformDestination[] = [
   {
     id: 'apple-music',
     name: 'Apple Music',
+    imageUrl: '/assets/platforms/apple-music.jpg',
     region: 'Global (167 Markets)',
     type: 'Global Streaming',
     category: 'Major Global',
@@ -30,6 +33,7 @@ export const PLATFORMS_DIRECTORY: PlatformDestination[] = [
   {
     id: 'youtube-music',
     name: 'YouTube Music & Content ID',
+    imageUrl: '/assets/platforms/youtube-music.jpg',
     region: 'Global (100+ Markets)',
     type: 'Video & Social',
     category: 'Major Global',
@@ -39,6 +43,7 @@ export const PLATFORMS_DIRECTORY: PlatformDestination[] = [
   {
     id: 'amazon-music',
     name: 'Amazon Music',
+    imageUrl: '/assets/platforms/amazon-music.jpg',
     region: 'Global (50+ Markets)',
     type: 'Global Streaming',
     category: 'Major Global',
@@ -48,6 +53,7 @@ export const PLATFORMS_DIRECTORY: PlatformDestination[] = [
   {
     id: 'jiosaavn',
     name: 'JioSaavn',
+    imageUrl: '/assets/platforms/jiosaavn.jpg',
     region: 'South Asia & Global Diaspora',
     type: 'Regional Streaming',
     category: 'Regional & South Asian',
@@ -57,6 +63,7 @@ export const PLATFORMS_DIRECTORY: PlatformDestination[] = [
   {
     id: 'deezer',
     name: 'Deezer',
+    imageUrl: '/assets/platforms/deezer.jpg',
     region: 'Global (185+ Markets)',
     type: 'Global Streaming',
     category: 'Major Global',
@@ -66,6 +73,7 @@ export const PLATFORMS_DIRECTORY: PlatformDestination[] = [
   {
     id: 'tidal',
     name: 'Tidal',
+    imageUrl: '/assets/platforms/tidal.jpg',
     region: 'Global (60+ Markets)',
     type: 'Hi-Fi / Audiophile',
     category: 'High Fidelity',

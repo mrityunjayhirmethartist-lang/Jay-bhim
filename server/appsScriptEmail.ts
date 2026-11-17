@@ -48,16 +48,6 @@ export interface AppsScriptEmailResult {
   latencyMs?: number;
 }
 
-function resolveRequestTimeoutMs(): number {
-  const raw = (process.env.EMAIL_REQUEST_TIMEOUT_MS || '').trim();
-  if (!raw) return DEFAULT_APPS_SCRIPT_TIMEOUT_MS;
-  const parsed = Number(raw);
-  if (Number.isFinite(parsed) && parsed >= 200 && parsed <= 60_000) {
-    return Math.round(parsed);
-  }
-  return DEFAULT_APPS_SCRIPT_TIMEOUT_MS;
-}
-
 function redactSensitiveText(text: string, url: string, secret: string): string {
   let sanitized = text || '';
   if (secret) {
@@ -91,7 +81,7 @@ export function resolveAppsScriptEmailConfig(): ResolvedAppsScriptEmailConfig {
 
   const rawUrl = stripOuterQuotes(process.env.GOOGLE_SCRIPT_URL);
   const secret = stripOuterQuotes(process.env.GOOGLE_SCRIPT_SECRET);
-  const timeoutMs = resolveRequestTimeoutMs();
+  const timeoutMs = DEFAULT_APPS_SCRIPT_TIMEOUT_MS;
 
   let validHttpsUrl = false;
   let normalizedUrl = '';
