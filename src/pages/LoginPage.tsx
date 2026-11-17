@@ -36,7 +36,7 @@ export const LoginPage: React.FC = () => {
   const [otpLoading, setOtpLoading] = useState(false);
   const [otpError, setOtpError] = useState<string | null>(null);
   const [cooldown, setCooldown] = useState(60);
-  const [expirySeconds, setExpirySeconds] = useState(300); // 5 minutes strictly
+  const [expirySeconds, setExpirySeconds] = useState(600); // 10 minutes strictly
 
   // Forgot password modal state
   const [forgotModalOpen, setForgotModalOpen] = useState(false);
@@ -71,7 +71,7 @@ export const LoginPage: React.FC = () => {
     return () => clearInterval(timer);
   }, [forgotCooldown]);
 
-  // 5-minute expiration countdown timer for Login OTP
+  // 10-minute expiration countdown timer for Login OTP
   useEffect(() => {
     let timer: any;
     if (requiresOtp && expirySeconds > 0) {
@@ -118,7 +118,7 @@ export const LoginPage: React.FC = () => {
           setOtpDigits(['', '', '', '', '', '']);
           setOtpError(null);
           setCooldown(data.cooldownSeconds || 60);
-          setExpirySeconds(data.expiresInSeconds || 300);
+          setExpirySeconds(data.expiresInSeconds || 600);
         }
       } else {
         if (data && data.needsVerification) {
@@ -145,7 +145,7 @@ export const LoginPage: React.FC = () => {
     }
 
     if (expirySeconds <= 0) {
-      setOtpError('This verification code has expired (5-minute limit). Please request a new code.');
+      setOtpError('This verification code has expired (10-minute limit). Please request a new code.');
       return;
     }
 
@@ -190,7 +190,7 @@ export const LoginPage: React.FC = () => {
 
       if (res.ok && data.success) {
         setCooldown(data.cooldownSeconds || 60);
-        setExpirySeconds(data.expiresInSeconds || 300);
+        setExpirySeconds(data.expiresInSeconds || 600);
         setOtpDigits(['', '', '', '', '', '']);
       } else {
         setOtpError(data.error || 'Failed to dispatch new verification code.');
@@ -611,7 +611,7 @@ export const LoginPage: React.FC = () => {
             ) : (
               <form onSubmit={handleForgotReset} className="space-y-4">
                 <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-2">6-Digit Reset Code (Expires in 5 min)</label>
+                  <label className="block text-xs font-medium text-slate-300 mb-2">6-Digit Reset Code (Expires in 10 min)</label>
                   <OtpInput
                     digits={forgotOtpDigits}
                     onChange={setForgotOtpDigits}

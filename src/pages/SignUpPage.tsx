@@ -37,7 +37,7 @@ export const SignUpPage: React.FC = () => {
   const [otpLoading, setOtpLoading] = useState(false);
   const [otpError, setOtpError] = useState<string | null>(null);
   const [cooldown, setCooldown] = useState(60);
-  const [expirySeconds, setExpirySeconds] = useState(300); // 5 minutes strictly
+  const [expirySeconds, setExpirySeconds] = useState(600); // 10 minutes strictly
 
   // Change Email State during OTP verification
   const [isChangingEmail, setIsChangingEmail] = useState(false);
@@ -56,7 +56,7 @@ export const SignUpPage: React.FC = () => {
       }
       setOtpStep(true);
       setCooldown(60);
-      setExpirySeconds(300);
+      setExpirySeconds(600);
     }
   }, [verifyEmailFromQuery]);
 
@@ -71,7 +71,7 @@ export const SignUpPage: React.FC = () => {
     return () => clearInterval(timer);
   }, [cooldown]);
 
-  // 5-minute expiry countdown timer
+  // 10-minute expiry countdown timer
   useEffect(() => {
     let timer: any;
     if (otpStep && expirySeconds > 0) {
@@ -145,7 +145,7 @@ export const SignUpPage: React.FC = () => {
         setOtpStep(true);
         setOtpDigits(['', '', '', '', '', '']);
         setCooldown(data.cooldownSeconds || 60);
-        setExpirySeconds(data.expiresInSeconds || 300);
+        setExpirySeconds(data.expiresInSeconds || 600);
       } else {
         setError(data?.error || 'Registration failed.');
       }
@@ -165,7 +165,7 @@ export const SignUpPage: React.FC = () => {
     }
 
     if (expirySeconds <= 0) {
-      setOtpError('This verification code has expired (5-minute limit). Please request a fresh code.');
+      setOtpError('This verification code has expired (10-minute limit). Please request a fresh code.');
       return;
     }
 
@@ -236,7 +236,7 @@ export const SignUpPage: React.FC = () => {
         setIsChangingEmail(false);
         setNewEmailInput('');
         setCooldown(data.cooldownSeconds || 60);
-        setExpirySeconds(data.expiresInSeconds || 300);
+        setExpirySeconds(data.expiresInSeconds || 600);
         setOtpDigits(['', '', '', '', '', '']);
         setOtpError(null);
       } else {
@@ -262,7 +262,7 @@ export const SignUpPage: React.FC = () => {
       const data = await parseJsonSafe(res);
       if (res.ok && data.success) {
         setCooldown(data.cooldownSeconds || 60);
-        setExpirySeconds(data.expiresInSeconds || 300);
+        setExpirySeconds(data.expiresInSeconds || 600);
         setOtpDigits(['', '', '', '', '', '']);
       } else {
         setOtpError(data.error || 'Failed to resend code.');

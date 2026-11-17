@@ -226,7 +226,7 @@ export const ForgotPasswordPage: React.FC = () => {
               <form onSubmit={handleResetPassword} className="space-y-4">
                 <div>
                   <label className="block text-xs font-medium text-slate-300 mb-2 text-center">
-                    Enter 6-Digit Reset Code (Expires in 5 min)
+                    Enter 6-Digit Reset Code (Expires in 10 min)
                   </label>
                   <OtpInput
                     digits={otpDigits}

@@ -73,6 +73,18 @@ import {
   generateRoyaltyCsv,
   generateRoyaltyPdfBuffer
 } from './server/royaltyReportExport';
+import {
+  OTP_EXPIRY_SECONDS,
+  OTP_COOLDOWN_SECONDS,
+  OTP_MAX_ATTEMPTS,
+  checkOtpCooldown,
+  checkOtpRequestQuota,
+  recordOtpRequest,
+  createOtpRecord,
+  verifyOtpSubmission,
+  type OtpPurpose,
+  type OtpRecord
+} from './server/otpSecurity';
 
 dotenv.config();
 
@@ -395,14 +407,7 @@ export interface StoredUser {
   createdAt: string;
 }
 
-export interface StoredOtp {
-  email: string;
-  codeHash: string;
-  expiresAt: number;
-  attempts: number;
-  lastSentAt: number;
-  purpose: 'signup' | 'login' | 'reset';
-}
+export type StoredOtp = OtpRecord;
 
 export interface Session {
   token: string;
@@ -1250,7 +1255,7 @@ function findReleaseById(releaseId: string): { release: StoredRelease; dashboard
   return null;
 }
 
-// ======================== AUTH ROUTES (6-DIGIT OTP, 5-MIN EXPIRY, 2FA LOGIN) ========================
+// ======================== AUTH ROUTES (6-DIGIT CSPRNG OTP, 10-MIN EXPIRY, 2FA LOGIN) ========================
 
 app.post('/api/auth/register', authRateLimiter, async (req, res) => {
   const { fullName, email, country, password, confirmPassword, termsAccepted, selectedPlanId } = req.body;
@@ -1282,10 +1287,26 @@ app.post('/api/auth/register', authRateLimiter, async (req, res) => {
     return res.status(409).json({ error: 'An account with this email address already exists. Please log in or reset your password.' });
   }
 
-  // Generate 6-digit code (strictly 100000 - 999999)
-  const otpCode = crypto.randomInt(100000, 1000000).toString();
-  const codeHash = hashString(otpCode);
-  const expiresAt = Date.now() + 5 * 60 * 1000; // Strictly 5 minutes
+  // Enforce 60-second resend cooldown on repeated unverified signup attempts
+  const existingSignupOtp = signupOtps.get(normalizedEmail);
+  const cooldownCheck = checkOtpCooldown(existingSignupOtp);
+  if (!cooldownCheck.allowed) {
+    return res.status(429).json({
+      error: `Please wait ${cooldownCheck.remainingSeconds} seconds before requesting a new verification code.`
+    });
+  }
+
+  // Prevent excessive OTP generation requests for the same email
+  const quotaCheck = checkOtpRequestQuota(normalizedEmail, 'signup');
+  if (!quotaCheck.allowed) {
+    return res.status(429).json({
+      error: `Too many verification code requests for this email. Please wait ${Math.ceil(quotaCheck.retryAfterSeconds / 60)} minute(s) before trying again.`
+    });
+  }
+
+  // Invalidate any previous signup OTP immediately before creating a fresh one
+  signupOtps.delete(normalizedEmail);
+  await dbDeleteOtp(normalizedEmail, 'signup');
 
   const userId = existing ? existing.id : 'usr_' + crypto.randomBytes(6).toString('hex');
   const passwordHash = await hashPassword(password);
@@ -1303,15 +1324,13 @@ app.post('/api/auth/register', authRateLimiter, async (req, res) => {
   users.set(normalizedEmail, newUser);
   await dbUpsertUser(newUser);
 
-  const otpData: StoredOtp = {
+  // Cryptographically secure 6-digit OTP, salted hash, 10-minute expiration
+  const { code: otpCode, record: otpData } = createOtpRecord({
     email: normalizedEmail,
-    codeHash,
-    expiresAt,
-    attempts: 0,
-    lastSentAt: Date.now(),
     purpose: 'signup'
-  };
+  });
 
+  recordOtpRequest(normalizedEmail, 'signup');
   signupOtps.set(normalizedEmail, otpData);
   await dbSaveOtp(otpData);
 
@@ -1335,41 +1354,28 @@ app.post('/api/auth/register', authRateLimiter, async (req, res) => {
     senderEmail: emailResult.senderAddress,
     smtpDelivered: true,
     smtpConfigured: true,
-    expiresInSeconds: 300,
-    cooldownSeconds: 60
+    expiresInSeconds: OTP_EXPIRY_SECONDS,
+    cooldownSeconds: OTP_COOLDOWN_SECONDS
   });
 });
 
 async function verifySignupOtpInternal(_req: express.Request, res: express.Response, normalizedEmail: string, code: string) {
-  const otpRecord = signupOtps.get(normalizedEmail);
+  const verification = await verifyOtpSubmission({
+    email: normalizedEmail,
+    purpose: 'signup',
+    enteredCode: code,
+    otpMap: signupOtps,
+    saveOtp: dbSaveOtp,
+    deleteOtp: dbDeleteOtp,
+    missingMessage: 'No active verification code was requested for this email. Please sign up or resend code.',
+    expiredMessage: 'This verification code has expired (10-minute limit). Please request a fresh code.',
+    lockedMessage: `Too many incorrect attempts (maximum ${OTP_MAX_ATTEMPTS} attempts reached). For your security, this code has been invalidated. Please request a new verification code.`,
+    invalidPrefix: 'Invalid verification code'
+  });
 
-  if (!otpRecord) {
-    return res.status(400).json({ error: 'No active verification code was requested for this email. Please sign up or resend code.' });
+  if (!verification.ok) {
+    return res.status(verification.status).json({ error: verification.error });
   }
-
-  if (Date.now() > otpRecord.expiresAt) {
-    signupOtps.delete(normalizedEmail);
-    await dbDeleteOtp(normalizedEmail, 'signup');
-    return res.status(400).json({ error: 'This verification code has expired (5-minute limit). Please request a fresh code.' });
-  }
-
-  if (otpRecord.attempts >= 5) {
-    signupOtps.delete(normalizedEmail);
-    await dbDeleteOtp(normalizedEmail, 'signup');
-    return res.status(429).json({ error: 'Too many incorrect attempts. Please request a new verification code.' });
-  }
-
-  const enteredHash = hashString(code.trim());
-  if (enteredHash !== otpRecord.codeHash) {
-    otpRecord.attempts += 1;
-    await dbSaveOtp(otpRecord);
-    const remaining = 5 - otpRecord.attempts;
-    return res.status(400).json({ error: `Invalid verification code. ${remaining} attempt(s) remaining.` });
-  }
-
-  // Invalidate OTP immediately upon successful verification
-  signupOtps.delete(normalizedEmail);
-  await dbDeleteOtp(normalizedEmail, 'signup');
 
   const user = users.get(normalizedEmail);
   if (!user) return res.status(404).json({ error: 'Account record not found.' });
@@ -1413,8 +1419,20 @@ app.post('/api/auth/verify-otp', authRateLimiter, async (req, res) => {
 
   const normalizedEmail = email.trim().toLowerCase();
 
-  // If client specifically routed a login OTP to this generic endpoint, delegate to login OTP handler
-  if (type === 'login' || (!signupOtps.has(normalizedEmail) && loginOtps.has(normalizedEmail))) {
+  if (type === 'reset') {
+    return res.status(400).json({ error: 'Password reset codes must be verified on the password reset endpoint.' });
+  }
+
+  // Enforce purpose-bound verification when type is explicitly provided
+  if (type === 'login') {
+    return verifyLoginOtpInternal(req, res, normalizedEmail, code);
+  }
+  if (type === 'signup') {
+    return verifySignupOtpInternal(req, res, normalizedEmail, code);
+  }
+
+  // Backward-compatible fallback only when type is omitted
+  if (!signupOtps.has(normalizedEmail) && loginOtps.has(normalizedEmail)) {
     return verifyLoginOtpInternal(req, res, normalizedEmail, code);
   }
 
@@ -1456,11 +1474,29 @@ app.post('/api/auth/change-registration-email', authRateLimiter, async (req, res
     return res.status(400).json({ error: 'This account is already activated. Please log in.' });
   }
 
-  // Migrate user record to new email
+  // Enforce 60-second cooldown & excessive request protection before dispatching another OTP
+  const oldOtp = signupOtps.get(normalizedOld);
+  const cooldownCheck = checkOtpCooldown(oldOtp);
+  if (!cooldownCheck.allowed) {
+    return res.status(429).json({
+      error: `Please wait ${cooldownCheck.remainingSeconds} seconds before requesting a new verification code.`
+    });
+  }
+
+  const quotaCheck = checkOtpRequestQuota(normalizedNew, 'signup');
+  if (!quotaCheck.allowed) {
+    return res.status(429).json({
+      error: `Too many verification code requests for this email. Please wait ${Math.ceil(quotaCheck.retryAfterSeconds / 60)} minute(s) before trying again.`
+    });
+  }
+
+  // Migrate user record to new email & invalidate any previous OTPs for both emails
   users.delete(normalizedOld);
   signupOtps.delete(normalizedOld);
+  signupOtps.delete(normalizedNew);
   await dbDeleteUserByEmail(normalizedOld);
   await dbDeleteOtp(normalizedOld, 'signup');
+  await dbDeleteOtp(normalizedNew, 'signup');
 
   const updatedUser: StoredUser = {
     ...oldUser,
@@ -1469,19 +1505,13 @@ app.post('/api/auth/change-registration-email', authRateLimiter, async (req, res
   users.set(normalizedNew, updatedUser);
   await dbUpsertUser(updatedUser);
 
-  // Generate fresh 6-digit OTP
-  const freshCode = crypto.randomInt(100000, 1000000).toString();
-  const codeHash = hashString(freshCode);
-  const expiresAt = Date.now() + 5 * 60 * 1000; // 5 minutes
-
-  const newOtpData: StoredOtp = {
+  // Generate fresh 6-digit OTP (10-minute expiration, salted hash)
+  const { code: freshCode, record: newOtpData } = createOtpRecord({
     email: normalizedNew,
-    codeHash,
-    expiresAt,
-    attempts: 0,
-    lastSentAt: Date.now(),
     purpose: 'signup'
-  };
+  });
+
+  recordOtpRequest(normalizedNew, 'signup');
   signupOtps.set(normalizedNew, newOtpData);
   await dbSaveOtp(newOtpData);
 
@@ -1508,8 +1538,8 @@ app.post('/api/auth/change-registration-email', authRateLimiter, async (req, res
     replyTo: OFFICIAL_COMPANY_EMAIL,
     smtpDelivered: true,
     smtpConfigured: true,
-    cooldownSeconds: 60,
-    expiresInSeconds: 300
+    cooldownSeconds: OTP_COOLDOWN_SECONDS,
+    expiresInSeconds: OTP_EXPIRY_SECONDS
   });
 });
 
@@ -1633,31 +1663,37 @@ app.post('/api/auth/login', authRateLimiter, async (req, res) => {
 
   // Check 60-second cooldown on recent login OTP for standard artist/admin users
   const existingLoginOtp = loginOtps.get(normalizedEmail);
-  if (existingLoginOtp && Date.now() - existingLoginOtp.lastSentAt < 60 * 1000) {
-    const remainingCooldown = Math.ceil((60 * 1000 - (Date.now() - existingLoginOtp.lastSentAt)) / 1000);
+  const cooldownCheck = checkOtpCooldown(existingLoginOtp);
+  if (!cooldownCheck.allowed && existingLoginOtp && Date.now() <= existingLoginOtp.expiresAt) {
     return res.json({
       success: true,
       requiresOtp: true,
       email: normalizedEmail,
-      message: `A login code was recently sent. Please enter the 6-digit code or wait ${remainingCooldown}s to resend.`,
+      message: `A login code was recently sent. Please enter the 6-digit code or wait ${cooldownCheck.remainingSeconds}s to resend.`,
       expiresInSeconds: Math.max(0, Math.ceil((existingLoginOtp.expiresAt - Date.now()) / 1000)),
-      cooldownSeconds: remainingCooldown
+      cooldownSeconds: cooldownCheck.remainingSeconds
     });
   }
 
-  // Generate fresh 6-digit login OTP (valid for 5 minutes)
-  const loginCode = crypto.randomInt(100000, 1000000).toString();
-  const codeHash = hashString(loginCode);
-  const expiresAt = Date.now() + 5 * 60 * 1000; // Strictly 5 minutes
+  // Enforce rolling excessive OTP request protection
+  const quotaCheck = checkOtpRequestQuota(normalizedEmail, 'login');
+  if (!quotaCheck.allowed) {
+    return res.status(429).json({
+      error: `Too many login OTP requests. Please wait ${Math.ceil(quotaCheck.retryAfterSeconds / 60)} minute(s) before trying again.`
+    });
+  }
 
-  const loginOtpRecord: StoredOtp = {
+  // Invalidate any previous login OTP before issuing a fresh one
+  loginOtps.delete(normalizedEmail);
+  await dbDeleteOtp(normalizedEmail, 'login');
+
+  // Generate fresh 6-digit login OTP (10-minute expiry, salted hash)
+  const { code: loginCode, record: loginOtpRecord } = createOtpRecord({
     email: normalizedEmail,
-    codeHash,
-    expiresAt,
-    attempts: 0,
-    lastSentAt: Date.now(),
     purpose: 'login'
-  };
+  });
+
+  recordOtpRequest(normalizedEmail, 'login');
   loginOtps.set(normalizedEmail, loginOtpRecord);
   await dbSaveOtp(loginOtpRecord);
 
@@ -1684,42 +1720,29 @@ app.post('/api/auth/login', authRateLimiter, async (req, res) => {
     message: `Password verified. A 6-digit login authorization code has been dispatched to your registered email from ${emailResult.sender}.`,
     smtpDelivered: true,
     smtpConfigured: true,
-    expiresInSeconds: 300,
-    cooldownSeconds: 60
+    expiresInSeconds: OTP_EXPIRY_SECONDS,
+    cooldownSeconds: OTP_COOLDOWN_SECONDS
   });
 });
 
 // Helper for login OTP verification
 async function verifyLoginOtpInternal(_req: express.Request, res: express.Response, normalizedEmail: string, code: string) {
-  const otpRecord = loginOtps.get(normalizedEmail);
+  const verification = await verifyOtpSubmission({
+    email: normalizedEmail,
+    purpose: 'login',
+    enteredCode: code,
+    otpMap: loginOtps,
+    saveOtp: dbSaveOtp,
+    deleteOtp: dbDeleteOtp,
+    missingMessage: 'No login authorization code was requested for this email. Please enter your credentials to log in.',
+    expiredMessage: 'This login verification code has expired (10-minute limit). Please log in again to request a fresh code.',
+    lockedMessage: `Too many incorrect verification attempts (maximum ${OTP_MAX_ATTEMPTS} attempts reached). For your security, this code has been invalidated. Please log in again to request a new code.`,
+    invalidPrefix: 'Invalid login verification code'
+  });
 
-  if (!otpRecord) {
-    return res.status(400).json({ error: 'No login authorization code was requested for this email. Please enter your credentials to log in.' });
+  if (!verification.ok) {
+    return res.status(verification.status).json({ error: verification.error });
   }
-
-  if (Date.now() > otpRecord.expiresAt) {
-    loginOtps.delete(normalizedEmail);
-    await dbDeleteOtp(normalizedEmail, 'login');
-    return res.status(400).json({ error: 'This login verification code has expired (5-minute limit). Please log in again to request a fresh code.' });
-  }
-
-  if (otpRecord.attempts >= 5) {
-    loginOtps.delete(normalizedEmail);
-    await dbDeleteOtp(normalizedEmail, 'login');
-    return res.status(429).json({ error: 'Too many incorrect verification attempts. Please log in again to request a new code.' });
-  }
-
-  const enteredHash = hashString(code.trim());
-  if (enteredHash !== otpRecord.codeHash) {
-    otpRecord.attempts += 1;
-    await dbSaveOtp(otpRecord);
-    const remaining = 5 - otpRecord.attempts;
-    return res.status(400).json({ error: `Invalid login verification code. ${remaining} attempt(s) remaining.` });
-  }
-
-  // Invalidate OTP immediately upon verified use
-  loginOtps.delete(normalizedEmail);
-  await dbDeleteOtp(normalizedEmail, 'login');
 
   const user = users.get(normalizedEmail);
   if (!user || !user.isActive) {
@@ -1767,8 +1790,12 @@ app.post('/api/auth/resend-otp', authRateLimiter, async (req, res) => {
   const { email, type } = req.body;
   if (!email) return res.status(400).json({ error: 'Email address is required.' });
 
+  if (type !== undefined && type !== 'signup' && type !== 'login' && type !== 'reset') {
+    return res.status(400).json({ error: 'Invalid OTP purpose specified.' });
+  }
+
   const normalizedEmail = email.trim().toLowerCase();
-  const targetType = (type === 'login' || type === 'reset' ? type : 'signup') as 'signup' | 'login' | 'reset';
+  const targetType: OtpPurpose = type === 'login' || type === 'reset' ? type : 'signup';
 
   const user = users.get(normalizedEmail);
   if (targetType === 'login' && (!user || !user.isActive)) {
@@ -1779,27 +1806,52 @@ app.post('/api/auth/resend-otp', authRateLimiter, async (req, res) => {
     return res.status(400).json({ error: user?.isActive ? 'This account is already verified. Please log in.' : 'No pending registration found.' });
   }
 
+  if (targetType === 'reset' && (!user || !user.isActive)) {
+    const quota = checkOtpRequestQuota(normalizedEmail, 'reset');
+    if (!quota.allowed) {
+      return res.status(429).json({
+        error: `Too many password reset requests. Please wait ${Math.ceil(quota.retryAfterSeconds / 60)} minute(s) before trying again.`
+      });
+    }
+    recordOtpRequest(normalizedEmail, 'reset');
+    return res.json({
+      success: true,
+      message: 'If an active account exists with this email address, a fresh 6-digit password reset code has been dispatched.',
+      cooldownSeconds: OTP_COOLDOWN_SECONDS,
+      expiresInSeconds: OTP_EXPIRY_SECONDS
+    });
+  }
+
   const targetMap = targetType === 'login' ? loginOtps : targetType === 'reset' ? resetOtps : signupOtps;
   const currentOtp = targetMap.get(normalizedEmail);
 
-  // Enforce 60-second cooldown
-  if (currentOtp && Date.now() - currentOtp.lastSentAt < 60 * 1000) {
-    const remaining = Math.ceil((60 * 1000 - (Date.now() - currentOtp.lastSentAt)) / 1000);
-    return res.status(429).json({ error: `Please wait ${remaining} seconds before requesting a new code.` });
+  // Enforce 60-second resend cooldown strictly
+  const cooldownCheck = checkOtpCooldown(currentOtp);
+  if (!cooldownCheck.allowed) {
+    return res.status(429).json({
+      error: `Please wait ${cooldownCheck.remainingSeconds} seconds before requesting a new code.`
+    });
   }
 
-  // Generate new 6-digit code
-  const newCode = crypto.randomInt(100000, 1000000).toString();
-  const codeHash = hashString(newCode);
+  // Enforce rolling excessive OTP request cap
+  const quotaCheck = checkOtpRequestQuota(normalizedEmail, targetType);
+  if (!quotaCheck.allowed) {
+    return res.status(429).json({
+      error: `Too many verification code requests. Please wait ${Math.ceil(quotaCheck.retryAfterSeconds / 60)} minute(s) before requesting another code.`
+    });
+  }
 
-  const newOtpRecord: StoredOtp = {
+  // Invalidate any previous OTP immediately when generating a new one
+  targetMap.delete(normalizedEmail);
+  await dbDeleteOtp(normalizedEmail, targetType);
+
+  // Generate cryptographically secure 6-digit code (10-minute expiration, salted hash)
+  const { code: newCode, record: newOtpRecord } = createOtpRecord({
     email: normalizedEmail,
-    codeHash,
-    expiresAt: Date.now() + 5 * 60 * 1000, // Strictly 5 minutes
-    attempts: 0,
-    lastSentAt: Date.now(),
     purpose: targetType
-  };
+  });
+
+  recordOtpRequest(normalizedEmail, targetType);
   targetMap.set(normalizedEmail, newOtpRecord);
   await dbSaveOtp(newOtpRecord);
 
@@ -1822,8 +1874,8 @@ app.post('/api/auth/resend-otp', authRateLimiter, async (req, res) => {
     senderEmail: emailResult.senderAddress,
     smtpDelivered: true,
     smtpConfigured: true,
-    cooldownSeconds: 60,
-    expiresInSeconds: 300
+    cooldownSeconds: OTP_COOLDOWN_SECONDS,
+    expiresInSeconds: OTP_EXPIRY_SECONDS
   });
 });
 
@@ -1835,22 +1887,32 @@ app.post('/api/auth/forgot-password', authRateLimiter, async (req, res) => {
   const normalizedEmail = email.trim().toLowerCase();
   const user = users.get(normalizedEmail);
 
-  if (user && user.isActive) {
-    const existingReset = resetOtps.get(normalizedEmail);
-    if (existingReset && Date.now() - existingReset.lastSentAt < 60 * 1000) {
-      const remaining = Math.ceil((60 * 1000 - (Date.now() - existingReset.lastSentAt)) / 1000);
-      return res.status(429).json({ error: `Please wait ${remaining} seconds before requesting a new password reset code.` });
-    }
+  const existingReset = resetOtps.get(normalizedEmail);
+  const cooldownCheck = checkOtpCooldown(existingReset);
+  if (!cooldownCheck.allowed) {
+    return res.status(429).json({
+      error: `Please wait ${cooldownCheck.remainingSeconds} seconds before requesting a new password reset code.`
+    });
+  }
 
-    const resetCode = crypto.randomInt(100000, 1000000).toString();
-    const resetRecord: StoredOtp = {
+  const quotaCheck = checkOtpRequestQuota(normalizedEmail, 'reset');
+  if (!quotaCheck.allowed) {
+    return res.status(429).json({
+      error: `Too many password reset requests. Please wait ${Math.ceil(quotaCheck.retryAfterSeconds / 60)} minute(s) before trying again.`
+    });
+  }
+
+  if (user && user.isActive) {
+    // Invalidate prior reset OTP before creating a new one
+    resetOtps.delete(normalizedEmail);
+    await dbDeleteOtp(normalizedEmail, 'reset');
+
+    const { code: resetCode, record: resetRecord } = createOtpRecord({
       email: normalizedEmail,
-      codeHash: hashString(resetCode),
-      expiresAt: Date.now() + 5 * 60 * 1000, // Strictly 5 minutes
-      attempts: 0,
-      lastSentAt: Date.now(),
       purpose: 'reset'
-    };
+    });
+
+    recordOtpRequest(normalizedEmail, 'reset');
     resetOtps.set(normalizedEmail, resetRecord);
     await dbSaveOtp(resetRecord);
 
@@ -1865,13 +1927,15 @@ app.post('/api/auth/forgot-password', authRateLimiter, async (req, res) => {
         error: emailResult.error || 'Unable to send password reset email.'
       });
     }
+  } else {
+    recordOtpRequest(normalizedEmail, 'reset');
   }
 
   return res.json({
     success: true,
     message: 'If an active account exists with this email address, a 6-digit password reset code has been dispatched to your inbox.',
-    expiresInSeconds: 300,
-    cooldownSeconds: 60
+    expiresInSeconds: OTP_EXPIRY_SECONDS,
+    cooldownSeconds: OTP_COOLDOWN_SECONDS
   });
 });
 
@@ -1891,30 +1955,21 @@ app.post('/api/auth/reset-password', authRateLimiter, async (req, res) => {
   }
 
   const normalizedEmail = email.trim().toLowerCase();
-  const resetRecord = resetOtps.get(normalizedEmail);
+  const verification = await verifyOtpSubmission({
+    email: normalizedEmail,
+    purpose: 'reset',
+    enteredCode: code,
+    otpMap: resetOtps,
+    saveOtp: dbSaveOtp,
+    deleteOtp: dbDeleteOtp,
+    missingMessage: 'No active password reset request was found for this email. Please request a new code.',
+    expiredMessage: 'This password reset code has expired (10-minute limit). Please request a new code.',
+    lockedMessage: `Too many incorrect attempts (maximum ${OTP_MAX_ATTEMPTS} attempts reached). For your security, this reset code has been invalidated. Please request a new code.`,
+    invalidPrefix: 'Invalid reset code'
+  });
 
-  if (!resetRecord) {
-    return res.status(400).json({ error: 'No active password reset request was found for this email. Please request a new code.' });
-  }
-
-  if (Date.now() > resetRecord.expiresAt) {
-    resetOtps.delete(normalizedEmail);
-    await dbDeleteOtp(normalizedEmail, 'reset');
-    return res.status(400).json({ error: 'This password reset code has expired (5-minute limit). Please request a new code.' });
-  }
-
-  if (resetRecord.attempts >= 5) {
-    resetOtps.delete(normalizedEmail);
-    await dbDeleteOtp(normalizedEmail, 'reset');
-    return res.status(429).json({ error: 'Too many incorrect attempts. Please request a new password reset code.' });
-  }
-
-  const enteredHash = hashString(code.trim());
-  if (enteredHash !== resetRecord.codeHash) {
-    resetRecord.attempts += 1;
-    await dbSaveOtp(resetRecord);
-    const remaining = 5 - resetRecord.attempts;
-    return res.status(400).json({ error: `Invalid reset code. ${remaining} attempt(s) remaining.` });
+  if (!verification.ok) {
+    return res.status(verification.status).json({ error: verification.error });
   }
 
   const user = users.get(normalizedEmail);
@@ -1923,8 +1978,6 @@ app.post('/api/auth/reset-password', authRateLimiter, async (req, res) => {
   // Update password hash using bcrypt
   user.passwordHash = await hashPassword(newPassword);
   await dbUpsertUser(user);
-  resetOtps.delete(normalizedEmail);
-  await dbDeleteOtp(normalizedEmail, 'reset');
 
   // Invalidate any existing active sessions to force re-authentication with new password + 2FA
   for (const [tokenKey, sess] of sessions.entries()) {
@@ -5458,7 +5511,11 @@ async function startServer() {
   });
 }
 
-startServer().catch((err) => {
-  console.error('[FATAL] Failed to start Rudraatma Music server:', err);
-  process.exit(1);
-});
+export { app, users, sessions, signupOtps, loginOtps, resetOtps };
+
+if (process.env.RUDRAATMA_SKIP_AUTO_START !== '1') {
+  startServer().catch((err) => {
+    console.error('[FATAL] Failed to start Rudraatma Music server:', err);
+    process.exit(1);
+  });
+}

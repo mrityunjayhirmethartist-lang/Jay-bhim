@@ -196,6 +196,174 @@ export async function verifyAppsScriptNetworkReadiness(): Promise<{
   }
 }
 
+export const OFFICIAL_WEBSITE_URL = 'https://rudraatma-music-w7ql.onrender.com/';
+export const OTP_EMAIL_SUBJECT = 'Your Rudraatma Music Verification Code';
+export const OTP_EXPIRY_MINUTES = 10;
+
+function escapeHtml(value: string): string {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+export function buildOtpEmailTemplate(params: {
+  otp: string;
+  purpose: 'signup' | 'login' | 'reset';
+  recipientEmail?: string;
+  expiryMinutes?: number;
+}): {
+  subject: string;
+  htmlBody: string;
+  textBody: string;
+} {
+  const cleanOtp = escapeHtml(String(params.otp || '').trim());
+  const expiryMinutes = params.expiryMinutes ?? OTP_EXPIRY_MINUTES;
+  const purposeLabel =
+    params.purpose === 'login'
+      ? 'Secure Login Verification'
+      : params.purpose === 'reset'
+        ? 'Password Reset Verification'
+        : 'Account Email Verification';
+  const purposeDescription =
+    params.purpose === 'login'
+      ? 'Use this one-time verification code to complete your secure login to Rudraatma Music Distribution.'
+      : params.purpose === 'reset'
+        ? 'Use this one-time verification code to verify your identity and reset your account password.'
+        : 'Use this one-time verification code to complete your email verification and activate your Rudraatma Music Distribution account.';
+  const spacedOtp = cleanOtp.split('').join('&#8202;');
+  const year = new Date().getUTCFullYear();
+
+  const htmlBody = `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="x-apple-disable-message-reformatting" />
+  <title>${OTP_EMAIL_SUBJECT}</title>
+</head>
+<body style="margin:0;padding:0;background-color:#07070a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#f8fafc;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color:#07070a;padding:32px 12px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:580px;background-color:#0d0d12;border:1px solid #8a6d1f;border-radius:16px;overflow:hidden;box-shadow:0 16px 40px rgba(0,0,0,0.6);">
+          <!-- Gold Top Accent Bar -->
+          <tr>
+            <td style="height:4px;background:linear-gradient(90deg,#926f1c,#facc15,#d4af37,#926f1c);background-color:#d4af37;font-size:0;line-height:0;">&nbsp;</td>
+          </tr>
+
+          <!-- Header -->
+          <tr>
+            <td style="padding:28px 32px 20px 32px;border-bottom:1px solid #262115;text-align:center;background-color:#0a0a0e;">
+              <div style="display:inline-block;padding:6px 14px;border:1px solid #715919;border-radius:999px;background-color:#15120a;color:#facc15;font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;">
+                RUDRAATMA MUSIC DISTRIBUTION
+              </div>
+              <h1 style="margin:16px 0 4px 0;font-size:22px;line-height:1.3;font-weight:700;color:#ffffff;letter-spacing:-0.3px;">
+                Welcome to Rudraatma Music Distribution
+              </h1>
+              <p style="margin:0;font-size:13px;line-height:1.5;color:#d4af37;font-weight:600;letter-spacing:0.4px;text-transform:uppercase;">
+                ${purposeLabel}
+              </p>
+            </td>
+          </tr>
+
+          <!-- Main Body -->
+          <tr>
+            <td style="padding:30px 32px 26px 32px;">
+              <p style="margin:0 0 12px 0;font-size:15px;line-height:1.6;color:#e2e8f0;">
+                Your OTP for email verification or secure login is provided below. ${purposeDescription}
+              </p>
+
+              <!-- Highlighted OTP Box -->
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:24px 0;">
+                <tr>
+                  <td align="center" style="background-color:#131008;border:1.5px solid #d4af37;border-radius:12px;padding:24px 16px;">
+                    <div style="font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#ca9f2a;margin-bottom:10px;">
+                      One-Time Verification Code
+                    </div>
+                    <div style="font-family:'Courier New',Courier,monospace;font-size:36px;line-height:1.1;font-weight:800;letter-spacing:10px;color:#facc15;margin:0;padding-left:10px;">
+                      ${spacedOtp}
+                    </div>
+                    <div style="margin-top:12px;font-size:12px;color:#cbd5e1;">
+                      Valid for <strong style="color:#facc15;">${expiryMinutes} minutes</strong> &middot; Single-use only
+                    </div>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Security Warning Panel -->
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:20px 0 0 0;background-color:#111118;border:1px solid #2b2517;border-left:3px solid #d4af37;border-radius:8px;">
+                <tr>
+                  <td style="padding:16px 18px;">
+                    <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#facc15;margin-bottom:8px;">
+                      Security Notice
+                    </div>
+                    <ul style="margin:0;padding-left:18px;font-size:13px;line-height:1.65;color:#cbd5e1;">
+                      <li>Never share your OTP with anyone.</li>
+                      <li>Rudraatma staff will never ask for your OTP.</li>
+                      <li>This code expires automatically in ${expiryMinutes} minutes.</li>
+                      <li>If you did not request this code, ignore this email.</li>
+                    </ul>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="padding:20px 32px 26px 32px;background-color:#09090d;border-top:1px solid #262115;text-align:center;">
+              <p style="margin:0 0 8px 0;font-size:12px;line-height:1.5;color:#94a3b8;">
+                This is an automated security notification from <strong style="color:#e2e8f0;">Rudraatma Music Distribution</strong>. Please do not reply directly to this message.
+              </p>
+              <p style="margin:0 0 8px 0;font-size:12px;line-height:1.5;color:#94a3b8;">
+                Website: <a href="${OFFICIAL_WEBSITE_URL}" style="color:#facc15;text-decoration:none;">${OFFICIAL_WEBSITE_URL}</a>
+                &nbsp;|&nbsp;
+                Support: <a href="mailto:${OFFICIAL_SUPPORT_EMAIL}" style="color:#facc15;text-decoration:none;">${OFFICIAL_SUPPORT_EMAIL}</a>
+              </p>
+              <p style="margin:0;font-size:11px;color:#64748b;">
+                &copy; ${year} Rudraatma Music Distribution. All rights reserved.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+  const textBody = [
+    'Welcome to Rudraatma Music Distribution.',
+    '',
+    `Subject: ${OTP_EMAIL_SUBJECT}`,
+    `Purpose: ${purposeLabel}`,
+    '',
+    'Your OTP for email verification or secure login:',
+    `Verification Code: ${String(params.otp || '').trim()}`,
+    `OTP Validity: ${expiryMinutes} minutes (single-use only)`,
+    '',
+    purposeDescription,
+    '',
+    'Security Notice:',
+    '- Never share your OTP with anyone.',
+    '- Rudraatma staff will never ask for your OTP.',
+    '- If you did not request this code, ignore this email.',
+    '',
+    'Automated security notification from Rudraatma Music Distribution.',
+    `Official Website: ${OFFICIAL_WEBSITE_URL}`,
+    `Support Email: ${OFFICIAL_SUPPORT_EMAIL}`
+  ].join('\n');
+
+  return {
+    subject: OTP_EMAIL_SUBJECT,
+    htmlBody,
+    textBody
+  };
+}
+
 export async function sendAppsScriptOtpEmail(params: {
   email: string;
   otp: string;
@@ -221,6 +389,12 @@ export async function sendAppsScriptOtpEmail(params: {
 
   const normalizedEmail = params.email.trim().toLowerCase();
   const cleanOtp = String(params.otp).trim();
+  const emailTemplate = buildOtpEmailTemplate({
+    otp: cleanOtp,
+    purpose: params.purpose,
+    recipientEmail: normalizedEmail,
+    expiryMinutes: OTP_EXPIRY_MINUTES
+  });
   const effectiveTimeoutMs = params.timeoutMsOverride ?? config.timeoutMs;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), effectiveTimeoutMs);
@@ -237,7 +411,18 @@ export async function sendAppsScriptOtpEmail(params: {
       body: JSON.stringify({
         secret: config.secret,
         email: normalizedEmail,
-        otp: cleanOtp
+        otp: cleanOtp,
+        type: 'otp',
+        purpose: params.purpose,
+        brandName: 'Rudraatma Music Distribution',
+        expiresInMinutes: OTP_EXPIRY_MINUTES,
+        websiteUrl: OFFICIAL_WEBSITE_URL,
+        supportEmail: OFFICIAL_SUPPORT_EMAIL,
+        subject: emailTemplate.subject,
+        htmlBody: emailTemplate.htmlBody,
+        html: emailTemplate.htmlBody,
+        textBody: emailTemplate.textBody,
+        message: emailTemplate.textBody
       }),
       signal: controller.signal
     });
@@ -362,6 +547,32 @@ export async function sendArtistNotificationEmail(params: {
     };
   }
 
+  const safeTitle = escapeHtml(params.title);
+  const safeBody = escapeHtml(params.body).replace(/\r?\n/g, '<br />');
+  const notificationHtmlBody = `<!doctype html>
+<html lang="en">
+<head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>${escapeHtml(params.subject)}</title></head>
+<body style="margin:0;padding:0;background-color:#07070a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#f8fafc;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color:#07070a;padding:32px 12px;">
+    <tr><td align="center">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:580px;background-color:#0d0d12;border:1px solid #8a6d1f;border-radius:16px;overflow:hidden;">
+        <tr><td style="height:4px;background-color:#d4af37;font-size:0;line-height:0;">&nbsp;</td></tr>
+        <tr><td style="padding:24px 32px;border-bottom:1px solid #262115;background-color:#0a0a0e;">
+          <div style="color:#facc15;font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;">RUDRAATMA MUSIC DISTRIBUTION</div>
+          <h1 style="margin:10px 0 0 0;font-size:20px;line-height:1.3;color:#ffffff;">${safeTitle}</h1>
+        </td></tr>
+        <tr><td style="padding:26px 32px;font-size:14px;line-height:1.65;color:#e2e8f0;">${safeBody}</td></tr>
+        <tr><td style="padding:18px 32px;background-color:#09090d;border-top:1px solid #262115;font-size:12px;color:#94a3b8;text-align:center;">
+          Website: <a href="${OFFICIAL_WEBSITE_URL}" style="color:#facc15;text-decoration:none;">${OFFICIAL_WEBSITE_URL}</a> |
+          Support: <a href="mailto:${OFFICIAL_SUPPORT_EMAIL}" style="color:#facc15;text-decoration:none;">${OFFICIAL_SUPPORT_EMAIL}</a>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+  const notificationTextBody = `${params.title}\n\n${params.body}\n\nRudraatma Music Distribution\nWebsite: ${OFFICIAL_WEBSITE_URL}\nSupport: ${OFFICIAL_SUPPORT_EMAIL}`;
+
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), config.timeoutMs);
   const startedAt = Date.now();
@@ -376,6 +587,9 @@ export async function sendArtistNotificationEmail(params: {
         subject: params.subject,
         title: params.title,
         message: params.body,
+        htmlBody: notificationHtmlBody,
+        textBody: notificationTextBody,
+        supportEmail: OFFICIAL_SUPPORT_EMAIL,
         type: 'notification',
         purpose: params.purpose
       }),

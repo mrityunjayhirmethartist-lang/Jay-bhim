@@ -27,7 +27,7 @@ export const VerifyOtpPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [successNotice, setSuccessNotice] = useState<string | null>(null);
   const [cooldown, setCooldown] = useState(60);
-  const [expirySeconds, setExpirySeconds] = useState(300); // 5 minutes strictly
+  const [expirySeconds, setExpirySeconds] = useState(600); // 10 minutes strictly
 
   // Change Email State
   const [isChangingEmail, setIsChangingEmail] = useState(false);
@@ -58,7 +58,7 @@ export const VerifyOtpPage: React.FC = () => {
     return () => clearInterval(timer);
   }, [cooldown]);
 
-  // 5-minute expiry countdown timer
+  // 10-minute expiry countdown timer
   useEffect(() => {
     let timer: any;
     if (expirySeconds > 0) {
@@ -84,7 +84,7 @@ export const VerifyOtpPage: React.FC = () => {
     }
 
     if (expirySeconds <= 0) {
-      setError('This verification code has expired (5-minute limit). Please request a fresh code.');
+      setError('This verification code has expired (10-minute limit). Please request a fresh code.');
       return;
     }
 
@@ -144,7 +144,7 @@ export const VerifyOtpPage: React.FC = () => {
 
       if (res.ok && data.success) {
         setCooldown(data.cooldownSeconds || 60);
-        setExpirySeconds(data.expiresInSeconds || 300);
+        setExpirySeconds(data.expiresInSeconds || 600);
         setOtpDigits(['', '', '', '', '', '']);
         setSuccessNotice(`Fresh 6-digit verification code dispatched to ${email.trim()}.`);
       } else {
@@ -191,7 +191,7 @@ export const VerifyOtpPage: React.FC = () => {
         setIsChangingEmail(false);
         setNewEmailInput('');
         setCooldown(data.cooldownSeconds || 60);
-        setExpirySeconds(data.expiresInSeconds || 300);
+        setExpirySeconds(data.expiresInSeconds || 600);
         setOtpDigits(['', '', '', '', '', '']);
         setSuccessNotice(`Verification code successfully dispatched to your new email: ${cleanNewEmail}`);
         setError(null);
