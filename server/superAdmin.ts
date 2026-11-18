@@ -6,7 +6,14 @@ import bcrypt from 'bcryptjs';
 import multer from 'multer';
 import { getDbPool, isDatabaseEnabled } from './db';
 import { saveUploadedMedia, getStoredMedia } from './storage';
-import { verifyAppsScriptNetworkReadiness, getSafeEmailDiagnostics } from './appsScriptEmail';
+import {
+  verifyAppsScriptNetworkReadiness,
+  getSafeEmailDiagnostics,
+  buildOtpEmailTemplate,
+  OTP_EXPIRY_MINUTES,
+  OFFICIAL_COMPANY_EMAIL,
+  OFFICIAL_WEBSITE_URL
+} from './appsScriptEmail';
 import {
   loadLivePlatformSnapshot,
   recordAdminSessionMeta,
@@ -427,6 +434,41 @@ export function registerSuperAdminRoutes(app: express.Express, deps: SuperAdminD
     return res.json({
       connected: true,
       ...result.diagnostics
+    });
+  });
+
+  // Read-only OTP email template preview using dummy data (never creates active OTPs or dispatches emails)
+  app.post('/api/super-admin/otp-email-preview', requireSuperAdmin, (req, res) => {
+    const rawPurpose = String(req.body?.purpose || 'signup').trim().toLowerCase();
+    const purpose: 'signup' | 'login' | 'reset' =
+      rawPurpose === 'login' || rawPurpose === 'reset' ? rawPurpose : 'signup';
+
+    const rawDummyOtp = String(req.body?.dummyOtp || '').replace(/\D/g, '').slice(0, 6);
+    const dummyOtp = /^\d{6}$/.test(rawDummyOtp) ? rawDummyOtp : '482917';
+
+    const rawEmail = String(req.body?.recipientEmail || '').trim().toLowerCase();
+    const recipientEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rawEmail)
+      ? rawEmail
+      : 'artist.preview@rudraatmamusic.com';
+
+    const rendered = buildOtpEmailTemplate({
+      otp: dummyOtp,
+      purpose,
+      recipientEmail,
+      expiryMinutes: OTP_EXPIRY_MINUTES
+    });
+
+    return res.json({
+      previewOnly: true,
+      purpose,
+      dummyOtp,
+      recipientEmail,
+      senderEmail: OFFICIAL_COMPANY_EMAIL,
+      websiteUrl: OFFICIAL_WEBSITE_URL,
+      expiryMinutes: OTP_EXPIRY_MINUTES,
+      subject: rendered.subject,
+      htmlBody: rendered.htmlBody,
+      textBody: rendered.textBody
     });
   });
 

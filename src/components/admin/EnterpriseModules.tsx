@@ -1193,9 +1193,10 @@ export const SystemHealthPanel: React.FC<{
   activeSubmenu: string;
   showToast: (type: 'ok' | 'err', text: string) => void;
   onTestEmailRelay: () => void;
+  onPreviewOtpEmail?: () => void;
   testingEmail: boolean;
   emailTestResult: { ok: boolean; message: string } | null;
-}> = ({ token, activeSubmenu, showToast, onTestEmailRelay, testingEmail, emailTestResult }) => {
+}> = ({ token, activeSubmenu, showToast, onTestEmailRelay, onPreviewOtpEmail, testingEmail, emailTestResult }) => {
   const [health, setHealth] = useState<any | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -1286,13 +1287,24 @@ export const SystemHealthPanel: React.FC<{
             Queued: {health?.email?.queue?.queued ?? 0} · Sent: {health?.email?.queue?.sent ?? 0} · Failed:{' '}
             {health?.email?.queue?.failed ?? 0}
           </p>
-          <button
-            onClick={onTestEmailRelay}
-            disabled={testingEmail}
-            className="px-2.5 py-1 rounded-lg bg-[#d4af37]/15 border border-[#d4af37]/40 text-[#f0cf65] text-[11px]"
-          >
-            {testingEmail ? 'Checking...' : 'Test Email Relay'}
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={onTestEmailRelay}
+              disabled={testingEmail}
+              className="px-2.5 py-1 rounded-lg bg-[#d4af37]/15 border border-[#d4af37]/40 text-[#f0cf65] text-[11px]"
+            >
+              {testingEmail ? 'Checking...' : 'Test Email Relay'}
+            </button>
+            {onPreviewOtpEmail && (
+              <button
+                type="button"
+                onClick={onPreviewOtpEmail}
+                className="px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-700 hover:border-[#d4af37]/50 text-slate-200 hover:text-[#f0cf65] text-[11px]"
+              >
+                Preview OTP Email
+              </button>
+            )}
+          </div>
           {emailTestResult && (
             <p className={`text-[11px] ${emailTestResult.ok ? 'text-emerald-300' : 'text-red-300'}`}>
               {emailTestResult.message}

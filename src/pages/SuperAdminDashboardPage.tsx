@@ -64,6 +64,7 @@ import {
   type OwnerApprovalProposalInput,
   type ExecutiveSessionInfo
 } from '../components/admin/adminTypes';
+import { OtpEmailPreviewModal } from '../components/admin/OtpEmailPreviewModal';
 
 const PAGE_SIZE = 15;
 
@@ -95,6 +96,7 @@ export const SuperAdminDashboardPage: React.FC = () => {
   const [pendingProposal, setPendingProposal] = useState<OwnerApprovalProposalInput | null>(null);
   const [executingApproval, setExecutingApproval] = useState(false);
   const [showApprovalsDrawer, setShowApprovalsDrawer] = useState(false);
+  const [otpPreviewOpen, setOtpPreviewOpen] = useState(false);
 
   // Overview state
   const [kpis, setKpis] = useState<Record<string, number> | null>(null);
@@ -1862,6 +1864,7 @@ export const SuperAdminDashboardPage: React.FC = () => {
               activeSubmenu={activeSubmenu}
               showToast={showToast}
               onTestEmailRelay={handleTestEmailRelay}
+              onPreviewOtpEmail={() => setOtpPreviewOpen(true)}
               testingEmail={testingEmail}
               emailTestResult={emailTestResult}
             />
@@ -1888,13 +1891,23 @@ export const SuperAdminDashboardPage: React.FC = () => {
                       ? 'CONFIGURED & READY'
                       : 'MISCONFIGURED / MISSING ENV'}
                   </p>
-                  <button
-                    onClick={handleTestEmailRelay}
-                    disabled={testingEmail}
-                    className="px-3 py-1.5 rounded-lg bg-[#d4af37]/15 border border-[#d4af37]/40 text-[#f0cf65]"
-                  >
-                    {testingEmail ? 'Checking...' : 'Test Email Relay'}
-                  </button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      onClick={handleTestEmailRelay}
+                      disabled={testingEmail}
+                      className="px-3 py-1.5 rounded-lg bg-[#d4af37]/15 border border-[#d4af37]/40 text-[#f0cf65]"
+                    >
+                      {testingEmail ? 'Checking...' : 'Test Email Relay'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setOtpPreviewOpen(true)}
+                      className="px-3 py-1.5 rounded-lg bg-[#050507] border border-slate-700 hover:border-[#d4af37]/50 text-slate-200 hover:text-[#f0cf65] inline-flex items-center gap-1.5"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                      <span>Preview OTP Email</span>
+                    </button>
+                  </div>
                   {emailTestResult && (
                     <p className={`text-[11px] ${emailTestResult.ok ? 'text-emerald-300' : 'text-red-300'}`}>
                       {emailTestResult.message}
@@ -2627,6 +2640,11 @@ export const SuperAdminDashboardPage: React.FC = () => {
           </div>
         </div>
       )}
+      <OtpEmailPreviewModal
+        isOpen={otpPreviewOpen}
+        onClose={() => setOtpPreviewOpen(false)}
+        token={token}
+      />
     </div>
   );
 };
