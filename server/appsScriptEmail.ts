@@ -649,3 +649,308 @@ export async function sendArtistNotificationEmail(params: {
   }
 }
 
+export function buildPromotionalEmailTemplate(params: {
+  subject: string;
+  headline: string;
+  preheader?: string;
+  categoryLabel?: string;
+  bodyText: string;
+  ctaLabel?: string;
+  ctaUrl?: string;
+  recipientName?: string;
+  unsubscribeUrl?: string;
+}): {
+  subject: string;
+  htmlBody: string;
+  textBody: string;
+} {
+  const safeSubject = escapeHtml(params.subject.trim() || 'Rudraatma Music Distribution Update');
+  const safeHeadline = escapeHtml(params.headline.trim() || params.subject.trim());
+  const safePreheader = escapeHtml((params.preheader || '').trim());
+  const safeCategory = escapeHtml((params.categoryLabel || 'ANNOUNCEMENT & OFFERS').trim().toUpperCase());
+  const greetingName = params.recipientName?.trim() ? `Hello ${escapeHtml(params.recipientName.trim())},` : 'Hello Artist,';
+  const greetingPlain = params.recipientName?.trim() ? `Hello ${params.recipientName.trim()},` : 'Hello Artist,';
+
+  const paragraphs = String(params.bodyText || '')
+    .split(/\n{2,}/)
+    .map(p => p.trim())
+    .filter(Boolean);
+
+  const htmlParagraphs = (paragraphs.length ? paragraphs : [String(params.bodyText || '')])
+    .map(
+      p =>
+        `<p style="margin:0 0 16px 0;font-size:15px;line-height:1.68;color:#e2e8f0;">${escapeHtml(p).replace(/\r?\n/g, '<br />')}</p>`
+    )
+    .join('\n');
+
+  const cleanCtaLabel = params.ctaLabel?.trim();
+  const cleanCtaUrl = params.ctaUrl?.trim();
+  const safeCtaUrl =
+    cleanCtaUrl && /^https?:\/\//i.test(cleanCtaUrl) ? escapeHtml(cleanCtaUrl) : OFFICIAL_WEBSITE_URL;
+  const ctaHtml = cleanCtaLabel
+    ? `<table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:24px 0;">
+        <tr>
+          <td align="center" style="border-radius:10px;background-color:#d4af37;">
+            <a href="${safeCtaUrl}" style="display:inline-block;padding:13px 26px;font-size:14px;font-weight:700;color:#07070a;text-decoration:none;border-radius:10px;">
+              ${escapeHtml(cleanCtaLabel)}
+            </a>
+          </td>
+        </tr>
+      </table>`
+    : '';
+
+  const unsubUrl = params.unsubscribeUrl?.trim() || `${OFFICIAL_WEBSITE_URL}/dashboard/profile`;
+
+  const htmlBody = `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="x-apple-disable-message-reformatting" />
+  <title>${safeSubject}</title>
+</head>
+<body style="margin:0;padding:0;background-color:#07070a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#f8fafc;">
+  ${safePreheader ? `<div style="display:none;max-height:0;overflow:hidden;opacity:0;">${safePreheader}</div>` : ''}
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color:#07070a;padding:32px 12px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:600px;background-color:#0d0d12;border:1px solid #8a6d1f;border-radius:16px;overflow:hidden;box-shadow:0 16px 40px rgba(0,0,0,0.65);">
+          <tr>
+            <td style="height:4px;background:linear-gradient(90deg,#926f1c,#facc15,#d4af37,#926f1c);background-color:#d4af37;font-size:0;line-height:0;">&nbsp;</td>
+          </tr>
+          <tr>
+            <td style="padding:26px 32px 20px 32px;border-bottom:1px solid #262115;background-color:#0a0a0e;">
+              <div style="color:#facc15;font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;">
+                RUDRAATMA MUSIC DISTRIBUTION · ${safeCategory}
+              </div>
+              <h1 style="margin:12px 0 0 0;font-size:22px;line-height:1.35;color:#ffffff;font-weight:700;">
+                ${safeHeadline}
+              </h1>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:28px 32px 24px 32px;">
+              <p style="margin:0 0 14px 0;font-size:15px;line-height:1.6;color:#facc15;font-weight:600;">
+                ${greetingName}
+              </p>
+              ${htmlParagraphs}
+              ${ctaHtml}
+              <div style="margin-top:22px;padding-top:18px;border-top:1px solid #262115;font-size:13.5px;line-height:1.65;color:#cbd5e1;">
+                <p style="margin:0;">Best Regards,</p>
+                <p style="margin:0;font-weight:700;color:#facc15;">Rudraatma Music Distribution</p>
+                <p style="margin:4px 0 0 0;">
+                  Official Website: <a href="${OFFICIAL_WEBSITE_URL}" style="color:#facc15;text-decoration:none;">${OFFICIAL_WEBSITE_URL}</a>
+                </p>
+                <p style="margin:2px 0 0 0;">
+                  Support: <a href="mailto:${OFFICIAL_COMPANY_EMAIL}" style="color:#facc15;text-decoration:none;">${OFFICIAL_COMPANY_EMAIL}</a>
+                </p>
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:18px 32px 22px 32px;background-color:#09090d;border-top:1px solid #262115;text-align:center;">
+              <p style="margin:0 0 6px 0;font-size:12px;line-height:1.55;color:#94a3b8;">
+                You received this promotional update as a registered Rudraatma Music Distribution user.
+              </p>
+              <p style="margin:0;font-size:12px;line-height:1.55;color:#94a3b8;">
+                Prefer not to receive promotional emails?
+                <a href="${escapeHtml(unsubUrl)}" style="color:#facc15;text-decoration:underline;">Unsubscribe here</a>.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+  const textParts = [
+    'RUDRAATMA MUSIC DISTRIBUTION',
+    params.headline.trim(),
+    '',
+    greetingPlain,
+    '',
+    params.bodyText.trim()
+  ];
+  if (cleanCtaLabel) {
+    textParts.push('', `${cleanCtaLabel}: ${cleanCtaUrl || OFFICIAL_WEBSITE_URL}`);
+  }
+  textParts.push(
+    '',
+    'Best Regards,',
+    'Rudraatma Music Distribution',
+    `Official Website: ${OFFICIAL_WEBSITE_URL}`,
+    `Support: ${OFFICIAL_COMPANY_EMAIL}`,
+    '',
+    `To unsubscribe from promotional updates, visit: ${unsubUrl}`
+  );
+
+  return {
+    subject: params.subject.trim(),
+    htmlBody,
+    textBody: textParts.join('\n')
+  };
+}
+
+export async function sendPromotionalEmail(params: {
+  email: string;
+  recipientName?: string;
+  subject: string;
+  headline: string;
+  preheader?: string;
+  categoryLabel?: string;
+  bodyText: string;
+  ctaLabel?: string;
+  ctaUrl?: string;
+  unsubscribeUrl?: string;
+  campaignId: string;
+}): Promise<AppsScriptEmailResult> {
+  const { dbQueueEmailJob } = await import('./db');
+  const jobId = `promo_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const normalizedEmail = params.email.trim().toLowerCase();
+  const config = resolveAppsScriptEmailConfig();
+  const senderDisplay = `"${OFFICIAL_SENDER_NAME}" <${config.senderEmail}>`;
+
+  const rendered = buildPromotionalEmailTemplate({
+    subject: params.subject,
+    headline: params.headline,
+    preheader: params.preheader,
+    categoryLabel: params.categoryLabel,
+    bodyText: params.bodyText,
+    ctaLabel: params.ctaLabel,
+    ctaUrl: params.ctaUrl,
+    recipientName: params.recipientName,
+    unsubscribeUrl: params.unsubscribeUrl
+  });
+
+  await dbQueueEmailJob({
+    id: jobId,
+    recipientEmail: normalizedEmail,
+    subject: rendered.subject,
+    purpose: 'promotional_campaign',
+    payload: { campaignId: params.campaignId, headline: params.headline },
+    status: 'QUEUED'
+  }).catch(() => {});
+
+  if (!config.configured) {
+    const errText = `Email relay unconfigured (missing: ${config.missingVars.join(', ')}).`;
+    await dbQueueEmailJob({
+      id: jobId,
+      recipientEmail: normalizedEmail,
+      subject: rendered.subject,
+      purpose: 'promotional_campaign',
+      payload: { campaignId: params.campaignId },
+      status: 'FAILED',
+      lastError: errText
+    }).catch(() => {});
+    return {
+      success: false,
+      delivered: false,
+      missingConfig: true,
+      error: errText,
+      sender: senderDisplay,
+      senderAddress: config.senderEmail
+    };
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), config.timeoutMs);
+  const startedAt = Date.now();
+  try {
+    const response = await fetch(config.url, {
+      method: 'POST',
+      redirect: 'follow',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({
+        secret: config.secret,
+        email: normalizedEmail,
+        subject: rendered.subject,
+        title: params.headline,
+        message: rendered.textBody,
+        htmlBody: rendered.htmlBody,
+        textBody: rendered.textBody,
+        supportEmail: OFFICIAL_COMPANY_EMAIL,
+        replyTo: OFFICIAL_COMPANY_EMAIL,
+        type: 'promotional',
+        purpose: 'promotional_campaign',
+        campaignId: params.campaignId
+      }),
+      signal: controller.signal
+    });
+    const latencyMs = Date.now() - startedAt;
+    const rawBody = await response.text();
+    let parsed: any = null;
+    try {
+      parsed = rawBody ? JSON.parse(rawBody) : null;
+    } catch {
+      parsed = null;
+    }
+    const ok = Boolean(response.ok && parsed && typeof parsed === 'object' && parsed.success === true);
+    const errorMsg = ok
+      ? undefined
+      : typeof parsed?.error === 'string'
+        ? redactSensitiveText(parsed.error, config.url, config.secret)
+        : `Relay status ${response.status}`;
+
+    await dbQueueEmailJob({
+      id: jobId,
+      recipientEmail: normalizedEmail,
+      subject: rendered.subject,
+      purpose: 'promotional_campaign',
+      payload: { campaignId: params.campaignId },
+      status: ok ? 'SENT' : 'FAILED',
+      lastError: errorMsg
+    }).catch(() => {});
+
+    return {
+      success: ok,
+      delivered: ok,
+      error: errorMsg,
+      sender: senderDisplay,
+      senderAddress: config.senderEmail,
+      latencyMs
+    };
+  } catch (err: any) {
+    const latencyMs = Date.now() - startedAt;
+    const safeReason = redactSensitiveText(String(err?.message || 'Relay request failed'), config.url, config.secret);
+    await dbQueueEmailJob({
+      id: jobId,
+      recipientEmail: normalizedEmail,
+      subject: rendered.subject,
+      purpose: 'promotional_campaign',
+      payload: { campaignId: params.campaignId },
+      status: 'FAILED',
+      lastError: safeReason
+    }).catch(() => {});
+    return {
+      success: false,
+      delivered: false,
+      error: safeReason,
+      sender: senderDisplay,
+      senderAddress: config.senderEmail,
+      latencyMs
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export async function sendSupportTicketNotificationEmail(params: {
+  email: string;
+  ticketId: string;
+  subject: string;
+  title: string;
+  body: string;
+  purpose: 'ticket_auto_reply' | 'ticket_escalated' | 'ticket_reply_approved';
+}): Promise<AppsScriptEmailResult> {
+  return sendArtistNotificationEmail({
+    email: params.email,
+    subject: `[${params.ticketId}] ${params.subject}`,
+    title: params.title,
+    body: params.body,
+    purpose: 'profile_changes_requested'
+  });
+}
+
+

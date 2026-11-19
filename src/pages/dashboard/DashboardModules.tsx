@@ -223,14 +223,18 @@ export const ProfilePage: React.FC = () => {
   const [uploadingDoc, setUploadingDoc] = useState<string | null>(null);
   const [kycSubmitting, setKycSubmitting] = useState(false);
   const [kycMessage, setKycMessage] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+  const [promoOptOut, setPromoOptOut] = useState(false);
+  const [savingEmailPref, setSavingEmailPref] = useState(false);
+  const [emailPrefNotice, setEmailPrefNotice] = useState<string | null>(null);
 
   const loadArtistOnboardingData = async () => {
     if (!token) return;
     setLoadingProfile(true);
     try {
-      const [apRes, kycRes] = await Promise.all([
+      const [apRes, kycRes, prefRes] = await Promise.all([
         fetch(apiUrl('/api/artist-profile'), { headers: { Authorization: `Bearer ${token}` } }),
-        fetch(apiUrl('/api/profile'), { headers: { Authorization: `Bearer ${token}` } })
+        fetch(apiUrl('/api/profile'), { headers: { Authorization: `Bearer ${token}` } }),
+        fetch(apiUrl('/api/dashboard/preferences/email'), { headers: { Authorization: `Bearer ${token}` } })
       ]);
       if (apRes.ok) {
         const d = await apRes.json();
@@ -279,8 +283,40 @@ export const ProfilePage: React.FC = () => {
           if (k.profilePhotoUrl) setProfilePhotoUrl(k.profilePhotoUrl);
         }
       }
+      if (prefRes.ok) {
+        const pd = await prefRes.json();
+        setPromoOptOut(Boolean(pd.promoOptOut));
+      }
     } finally {
       setLoadingProfile(false);
+    }
+  };
+
+  const handleTogglePromoOptOut = async (nextOptOut: boolean) => {
+    if (!token) return;
+    setSavingEmailPref(true);
+    setEmailPrefNotice(null);
+    try {
+      const res = await fetch(apiUrl('/api/dashboard/preferences/email'), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ promoOptOut: nextOptOut })
+      });
+      const d = await res.json();
+      if (!res.ok) {
+        setEmailPrefNotice(d.error || 'Could not update email preferences.');
+        return;
+      }
+      setPromoOptOut(Boolean(d.promoOptOut));
+      setEmailPrefNotice(
+        d.promoOptOut
+          ? 'Opted out of promotional updates. Security OTP & distribution alerts remain enabled.'
+          : 'Subscribed to Rudraatma Music Distribution announcements & offers.'
+      );
+    } catch {
+      setEmailPrefNotice('Network error updating email preferences.');
+    } finally {
+      setSavingEmailPref(false);
     }
   };
 
@@ -921,6 +957,31 @@ export const ProfilePage: React.FC = () => {
             </form>
           )}
         </div>
+
+        {/* Email & Promotional Communication Preferences */}
+        <div className="p-5 rounded-2xl bg-[#090e1a] border border-slate-800 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold text-white">Email & Promotional Communication Preferences</h2>
+              <p className="text-xs text-slate-400">
+                Choose whether to receive feature announcements, offers, and promotional updates. Transactional OTP codes and release review alerts are always delivered.
+              </p>
+            </div>
+            <label className="inline-flex items-center gap-2.5 text-xs text-slate-200 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={promoOptOut}
+                disabled={savingEmailPref}
+                onChange={e => handleTogglePromoOptOut(e.target.checked)}
+                className="w-4 h-4 accent-amber-500"
+              />
+              <span>Opt out of promotional emails</span>
+            </label>
+          </div>
+          {emailPrefNotice && (
+            <p className="text-xs text-emerald-300">{emailPrefNotice}</p>
+          )}
+        </div>
       </div>
     </DashboardLayout>
   );
@@ -1539,6 +1600,8 @@ export const SupportPage: React.FC = () => {
   const [subject, setSubject] = useState('');
   const [category, setCategory] = useState('Metadata Inquiry');
   const [message, setMessage] = useState('');
+  const [ticketFeedback, setTicketFeedback] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+  const [submittingTicket, setSubmittingTicket] = useState(false);
 
   useEffect(() => {
     if (!token) return;
@@ -1550,16 +1613,35 @@ export const SupportPage: React.FC = () => {
   const handleCreateTicket = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!subject || !message) return;
-    const res = await fetch(apiUrl('/api/dashboard/support'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ subject, category, message, priority: 'Medium' })
-    });
-    const d = await res.json();
-    if (d.success) {
+    setSubmittingTicket(true);
+    setTicketFeedback(null);
+    try {
+      const res = await fetch(apiUrl('/api/dashboard/support'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ subject, category, message, priority: 'Medium' })
+      });
+      const d = await res.json();
+      if (!res.ok || !d.success) {
+        setTicketFeedback({ type: 'err', text: d.error || 'Could not submit support ticket.' });
+        return;
+      }
       setTickets(prev => [d.ticket, ...prev]);
       setSubject('');
       setMessage('');
+      setTicketFeedback({
+        type: 'ok',
+        text:
+          d.aiAutomation === 'AUTO_REPLIED'
+            ? `Ticket ${d.ticket.id} created with an instant automated response below.`
+            : d.aiAutomation === 'ESCALATED_WITH_DRAFT' || d.aiAutomation === 'ESCALATED'
+              ? `Ticket ${d.ticket.id} created and prioritized for Super Admin desk review.`
+              : `Ticket ${d.ticket.id} submitted to Rudraatma Support Desk.`
+      });
+    } catch {
+      setTicketFeedback({ type: 'err', text: 'Network error submitting support ticket.' });
+    } finally {
+      setSubmittingTicket(false);
     }
   };
 
@@ -1600,11 +1682,17 @@ export const SupportPage: React.FC = () => {
               placeholder="Describe your inquiry with relevant release titles..."
               className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-800 rounded-lg text-xs text-white"
             />
+            {ticketFeedback && (
+              <p className={`text-xs ${ticketFeedback.type === 'ok' ? 'text-emerald-400' : 'text-rose-400'}`}>
+                {ticketFeedback.text}
+              </p>
+            )}
             <button
               type="submit"
-              className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-semibold"
+              disabled={submittingTicket}
+              className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-lg text-xs font-semibold"
             >
-              Submit Ticket
+              {submittingTicket ? 'Submitting...' : 'Submit Ticket'}
             </button>
           </form>
         </div>

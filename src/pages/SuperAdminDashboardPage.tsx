@@ -9,9 +9,6 @@ import {
   RotateCcw,
   FileText,
   Sparkles,
-  Mail,
-  CreditCard,
-  HardDrive,
   Disc3,
   Clock,
   Pencil
@@ -65,6 +62,8 @@ import {
   type ExecutiveSessionInfo
 } from '../components/admin/adminTypes';
 import { OtpEmailPreviewModal } from '../components/admin/OtpEmailPreviewModal';
+import { AiAutomationDashboard } from '../components/admin/AiAutomationDashboard';
+import { SuperAdminSettingsHub } from '../components/admin/SuperAdminSettingsHub';
 
 const PAGE_SIZE = 15;
 
@@ -184,9 +183,6 @@ export const SuperAdminDashboardPage: React.FC = () => {
   const [gatewayConfig, setGatewayConfig] = useState<any>(null);
   const [emailTestResult, setEmailTestResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [testingEmail, setTestingEmail] = useState(false);
-  const [new2faPin, setNew2faPin] = useState('');
-  const [broadcastTitle, setBroadcastTitle] = useState('');
-  const [broadcastMessage, setBroadcastMessage] = useState('');
 
   // AI Control sub-tab view switcher
   const aiCenterMode = useMemo(() => {
@@ -636,24 +632,6 @@ export const SuperAdminDashboardPage: React.FC = () => {
       setReplyModal(null);
       setReplyText('');
       loadTabData('support');
-    } catch (err: any) {
-      showToast('err', err.message);
-    }
-  };
-
-  const handleBroadcast = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!broadcastTitle.trim() || !broadcastMessage.trim()) return;
-    try {
-      const res = await authFetch('/api/super-admin/notifications/broadcast', {
-        method: 'POST',
-        body: JSON.stringify({ title: broadcastTitle, message: broadcastMessage })
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Broadcast failed.');
-      showToast('ok', `Broadcast delivered to ${data.deliveredCount} active users.`);
-      setBroadcastTitle('');
-      setBroadcastMessage('');
     } catch (err: any) {
       showToast('err', err.message);
     }
@@ -1719,6 +1697,17 @@ export const SuperAdminDashboardPage: React.FC = () => {
             </div>
           )}
 
+          {/* ==================== 6B. AI AUTOMATION & CAMPAIGNS ==================== */}
+          {activeTab === 'ai-automation' && (
+            <AiAutomationDashboard
+              token={token}
+              includeTest={includeTest}
+              activeSubmenu={activeSubmenu}
+              onSelectSubmenu={handleSelectNavigation}
+              showToast={showToast}
+            />
+          )}
+
           {/* ==================== 7. DISTRIBUTION MANAGEMENT ==================== */}
           {activeTab === 'distribution' && (
             <DistributionManagementPanel
@@ -1870,169 +1859,26 @@ export const SuperAdminDashboardPage: React.FC = () => {
             />
           )}
 
-          {/* ==================== 12. SETTINGS ==================== */}
-          {activeTab === 'settings' && settings && (
-            <div className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-                <div className="p-4 rounded-2xl bg-[#0b0c10] border border-slate-800/90 space-y-2">
-                  <p className="font-semibold text-[#f0cf65] flex items-center gap-1.5">
-                    <Mail className="w-4 h-4" /> Email Relay & SMTP Status
-                  </p>
-                  <p className="font-mono text-[11px] text-slate-300">
-                    Provider: {emailConfig?.provider || 'Google Apps Script HTTPS Relay'}
-                  </p>
-                  <p
-                    className={`font-mono text-[11px] ${
-                      emailConfig?.configured && emailConfig?.validHttpsUrl ? 'text-emerald-300' : 'text-red-300'
-                    }`}
-                  >
-                    Status:{' '}
-                    {emailConfig?.configured && emailConfig?.validHttpsUrl
-                      ? 'CONFIGURED & READY'
-                      : 'MISCONFIGURED / MISSING ENV'}
-                  </p>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <button
-                      onClick={handleTestEmailRelay}
-                      disabled={testingEmail}
-                      className="px-3 py-1.5 rounded-lg bg-[#d4af37]/15 border border-[#d4af37]/40 text-[#f0cf65]"
-                    >
-                      {testingEmail ? 'Checking...' : 'Test Email Relay'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setOtpPreviewOpen(true)}
-                      className="px-3 py-1.5 rounded-lg bg-[#050507] border border-slate-700 hover:border-[#d4af37]/50 text-slate-200 hover:text-[#f0cf65] inline-flex items-center gap-1.5"
-                    >
-                      <Eye className="w-3.5 h-3.5" />
-                      <span>Preview OTP Email</span>
-                    </button>
-                  </div>
-                  {emailTestResult && (
-                    <p className={`text-[11px] ${emailTestResult.ok ? 'text-emerald-300' : 'text-red-300'}`}>
-                      {emailTestResult.message}
-                    </p>
-                  )}
-                </div>
-
-                <div className="p-4 rounded-2xl bg-[#0b0c10] border border-slate-800/90 space-y-2">
-                  <p className="font-semibold text-[#f0cf65] flex items-center gap-1.5">
-                    <CreditCard className="w-4 h-4" /> Razorpay Payment Gateway
-                  </p>
-                  <p className="font-mono text-[11px] text-slate-300">
-                    Key ID: {gatewayConfig?.razorpayKeyConfigured ? 'Set (Server-Side)' : 'Not Set'}
-                  </p>
-                  <p className="font-mono text-[11px] text-slate-300">
-                    Secret: {gatewayConfig?.razorpaySecretConfigured ? 'Set (Isolated)' : 'Not Set'}
-                  </p>
-                  <p className="font-mono text-[11px] text-slate-300">
-                    Webhook Secret: {gatewayConfig?.webhookSecretConfigured ? 'Configured' : 'Not Set'}
-                  </p>
-                </div>
-
-                <div className="p-4 rounded-2xl bg-[#0b0c10] border border-slate-800/90 space-y-2">
-                  <p className="font-semibold text-[#f0cf65] flex items-center gap-1.5">
-                    <HardDrive className="w-4 h-4" /> Database & Storage Status
-                  </p>
-                  <p className="font-mono text-[11px] text-slate-300">
-                    Source: {integrity?.dataSource || 'Checking...'}
-                  </p>
-                  <p className="font-mono text-[11px] text-slate-300">
-                    Connection: {integrity?.connectionStatus || 'Checking...'}
-                  </p>
-                  <p className="text-[11px] text-slate-400">
-                    All credentials remain isolated in server environment variables.
-                  </p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-                <div className="p-6 rounded-2xl bg-[#0b0c10] border border-slate-800/90 space-y-5">
-                  <h3 className="text-sm font-semibold text-white">Executive Security & Platform Policies</h3>
-
-                  <div className="p-3.5 rounded-xl bg-[#050507] border border-[#d4af37]/30 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-xs font-semibold text-[#f0cf65] flex items-center gap-1.5">
-                          <Lock className="w-3.5 h-3.5" /> Optional Super Admin 2FA PIN
-                        </p>
-                        <p className="text-[11px] text-slate-400">
-                          Enforced during Super Admin sign-in when enabled with a 4+ digit PIN
-                        </p>
-                      </div>
-                      <input
-                        type="checkbox"
-                        checked={Boolean(settings.adminTwoFactorEnabled)}
-                        onChange={e => setSettings({ ...settings, adminTwoFactorEnabled: e.target.checked })}
-                        className="w-4 h-4 accent-[#d4af37]"
-                      />
-                    </div>
-                    <input
-                      type="password"
-                      value={new2faPin}
-                      onChange={e => setNew2faPin(e.target.value)}
-                      placeholder="Set or update 4+ digit 2FA PIN"
-                      className="w-full px-3 py-2 rounded-lg bg-[#0b0c10] border border-slate-800 text-xs text-white font-mono"
-                    />
-                  </div>
-
-                  <button
-                    onClick={() =>
-                      setPendingProposal({
-                        actionType: 'SETTINGS_UPDATE',
-                        targetType: 'settings',
-                        targetId: 'global',
-                        title: 'Save General & Security Settings',
-                        explanation:
-                          'Updates executive 2FA PIN settings and global platform policies.',
-                        consequences:
-                          'Applies immediately to Super Admin authentication and public policies.',
-                        proposedChanges: {
-                          adminTwoFactorEnabled: settings.adminTwoFactorEnabled,
-                          pinUpdated: new2faPin.trim().length >= 4
-                        },
-                        payload: {
-                          settings,
-                          ...(new2faPin.trim().length >= 4 ? { newAdminTwoFactorPin: new2faPin.trim() } : {})
-                        }
-                      })
-                    }
-                    className="w-full min-h-[40px] py-2.5 rounded-xl bg-[#d4af37] hover:bg-[#f0cf65] text-black font-bold text-xs"
-                  >
-                    Save Security Settings (Owner Approval)
-                  </button>
-                </div>
-
-                {/* Platform Broadcast */}
-                <form onSubmit={handleBroadcast} className="p-6 rounded-2xl bg-[#0b0c10] border border-slate-800/90 space-y-3">
-                  <h3 className="text-sm font-semibold text-white flex items-center gap-2">
-                    <Megaphone className="w-4 h-4 text-[#d4af37]" /> Broadcast User Notification
-                  </h3>
-                  <input
-                    type="text"
-                    required
-                    value={broadcastTitle}
-                    onChange={e => setBroadcastTitle(e.target.value)}
-                    placeholder="Notification title..."
-                    className="w-full px-3 py-2 rounded-xl bg-[#050507] border border-slate-800 text-xs text-white"
-                  />
-                  <textarea
-                    rows={3}
-                    required
-                    value={broadcastMessage}
-                    onChange={e => setBroadcastMessage(e.target.value)}
-                    placeholder="Message to all active artists & label managers..."
-                    className="w-full px-3 py-2 rounded-xl bg-[#050507] border border-slate-800 text-xs text-white"
-                  />
-                  <button
-                    type="submit"
-                    className="px-4 py-2 rounded-xl bg-[#d4af37]/20 border border-[#d4af37]/50 text-[#f0cf65] text-xs font-semibold inline-flex items-center gap-2"
-                  >
-                    <Send className="w-3.5 h-3.5" /> Send Broadcast
-                  </button>
-                </form>
-              </div>
-            </div>
+          {/* ==================== 12. SETTINGS (10-MODULE HUB) ==================== */}
+          {activeTab === 'settings' && (
+            <SuperAdminSettingsHub
+              token={token}
+              activeSubmenu={activeSubmenu}
+              onSelectSubmenu={handleSelectNavigation}
+              platformSettings={settings}
+              onChangePlatformSettings={setSettings}
+              emailConfig={emailConfig}
+              gatewayConfig={gatewayConfig}
+              integrity={integrity}
+              testingEmail={testingEmail}
+              emailTestResult={emailTestResult}
+              onTestEmailRelay={handleTestEmailRelay}
+              onOpenOtpPreview={() => setOtpPreviewOpen(true)}
+              onProposeOwnerApproval={prop => setPendingProposal(prop)}
+              onOpenSessionModal={() => setSessionModalOpen(true)}
+              adminEmail={user?.email}
+              showToast={showToast}
+            />
           )}
         </main>
       </div>

@@ -22,6 +22,12 @@ import {
   executeArtistProfileReviewAction,
   computeRealFinancialSummary
 } from './artistOnboardingAndFinance';
+import {
+  getAiAutomationSettings,
+  isAiMasterActive,
+  appendAutomationLog,
+  recordAiChatTurn
+} from './aiAutomation';
 import type { SuperAdminDeps } from './superAdmin';
 
 export interface AdminSessionMeta {
@@ -1579,19 +1585,47 @@ export function registerCommandCenterRoutes(
       return res.status(400).json({ error: 'Message is required.' });
     }
 
+    const master = isAiMasterActive();
+    if (!master.allowed) {
+      await appendAutomationLog({
+        actorEmail: admin.email,
+        actorRole: 'SUPER_ADMIN',
+        permissionKey: 'aiBehaviour.aiMasterPaused',
+        action: 'AI_ASSISTANT_CHAT_BLOCKED',
+        targetType: 'ai_assistant',
+        targetId: 'rudra_chat',
+        status: 'BLOCKED',
+        details: master.reason || 'AI Engine paused by Super Admin.'
+      });
+      return res.status(403).json({ error: master.reason });
+    }
+
+    const autoCfg = getAiAutomationSettings();
+    const sessionId = `sa_${admin.id}_${new Date().toISOString().slice(0, 10)}`;
+    await recordAiChatTurn({
+      sessionId,
+      actorEmail: admin.email,
+      role: 'user',
+      content: String(message).trim(),
+      activeTab,
+      activeSubmenu
+    });
+
     const snapshot = await loadLivePlatformSnapshot(deps, aiCtx, { includeTest: false });
     const intelligence = await buildPlatformIntelligence(deps, aiCtx, snapshot);
 
     const paidRevenue = snapshot.paidOrders.reduce((s, o) => s + Number(o.amount || 0), 0);
+    const allowUserContext = autoCfg.userPermissions.allowAiUserDataAccess;
     const liveContextSummary = snapshot.ok
       ? {
           dataSource: snapshot.dataSource,
           lastSyncedAt: snapshot.lastSyncedAt,
-          productionUsers: snapshot.users.length,
-          pendingKyc: snapshot.users.filter(u => u.kyc?.status === 'Pending').length,
-          approvedKyc: snapshot.users.filter(u => u.kyc?.status === 'Approved').length,
-          suspendedUsers: snapshot.users.filter(u => u.accountStatus === 'suspended').length,
-          terminatedUsers: snapshot.users.filter(u => u.accountStatus === 'terminated').length,
+          userDataRestricted: !allowUserContext,
+          productionUsers: allowUserContext ? snapshot.users.length : 'RESTRICTED_BY_PERMISSION',
+          pendingKyc: allowUserContext ? snapshot.users.filter(u => u.kyc?.status === 'Pending').length : 'RESTRICTED',
+          approvedKyc: allowUserContext ? snapshot.users.filter(u => u.kyc?.status === 'Approved').length : 'RESTRICTED',
+          suspendedUsers: allowUserContext ? snapshot.users.filter(u => u.accountStatus === 'suspended').length : 'RESTRICTED',
+          terminatedUsers: allowUserContext ? snapshot.users.filter(u => u.accountStatus === 'terminated').length : 'RESTRICTED',
           productionReleases: snapshot.releases.length,
           pendingReleases: snapshot.releases.filter(r => r.status === 'Submitted' || r.status === 'Under Review').length,
           approvedReleases: snapshot.releases.filter(r => r.status === 'Approved').length,
@@ -1616,7 +1650,7 @@ export function registerCommandCenterRoutes(
           dataSource: snapshot.dataSource
         };
 
-    const activeModel = aiCtx.aiSettings?.activeModel || 'gemini-4-hydrogen';
+    const activeModel = autoCfg.aiBehaviour.activeModel || aiCtx.aiSettings?.activeModel || 'gemini-2.5-flash';
     const apiKey = process.env.GEMINI_API_KEY?.trim();
 
     if (!apiKey) {
@@ -1635,16 +1669,27 @@ export function registerCommandCenterRoutes(
       const deterministicLines = [
         `Namaste! Main Rudra hoon (Rudra AI — Intelligent Music Distribution Assistant). GEMINI_API_KEY is not configured on the backend, so I am providing a verified real-database status brief instead of generative prose:`,
         snapshot.ok
-          ? `• Data Source: ${snapshot.dataSource} (${snapshot.users.length} prod users, ${snapshot.releases.length} releases, ₹${paidRevenue.toLocaleString('en-IN')} verified paid revenue; ${snapshot.excludedTestCounts.users} demo/test user(s) isolated).`
+          ? `• Data Source: ${snapshot.dataSource} (${allowUserContext ? `${snapshot.users.length} prod users` : 'User data restricted by permission'}, ${snapshot.releases.length} releases, ₹${paidRevenue.toLocaleString('en-IN')} verified paid revenue).`
           : `• Data Status: Data Unavailable (${snapshot.error}).`,
         `• Current View: ${activeTab || 'overview'} / ${activeSubmenu || 'executive-overview'}`,
         `• Immediate Attention: ${intelligence.immediateAttention.length > 0 ? intelligence.immediateAttention.join(' | ') : 'None flagged.'}`,
         `• Top Recommended Next Step: ${intelligence.nextSteps[0]?.title} (${intelligence.nextSteps[0]?.actualStatus}) — ${intelligence.nextSteps[0]?.recommendedSolution}`,
         `Reminder: No action will be executed without your explicit Super Admin confirmation.`
       ];
+      const deterministicReply = deterministicLines.join('\n\n');
+      await recordAiChatTurn({
+        sessionId,
+        actorEmail: admin.email,
+        role: 'assistant',
+        content: deterministicReply,
+        activeTab,
+        activeSubmenu,
+        model: activeModel,
+        aiStatus: 'NOT_CONFIGURED'
+      });
 
       return res.json({
-        reply: deterministicLines.join('\n\n'),
+        reply: deterministicReply,
         aiStatus: 'NOT_CONFIGURED',
         model: activeModel,
         suggestedActions: intelligence.nextSteps.slice(0, 3).map(n => ({
@@ -1703,6 +1748,17 @@ SUPER_ADMIN_MESSAGE: ${String(message).trim()}`;
         latencyMs,
         status: 'SUCCESS',
         actorEmail: admin.email
+      });
+
+      await recordAiChatTurn({
+        sessionId,
+        actorEmail: admin.email,
+        role: 'assistant',
+        content: reply,
+        activeTab,
+        activeSubmenu,
+        model: activeModel,
+        aiStatus: 'CONNECTED'
       });
 
       return res.json({
@@ -1781,14 +1837,55 @@ SUPER_ADMIN_MESSAGE: ${String(message).trim()}`;
   // 6. AI Draft Suggested Reply for Support Tickets / Complaints (Draft Only — Not Sent)
   app.post('/api/super-admin/support/:id/ai-suggest', requireSuperAdmin, async (req, res) => {
     const admin = (req as any).superAdmin;
+    const master = isAiMasterActive();
+    if (!master.allowed) {
+      await appendAutomationLog({
+        actorEmail: admin.email,
+        actorRole: 'SUPER_ADMIN',
+        permissionKey: 'aiBehaviour.aiMasterPaused',
+        action: 'AI_SUPPORT_DRAFT_BLOCKED',
+        targetType: 'support_ticket',
+        targetId: req.params.id,
+        status: 'BLOCKED',
+        details: master.reason || 'Master AI paused.'
+      });
+      return res.status(403).json({ error: master.reason });
+    }
+    const autoCfg = getAiAutomationSettings();
+    if (!autoCfg.supportManagement.allowAiGenerateSupportReplies) {
+      const err = 'Blocked: "Allow AI to Generate Replies" is disabled in Settings -> Support Management.';
+      await appendAutomationLog({
+        actorEmail: admin.email,
+        actorRole: 'SUPER_ADMIN',
+        permissionKey: 'supportManagement.allowAiGenerateSupportReplies',
+        action: 'AI_SUPPORT_DRAFT_BLOCKED',
+        targetType: 'support_ticket',
+        targetId: req.params.id,
+        status: 'BLOCKED',
+        details: err
+      });
+      return res.status(403).json({ error: err });
+    }
+
     const { subject, body, userEmail, category } = req.body || {};
     const apiKey = process.env.GEMINI_API_KEY?.trim();
-    const activeModel = aiCtx.aiSettings?.activeModel || 'gemini-4-hydrogen';
+    const activeModel = autoCfg.aiBehaviour.activeModel || aiCtx.aiSettings?.activeModel || 'gemini-2.5-flash';
 
     if (!apiKey) {
+      const draft = `Namaste,\n\nThank you for reaching out to Rudraatma Music Distribution regarding "${subject || 'your inquiry'}". Our team has reviewed your ticket and will update you shortly with the verified resolution.\n\nWarm regards,\nRudraatma Support Desk`;
+      await appendAutomationLog({
+        actorEmail: admin.email,
+        actorRole: 'SUPER_ADMIN',
+        permissionKey: 'supportManagement.allowAiGenerateSupportReplies',
+        action: 'AI_SUPPORT_DRAFT_PREPARED',
+        targetType: 'support_ticket',
+        targetId: req.params.id,
+        status: 'SUCCESS',
+        details: `Generated structured reply draft for ${req.params.id}.`
+      });
       return res.json({
         aiStatus: 'NOT_CONFIGURED',
-        draft: `Namaste,\n\nThank you for reaching out to Rudraatma Music Distribution regarding "${subject || 'your inquiry'}". Our team has reviewed your ticket and will update you shortly with the verified resolution.\n\nWarm regards,\nRudraatma Support Desk`
+        draft
       });
     }
 

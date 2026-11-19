@@ -138,6 +138,9 @@ async function runMigrations(): Promise<void> {
     ALTER TABLE users ADD COLUMN IF NOT EXISTS kyc_data JSONB;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS artist_profile_data JSONB;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS artist_profile_status TEXT NOT NULL DEFAULT 'Incomplete';
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS promo_opt_out BOOLEAN NOT NULL DEFAULT FALSE;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS promo_opt_out_at TIMESTAMPTZ;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS promo_opt_out_token TEXT;
     CREATE INDEX IF NOT EXISTS idx_users_email ON users (email);
     CREATE INDEX IF NOT EXISTS idx_users_created_at ON users (created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_users_role_status ON users (role, account_status);
@@ -494,12 +497,15 @@ export async function dbUpsertUser(user: {
   kyc?: unknown;
   artistProfile?: unknown;
   artistProfileStatus?: string;
+  promoOptOut?: boolean;
+  promoOptOutAt?: string;
+  promoOptOutToken?: string;
   createdAt: string;
 }): Promise<void> {
   if (!pool) return;
   await pool.query(
-    `INSERT INTO users (id, full_name, email, country, password_hash, role, is_active, selected_plan_id, account_status, status_reason, kyc_data, artist_profile_data, artist_profile_status, created_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12::jsonb, $13, $14)
+    `INSERT INTO users (id, full_name, email, country, password_hash, role, is_active, selected_plan_id, account_status, status_reason, kyc_data, artist_profile_data, artist_profile_status, promo_opt_out, promo_opt_out_at, promo_opt_out_token, created_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12::jsonb, $13, $14, $15, $16, $17)
      ON CONFLICT (email) DO UPDATE SET
        full_name = EXCLUDED.full_name,
        country = EXCLUDED.country,
@@ -511,7 +517,10 @@ export async function dbUpsertUser(user: {
        status_reason = EXCLUDED.status_reason,
        kyc_data = EXCLUDED.kyc_data,
        artist_profile_data = COALESCE(EXCLUDED.artist_profile_data, users.artist_profile_data),
-       artist_profile_status = COALESCE(EXCLUDED.artist_profile_status, users.artist_profile_status)`,
+       artist_profile_status = COALESCE(EXCLUDED.artist_profile_status, users.artist_profile_status),
+       promo_opt_out = EXCLUDED.promo_opt_out,
+       promo_opt_out_at = EXCLUDED.promo_opt_out_at,
+       promo_opt_out_token = COALESCE(EXCLUDED.promo_opt_out_token, users.promo_opt_out_token)`,
     [
       user.id,
       user.fullName,
@@ -526,6 +535,9 @@ export async function dbUpsertUser(user: {
       user.kyc ? JSON.stringify(user.kyc) : null,
       user.artistProfile ? JSON.stringify(user.artistProfile) : null,
       user.artistProfileStatus || (user.artistProfile as any)?.status || 'Incomplete',
+      Boolean(user.promoOptOut),
+      user.promoOptOutAt || null,
+      user.promoOptOutToken || null,
       user.createdAt
     ]
   );

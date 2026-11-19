@@ -5,6 +5,7 @@ export type AdminTab =
   | 'finance'
   | 'subscriptions'
   | 'ai-center'
+  | 'ai-automation'
   | 'distribution'
   | 'support'
   | 'website'
@@ -112,6 +113,17 @@ export const ADMIN_NAV_CATEGORIES: NavCategory[] = [
     ]
   },
   {
+    id: 'ai-automation',
+    label: 'AI Automation',
+    shortLabel: 'Automation',
+    submenus: [
+      { id: 'automation-overview', label: 'AI Automation Dashboard' },
+      { id: 'promo-campaigns', label: 'Promotional Email Automation' },
+      { id: 'ticket-automation', label: 'AI Support Ticket Queue' },
+      { id: 'automation-logs', label: 'AI Activity & Audit Logs' }
+    ]
+  },
+  {
     id: 'distribution',
     label: 'Distribution Management',
     shortLabel: 'Distribution',
@@ -174,10 +186,16 @@ export const ADMIN_NAV_CATEGORIES: NavCategory[] = [
     label: 'Settings',
     shortLabel: 'Settings',
     submenus: [
-      { id: 'general-settings', label: 'General & Security PIN' },
-      { id: 'email-configuration', label: 'Email Relay Diagnostics' },
-      { id: 'payment-gateway', label: 'Payment Gateway Status' },
-      { id: 'broadcast-notifications', label: 'Broadcast Notifications' }
+      { id: 'general-settings', label: 'General Settings' },
+      { id: 'chat-history', label: 'Chat History Management' },
+      { id: 'user-permissions', label: 'User Permissions' },
+      { id: 'privacy-security', label: 'Privacy & Security' },
+      { id: 'ai-behaviour', label: 'AI Behaviour' },
+      { id: 'email-notifications', label: 'Email & Notifications' },
+      { id: 'support-management', label: 'Support Management' },
+      { id: 'automation-approvals', label: 'Automation & Approvals' },
+      { id: 'api-integrations', label: 'API & Integrations' },
+      { id: 'account-management', label: 'Account Management' }
     ]
   }
 ];

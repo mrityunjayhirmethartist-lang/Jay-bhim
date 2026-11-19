@@ -60,6 +60,12 @@ import {
 } from './server/ai/reviewQueue';
 import { registerAiRoutes } from './server/ai/routes';
 import {
+  registerAiAutomationRoutes,
+  hydrateAiAutomationState,
+  processSupportTicketWithAi,
+  getAiAutomationSettings
+} from './server/aiAutomation';
+import {
   getSafeEmailDiagnostics,
   logEmailStartupDiagnostics,
   sendAppsScriptOtpEmail,
@@ -403,6 +409,9 @@ export interface StoredUser {
   kyc?: any;
   artistProfile?: ArtistProfilePayload;
   artistProfileStatus?: ArtistProfileStatus;
+  promoOptOut?: boolean;
+  promoOptOutAt?: string;
+  promoOptOutToken?: string;
   selectedPlanId?: string;
   createdAt: string;
 }
@@ -3469,6 +3478,11 @@ app.post('/api/dashboard/support', async (req, res) => {
   const user = getAuthenticatedUser(req);
   if (!user) return res.status(401).json({ error: 'Unauthorized.' });
 
+  const autoCfg = getAiAutomationSettings();
+  if (!autoCfg.userPermissions.allowArtistSupportTickets) {
+    return res.status(403).json({ error: 'Support ticket submissions are currently paused by platform administrator.' });
+  }
+
   const { subject, category, priority, message } = req.body;
   if (!subject || !message) return res.status(400).json({ error: 'Subject and message are required.' });
 
@@ -3487,7 +3501,18 @@ app.post('/api/dashboard/support', async (req, res) => {
 
   dashboard.tickets.unshift(newTicket);
   await dbSaveDashboard(user.id, dashboard);
-  return res.json({ success: true, ticket: newTicket });
+
+  const aiResult = await processSupportTicketWithAi(superAdminDeps, {
+    user,
+    dashboard,
+    ticket: newTicket
+  }).catch(() => ({ processed: false, actionTaken: 'ERROR', ticket: newTicket }));
+
+  return res.json({
+    success: true,
+    ticket: aiResult.ticket || newTicket,
+    aiAutomation: aiResult.actionTaken
+  });
 });
 
 // Smart Links API Suite
@@ -5046,6 +5071,9 @@ async function hydrateFromDatabase() {
       kyc: row.kyc_data || undefined,
       artistProfile: row.artist_profile_data || undefined,
       artistProfileStatus: row.artist_profile_status || 'Incomplete',
+      promoOptOut: Boolean(row.promo_opt_out),
+      promoOptOutAt: row.promo_opt_out_at ? new Date(row.promo_opt_out_at).toISOString() : undefined,
+      promoOptOutToken: row.promo_opt_out_token || undefined,
       selectedPlanId: row.selected_plan_id || undefined,
       createdAt: new Date(row.created_at).toISOString()
     });
@@ -5162,6 +5190,7 @@ async function hydrateFromDatabase() {
     artistFeedbacks.length = 0;
     artistFeedbacks.push(...allPlatformSettings.artist_feedbacks);
   }
+  await hydrateAiAutomationState();
 
   // 12. Hydrate Rudraatma AI tables
   const aiSettingRows = await pool.query('SELECT key, value FROM ai_service_settings');
@@ -5383,6 +5412,9 @@ registerAiRoutes(app, {
   localLyricsDir,
   localEvidenceDir
 });
+
+// Register AI Automation, Permissions, Promotional Email & Settings Management routes
+registerAiAutomationRoutes(app, superAdminDeps);
 
 // Explicit SEO endpoints & private route X-Robots-Tag protection (works in dev, Cloud Run full-stack, and Render)
 const PRIVATE_SEO_PREFIXES = [

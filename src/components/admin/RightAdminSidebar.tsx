@@ -19,7 +19,8 @@ import {
   PanelRightClose,
   PanelRightOpen,
   X,
-  UserCheck
+  UserCheck,
+  Bot
 } from 'lucide-react';
 import { ADMIN_NAV_CATEGORIES, type AdminTab, type ExecutiveSessionInfo } from './adminTypes';
 
@@ -44,6 +45,7 @@ const ICONS: Record<AdminTab, React.ReactNode> = {
   finance: <IndianRupee className="w-4 h-4 shrink-0" />,
   subscriptions: <Crown className="w-4 h-4 shrink-0" />,
   'ai-center': <Sparkles className="w-4 h-4 shrink-0" />,
+  'ai-automation': <Bot className="w-4 h-4 shrink-0" />,
   distribution: <Globe className="w-4 h-4 shrink-0" />,
   support: <MessageSquare className="w-4 h-4 shrink-0" />,
   website: <LayoutTemplate className="w-4 h-4 shrink-0" />,
