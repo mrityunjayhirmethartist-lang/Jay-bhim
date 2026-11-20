@@ -379,15 +379,17 @@ export function registerSuperAdminRoutes(app: express.Express, deps: SuperAdminD
 
     deps.failedLoginAttempts.delete(attemptKey);
 
+    const now = Date.now();
     const sessionToken = 'sa_sess_' + crypto.randomBytes(28).toString('hex');
     const sessionRecord = {
       token: sessionToken,
       userId: user.id,
-      expiresAt: Date.now() + 12 * 60 * 60 * 1000 // 12-hour executive session
+      createdAt: now,
+      lastSeenAt: now,
+      expiresAt: now + 30 * 60 * 1000 // 30-minute idle executive session (ephemeral)
     };
     deps.sessions.set(sessionToken, sessionRecord);
     recordAdminSessionMeta(sessionToken, user, req.ip, twoFactorConfigured);
-    await deps.dbSaveSession(sessionRecord);
 
     await deps.recordAudit(
       user.email,

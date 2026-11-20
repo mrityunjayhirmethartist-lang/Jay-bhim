@@ -1,8 +1,12 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 
+interface NavigateOptions {
+  replace?: boolean;
+}
+
 interface RouterContextType {
   path: string;
-  navigate: (to: string) => void;
+  navigate: (to: string, options?: NavigateOptions) => void;
   queryParam: (key: string) => string | null;
 }
 
@@ -19,13 +23,22 @@ export const RouterProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return () => window.removeEventListener('popstate', onPopState);
   }, []);
 
-  const navigate = useCallback((to: string) => {
-    if (window.location.pathname !== to) {
-      window.history.pushState({}, '', to);
-      setPath(to);
+  const navigate = useCallback((to: string, options?: NavigateOptions) => {
+    const targetUrl = to.startsWith('/') ? to : `/${to}`;
+    const cleanPath = targetUrl.split('?')[0].split('#')[0] || '/';
+    const currentFull = `${window.location.pathname}${window.location.search}`;
+    if (currentFull !== targetUrl) {
+      if (options?.replace) {
+        window.history.replaceState({}, '', targetUrl);
+      } else {
+        window.history.pushState({}, '', targetUrl);
+      }
+      setPath(cleanPath);
       window.scrollTo(0, 0);
+    } else if (path !== cleanPath) {
+      setPath(cleanPath);
     }
-  }, []);
+  }, [path]);
 
   const queryParam = useCallback((key: string): string | null => {
     const params = new URLSearchParams(window.location.search);

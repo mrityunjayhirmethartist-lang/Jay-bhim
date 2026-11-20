@@ -195,6 +195,14 @@ function pushServerLog(entry: Omit<ServerLogEntry, 'id' | 'timestamp'>) {
   if (recentServerLogs.length > 200) recentServerLogs.length = 200;
 }
 
+// Prevent browser/proxy caching of authentication and private dashboard API responses
+app.use(['/api/auth', '/api/dashboard', '/api/admin', '/api/super-admin', '/api/notifications'], (_req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  next();
+});
+
 // Production-safe request error diagnostic logger (never logs passwords, OTPs, tokens, or secrets)
 app.use((req, res, next) => {
   const start = Date.now();
@@ -418,10 +426,15 @@ export interface StoredUser {
 
 export type StoredOtp = OtpRecord;
 
+export const SESSION_IDLE_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes idle expiry
+export const SESSION_ABSOLUTE_MAX_MS = 4 * 60 * 60 * 1000; // Hard 4-hour cap (non-persistent)
+
 export interface Session {
   token: string;
   userId: string;
   expiresAt: number;
+  createdAt?: number;
+  lastSeenAt?: number;
 }
 
 export interface ReleaseTrack {
@@ -1189,14 +1202,27 @@ if (process.env.NODE_ENV !== 'production') {
   });
 }
 
-// Helper for session token
+function createEphemeralSession(userId: string, prefix = 'sess_'): Session {
+  const now = Date.now();
+  return {
+    token: prefix + crypto.randomBytes(28).toString('hex'),
+    userId,
+    createdAt: now,
+    lastSeenAt: now,
+    expiresAt: now + SESSION_IDLE_TIMEOUT_MS
+  };
+}
+
+// Helper for session token (ephemeral active session with idle + absolute expiry)
 function getAuthenticatedUser(req: express.Request): StoredUser | null {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
   const token = authHeader.split(' ')[1];
   const session = sessions.get(token);
   if (!session) return null;
-  if (Date.now() > session.expiresAt) {
+  const now = Date.now();
+  const createdAt = session.createdAt || now;
+  if (now > session.expiresAt || now > createdAt + SESSION_ABSOLUTE_MAX_MS) {
     sessions.delete(token);
     void dbDeleteSession(token);
     return null;
@@ -1208,6 +1234,9 @@ function getAuthenticatedUser(req: express.Request): StoredUser | null {
         void dbDeleteSession(token);
         return null;
       }
+      // Slide idle expiration within the hard absolute session cap while user actively browses
+      session.lastSeenAt = now;
+      session.expiresAt = Math.min(now + SESSION_IDLE_TIMEOUT_MS, createdAt + SESSION_ABSOLUTE_MAX_MS);
       return user;
     }
   }
@@ -1395,14 +1424,9 @@ async function verifySignupOtpInternal(_req: express.Request, res: express.Respo
   const dashboard = getUserDashboard(user.id);
   await dbSaveDashboard(user.id, dashboard);
 
-  const sessionToken = 'sess_' + crypto.randomBytes(24).toString('hex');
-  const sessionRecord: Session = {
-    token: sessionToken,
-    userId: user.id,
-    expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000
-  };
+  const sessionRecord = createEphemeralSession(user.id, 'sess_');
+  const sessionToken = sessionRecord.token;
   sessions.set(sessionToken, sessionRecord);
-  await dbSaveSession(sessionRecord);
 
   return res.json({
     success: true,
@@ -1637,15 +1661,10 @@ app.post('/api/auth/login', authRateLimiter, async (req, res) => {
 
   // SUPER_ADMIN Bypass: Verified server-side role opens Super Admin Dashboard directly WITHOUT email OTP or 2FA
   if (user.role === 'SUPER_ADMIN') {
-    const sessionToken = 'sa_sess_' + crypto.randomBytes(28).toString('hex');
-    const sessionRecord: Session = {
-      token: sessionToken,
-      userId: user.id,
-      expiresAt: Date.now() + 12 * 60 * 60 * 1000
-    };
+    const sessionRecord = createEphemeralSession(user.id, 'sa_sess_');
+    const sessionToken = sessionRecord.token;
     sessions.set(sessionToken, sessionRecord);
     recordAdminSessionMeta(sessionToken, user, req.ip);
-    await dbSaveSession(sessionRecord);
     await recordAudit(
       user.email,
       'SUPER_ADMIN',
@@ -1758,15 +1777,10 @@ async function verifyLoginOtpInternal(_req: express.Request, res: express.Respon
     return res.status(403).json({ error: 'Account record is invalid or unverified.' });
   }
 
-  // Issue authenticated session token
-  const sessionToken = 'sess_' + crypto.randomBytes(24).toString('hex');
-  const sessionRecord: Session = {
-    token: sessionToken,
-    userId: user.id,
-    expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000
-  };
+  // Issue ephemeral authenticated session token (not persisted permanently)
+  const sessionRecord = createEphemeralSession(user.id, 'sess_');
+  const sessionToken = sessionRecord.token;
   sessions.set(sessionToken, sessionRecord);
-  await dbSaveSession(sessionRecord);
 
   return res.json({
     success: true,
@@ -2049,6 +2063,10 @@ app.post('/api/auth/logout', async (req, res) => {
     sessions.delete(token);
     await dbDeleteSession(token);
   }
+  res.clearCookie('rad_token');
+  res.clearCookie('token');
+  res.clearCookie('session');
+  res.clearCookie('connect.sid');
   return res.json({ success: true, message: 'Logged out successfully.' });
 });
 
@@ -5104,16 +5122,9 @@ async function hydrateFromDatabase() {
     else if (otp.purpose === 'reset') resetOtps.set(otp.email, otp);
   }
 
-  // 4. Load non-expired sessions
-  const sessionRows = await pool.query('SELECT * FROM sessions WHERE expires_at > $1', [now]);
+  // 4. Clear all old persistent sessions so every new visit / server boot requires fresh authentication
+  await pool.query('DELETE FROM sessions');
   sessions.clear();
-  for (const row of sessionRows.rows) {
-    sessions.set(row.token, {
-      token: row.token,
-      userId: row.user_id,
-      expiresAt: Number(row.expires_at)
-    });
-  }
 
   // 5. Load user dashboards (releases, labels, artists, smart links, subscriptions, transactions)
   const dashRows = await pool.query('SELECT user_id, data FROM user_dashboards');

@@ -19,71 +19,155 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const SESSION_TOKEN_KEY = 'rad_active_session_token';
+const SESSION_PLAN_KEY = 'rad_selected_plan';
+const LEGACY_STORAGE_KEYS = [
+  'rad_token',
+  'rad_refresh_token',
+  'rad_user',
+  'rad_selected_plan',
+  'auth_token',
+  'refresh_token',
+  'token'
+];
+
+function purgeLegacyPersistentAuth(): void {
+  try {
+    for (const key of LEGACY_STORAGE_KEYS) {
+      localStorage.removeItem(key);
+    }
+  } catch {
+    // Ignore storage access errors
+  }
+}
+
+function readActiveSessionToken(): string | null {
+  try {
+    return sessionStorage.getItem(SESSION_TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function writeActiveSessionToken(token: string | null): void {
+  try {
+    if (token) {
+      sessionStorage.setItem(SESSION_TOKEN_KEY, token);
+    } else {
+      sessionStorage.removeItem(SESSION_TOKEN_KEY);
+    }
+  } catch {
+    // Ignore storage access errors
+  }
+}
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(() => localStorage.getItem('rad_token'));
+  const [token, setToken] = useState<string | null>(() => {
+    purgeLegacyPersistentAuth();
+    return readActiveSessionToken();
+  });
   const [loading, setLoading] = useState<boolean>(true);
-  const [selectedPlanId, setSelectedPlanIdState] = useState<string | null>(() => localStorage.getItem('rad_selected_plan'));
+  const [selectedPlanId, setSelectedPlanIdState] = useState<string | null>(() => {
+    try {
+      return sessionStorage.getItem(SESSION_PLAN_KEY);
+    } catch {
+      return null;
+    }
+  });
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [activePopup, setActivePopup] = useState<NotificationItem | null>(null);
 
   const setSelectedPlanId = (planId: string | null) => {
     setSelectedPlanIdState(planId);
-    if (planId) {
-      localStorage.setItem('rad_selected_plan', planId);
-    } else {
-      localStorage.removeItem('rad_selected_plan');
+    try {
+      if (planId) {
+        sessionStorage.setItem(SESSION_PLAN_KEY, planId);
+      } else {
+        sessionStorage.removeItem(SESSION_PLAN_KEY);
+      }
+    } catch {
+      // Ignore storage access errors
     }
   };
 
-  // Check existing session
+  // Verify ONLY current active browsing session (never auto-restore from persistent storage)
   useEffect(() => {
+    purgeLegacyPersistentAuth();
+
     const verifySession = async () => {
-      const storedToken = localStorage.getItem('rad_token');
-      if (!storedToken) {
+      const activeToken = readActiveSessionToken();
+      if (!activeToken) {
+        setToken(null);
+        setUser(null);
         setLoading(false);
         return;
       }
 
       try {
         const res = await fetch(apiUrl('/api/auth/session'), {
-          headers: { Authorization: `Bearer ${storedToken}` }
+          headers: { Authorization: `Bearer ${activeToken}` },
+          cache: 'no-store'
         });
         if (res.ok) {
           const data = await res.json();
           if (data.authenticated && data.user) {
             setUser(data.user);
-            setToken(storedToken);
+            setToken(activeToken);
           } else {
-            localStorage.removeItem('rad_token');
+            writeActiveSessionToken(null);
             setToken(null);
             setUser(null);
           }
-        } else if (res.status === 401 || res.status === 403) {
-          localStorage.removeItem('rad_token');
+        } else {
+          writeActiveSessionToken(null);
           setToken(null);
           setUser(null);
         }
       } catch (err) {
-        console.error('Session verify failed (backend may be waking up):', err);
+        console.error('Session verify failed:', err);
+        writeActiveSessionToken(null);
+        setToken(null);
+        setUser(null);
       } finally {
         setLoading(false);
       }
     };
 
     verifySession();
+
+    const handlePageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) {
+        purgeLegacyPersistentAuth();
+        if (!readActiveSessionToken()) {
+          setToken(null);
+          setUser(null);
+          setNotifications([]);
+          setActivePopup(null);
+        } else {
+          void verifySession();
+        }
+      }
+    };
+    window.addEventListener('pageshow', handlePageShow);
+    return () => window.removeEventListener('pageshow', handlePageShow);
   }, []);
 
   const refreshNotifications = async () => {
     if (!token) return;
     try {
       const res = await fetch(apiUrl('/api/notifications'), {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
+        cache: 'no-store'
       });
       if (res.ok) {
         const data = await res.json();
         setNotifications(data.notifications || []);
         setActivePopup(data.activePopup || null);
+      } else if (res.status === 401 || res.status === 403) {
+        writeActiveSessionToken(null);
+        setToken(null);
+        setUser(null);
       }
     } catch (err) {
       console.error('Failed to fetch notifications', err);
@@ -99,27 +183,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [user, token]);
 
   const login = (newToken: string, newUser: User) => {
-    localStorage.setItem('rad_token', newToken);
+    purgeLegacyPersistentAuth();
+    writeActiveSessionToken(newToken);
     setToken(newToken);
     setUser(newUser);
   };
 
   const logout = async () => {
-    if (token) {
+    const activeToken = token || readActiveSessionToken();
+    purgeLegacyPersistentAuth();
+    writeActiveSessionToken(null);
+    setToken(null);
+    setUser(null);
+    setNotifications([]);
+    setActivePopup(null);
+
+    if (activeToken) {
       try {
         await fetch(apiUrl('/api/auth/logout'), {
           method: 'POST',
-          headers: { Authorization: `Bearer ${token}` }
+          headers: { Authorization: `Bearer ${activeToken}` }
         });
       } catch (err) {
         console.error('Logout error', err);
       }
     }
-    localStorage.removeItem('rad_token');
-    setToken(null);
-    setUser(null);
-    setNotifications([]);
-    setActivePopup(null);
   };
 
   const dismissPopup = async (notifId: string) => {

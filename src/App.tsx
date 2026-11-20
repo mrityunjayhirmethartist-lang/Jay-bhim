@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { RouterProvider, useRouter } from './context/RouterContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
@@ -42,6 +42,18 @@ import { SeoHead } from './components/common/SeoHead';
 import { SeoLandingPage } from './pages/SeoLandingPage';
 import { SEO_LANDING_PAGES } from './data/seoLandingPagesData';
 
+const Redirect: React.FC<{ to: string }> = ({ to }) => {
+  const { navigate } = useRouter();
+  useEffect(() => {
+    navigate(to, { replace: true });
+  }, [to, navigate]);
+  return (
+    <div className="min-h-screen bg-[#070b14] flex items-center justify-center text-xs font-mono text-slate-500">
+      Redirecting to login...
+    </div>
+  );
+};
+
 const RouteRenderer: React.FC = () => {
   const { path } = useRouter();
   const { user, token, loading } = useAuth();
@@ -54,10 +66,10 @@ const RouteRenderer: React.FC = () => {
     );
   }
 
-  // Protected Dashboard Routes - Block direct URL bypass
-  if (path.startsWith('/dashboard')) {
+  // Protected Dashboard Routes - Strictly redirect unauthenticated users to /login
+  if (path === '/dashboard' || path.startsWith('/dashboard/')) {
     if (!user || !token) {
-      return <LoginPage />;
+      return <Redirect to={`/login?redirect=${encodeURIComponent(path)}`} />;
     }
 
     if (path === '/dashboard/labels') return <MyLabelsPage />;
@@ -83,22 +95,22 @@ const RouteRenderer: React.FC = () => {
   // Super Admin Routes (strictly isolated to SUPER_ADMIN role)
   if (path === '/super-admin/login') {
     if (user && token && user.role === 'SUPER_ADMIN') {
-      return <SuperAdminDashboardPage />;
+      return <Redirect to="/super-admin" />;
     }
     return <SuperAdminLoginPage />;
   }
 
-  if (path.startsWith('/super-admin')) {
+  if (path === '/super-admin' || path.startsWith('/super-admin/')) {
     if (!user || !token || user.role !== 'SUPER_ADMIN') {
-      return <SuperAdminLoginPage />;
+      return <Redirect to="/super-admin/login" />;
     }
     return <SuperAdminDashboardPage />;
   }
 
   // Admin Routes
-  if (path.startsWith('/admin')) {
+  if (path === '/admin' || path.startsWith('/admin/')) {
     if (!user || !token || (user.role !== 'admin' && user.role !== 'SUPER_ADMIN')) {
-      return <LoginPage />;
+      return <Redirect to={`/login?redirect=${encodeURIComponent(path)}`} />;
     }
     return <AdminDashboardPage />;
   }

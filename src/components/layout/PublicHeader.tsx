@@ -1,12 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from '../../context/RouterContext';
-import { useAuth } from '../../context/AuthContext';
-import { Menu, X, Disc3, ArrowRight, User as UserIcon, LayoutDashboard } from 'lucide-react';
+import { Menu, X, ArrowRight } from 'lucide-react';
 import { BrandLogo } from '../common/BrandLogo';
 
 export const PublicHeader: React.FC = () => {
   const { path, navigate } = useRouter();
-  const { user } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -122,33 +120,21 @@ export const PublicHeader: React.FC = () => {
             </a>
           </nav>
 
-          {/* Action Zone + Hamburger Trigger */}
+          {/* Action Zone + Hamburger Trigger (Strictly Public: Login & Sign Up only) */}
           <div className="flex items-center gap-3">
-            {user ? (
-              <button
-                onClick={() => handleNav('/dashboard')}
-                className="hidden sm:inline-flex items-center gap-2 px-3.5 py-2 text-xs font-semibold text-blue-300 bg-blue-950/60 border border-blue-800/80 rounded-lg hover:bg-blue-900/60 transition-colors"
-              >
-                <LayoutDashboard className="w-3.5 h-3.5" />
-                Artist Dashboard
-              </button>
-            ) : (
-              <>
-                <button
-                  onClick={() => handleNav('/login')}
-                  className="hidden sm:inline-flex px-3.5 py-2 text-xs font-medium text-slate-300 hover:text-white transition-colors rounded-lg"
-                >
-                  Login
-                </button>
-                <button
-                  onClick={() => handleNav('/signup')}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-500 rounded-lg shadow-sm shadow-blue-500/20 transition-all hover:scale-[1.02] active:scale-[0.98]"
-                >
-                  <span>Get Started</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </button>
-              </>
-            )}
+            <button
+              onClick={() => handleNav('/login')}
+              className="hidden sm:inline-flex px-3.5 py-2 text-xs font-medium text-slate-300 hover:text-white transition-colors rounded-lg"
+            >
+              Login
+            </button>
+            <button
+              onClick={() => handleNav('/signup')}
+              className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-500 rounded-lg shadow-sm shadow-blue-500/20 transition-all hover:scale-[1.02] active:scale-[0.98]"
+            >
+              <span>Sign Up</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
 
             {/* Three-Line Hamburger Trigger */}
             <button
@@ -194,7 +180,7 @@ export const PublicHeader: React.FC = () => {
                 </button>
               </div>
 
-              {/* Exact 8 Primary Hamburger Routes */}
+              {/* Exact 8 Primary Public Routes */}
               <div className="mt-6 space-y-1">
                 <div className="text-xs uppercase tracking-wider text-slate-400 font-mono px-3 mb-2">
                   Navigation
@@ -217,41 +203,6 @@ export const PublicHeader: React.FC = () => {
                   );
                 })}
               </div>
-
-              {/* Quick Route to Dashboard if Authenticated */}
-              {user && (
-                <div className="mt-6 pt-6 border-t border-slate-800">
-                  <div className="text-xs uppercase tracking-wider text-slate-400 font-mono px-3 mb-2">
-                    Signed In As
-                  </div>
-                  <div className="px-3.5 py-2.5 bg-slate-900 rounded-lg border border-slate-800 flex items-center justify-between">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-7 h-7 rounded-full bg-blue-600/30 text-blue-400 flex items-center justify-center text-xs font-bold font-mono">
-                        {user.fullName.slice(0, 1)}
-                      </div>
-                      <div className="truncate">
-                        <div className="text-xs font-semibold text-white truncate">{user.fullName}</div>
-                        <div className="text-[11px] text-slate-400 font-mono truncate">{user.email}</div>
-                      </div>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => handleNav('/dashboard')}
-                    className="mt-3 w-full py-2.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-500 rounded-lg transition-colors flex items-center justify-center gap-2"
-                  >
-                    <LayoutDashboard className="w-4 h-4" />
-                    Go to Artist Dashboard
-                  </button>
-                  {user.role === 'admin' && (
-                    <button
-                      onClick={() => handleNav('/admin')}
-                      className="mt-2 w-full py-2 text-xs font-semibold text-emerald-400 bg-emerald-950/60 border border-emerald-800/80 hover:bg-emerald-900/60 rounded-lg transition-colors"
-                    >
-                      Admin Dashboard
-                    </button>
-                  )}
-                </div>
-              )}
             </div>
 
             {/* Drawer Bottom Details */}

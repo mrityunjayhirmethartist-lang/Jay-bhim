@@ -107,9 +107,9 @@ export const PublicFooter: React.FC = () => {
                 </a>
               </li>
               <li>
-                <button onClick={() => navigate('/dashboard')} className="hover:text-white transition-colors text-left">
-                  Artist Dashboard
-                </button>
+                <a href="/login" onClick={(e) => { e.preventDefault(); navigate('/login'); }} className="hover:text-white transition-colors text-left inline-block">
+                  Artist Login
+                </a>
               </li>
             </ul>
           </div>
