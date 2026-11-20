@@ -340,14 +340,14 @@ function getSeoForPath(cleanPath: string): RouteSeoConfig {
     case '/':
     default:
       return {
-        title: 'RUDRAATMA Music Distribution – India Artist & Label Platform',
-        description: 'Distribute music globally from India with RUDRAATMA Music Distribution. Affordable INR plans from ₹20, free ISRC & UPC codes, and IMPS/UPI payouts.',
+        title: 'Rudraatma Music – Official Music Distribution & Artist Platform',
+        description: 'Distribute music globally from India with Rudraatma Music. Affordable INR plans from ₹20, free ISRC & UPC codes, and IMPS/UPI royalty payouts.',
         structuredData: {
           '@context': 'https://schema.org',
           '@graph': [
             {
               '@type': 'Service',
-              name: 'RUDRAATMA Digital Music Distribution',
+              name: 'Rudraatma Music Distribution',
               serviceType: 'Online Music Distribution Platform',
               areaServed: {
                 '@type': 'Country',
@@ -356,7 +356,7 @@ function getSeoForPath(cleanPath: string): RouteSeoConfig {
               provider: {
                 '@type': 'Organization',
                 '@id': `${CANONICAL_BASE_URL}/#organization`,
-                name: 'RUDRAATMA Music Distribution',
+                name: 'Rudraatma Music',
               },
               url: `${CANONICAL_BASE_URL}/`,
             },
@@ -433,6 +433,7 @@ export const SeoHead: React.FC = () => {
     upsertMetaTag('name', 'robots', seo.noindex ? 'noindex, nofollow' : 'index, follow');
     upsertMetaTag('name', 'googlebot', seo.noindex ? 'noindex, nofollow' : 'index, follow');
 
+    upsertMetaTag('property', 'og:site_name', 'Rudraatma Music');
     upsertMetaTag('property', 'og:title', seo.title);
     upsertMetaTag('property', 'og:description', seo.description);
     upsertMetaTag('property', 'og:url', canonicalUrl || `${CANONICAL_BASE_URL}/`);

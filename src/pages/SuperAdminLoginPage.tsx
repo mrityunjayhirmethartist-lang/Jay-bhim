@@ -72,29 +72,29 @@ export const SuperAdminLoginPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#050507] text-slate-100 flex flex-col justify-between px-4 py-8">
+    <div className="min-h-screen bg-[#090a0e] text-slate-100 flex flex-col justify-between px-4 py-8">
       <div className="max-w-md w-full mx-auto my-auto">
         <div className="mb-8 text-center">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-[#11100c] border border-[#d4af37]/40 mb-4 shadow-[0_0_30px_rgba(212,175,55,0.12)]">
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-[#111319] border border-[#d4af37]/40 mb-4 shadow-[0_8px_32px_rgba(212,175,55,0.12)]">
             <Shield className="w-7 h-7 text-[#d4af37]" />
           </div>
-          <p className="text-[11px] font-mono uppercase tracking-[0.22em] text-[#d4af37] mb-1">
+          <p className="text-xs font-semibold text-[#d4af37] mb-1">
             Rudraatma Music Distribution
           </p>
-          <h1 className="text-2xl font-bold tracking-tight text-white font-display">
-            Super Admin Command
+          <h1 className="text-2xl font-bold tracking-tight text-white">
+            Super Admin Console
           </h1>
-          <p className="text-xs text-slate-400 mt-1">
-            Direct executive authentication · Role: SUPER_ADMIN
+          <p className="text-xs text-slate-400 mt-1.5">
+            Sign in with your executive administrator credentials
           </p>
         </div>
 
         <form
           onSubmit={handleSubmit}
-          className="p-7 rounded-2xl bg-[#0b0c10] border border-[#d4af37]/25 shadow-[0_24px_64px_rgba(0,0,0,0.75)] space-y-5"
+          className="p-6 sm:p-7 rounded-2xl bg-[#111319] border border-white/[0.08] shadow-[0_24px_64px_rgba(0,0,0,0.65)] space-y-5"
         >
           {error && (
-            <div className="p-3 rounded-xl bg-red-950/50 border border-red-700/50 flex items-start gap-2.5 text-xs text-red-200">
+            <div className="p-3.5 rounded-xl bg-red-950/50 border border-red-500/40 flex items-start gap-2.5 text-xs text-red-200">
               <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
               <span>{error}</span>
             </div>
@@ -105,7 +105,7 @@ export const SuperAdminLoginPage: React.FC = () => {
               Super Admin Email
             </label>
             <div className="relative">
-              <Mail className="w-4 h-4 text-[#d4af37]/70 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <Mail className="w-4 h-4 text-[#d4af37]/80 absolute left-3.5 top-1/2 -translate-y-1/2" />
               <input
                 type="email"
                 required
@@ -113,7 +113,7 @@ export const SuperAdminLoginPage: React.FC = () => {
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 placeholder="rudraatmamusic@gmail.com"
-                className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-[#050507] border border-slate-800 focus:border-[#d4af37] focus:outline-none text-sm text-white placeholder:text-slate-600"
+                className="w-full h-11 pl-10 pr-4 rounded-xl bg-[#090a0e] border border-white/[0.08] focus:border-[#d4af37]/70 focus:outline-none text-sm text-white placeholder:text-slate-600 transition-colors"
               />
             </div>
           </div>
@@ -123,7 +123,7 @@ export const SuperAdminLoginPage: React.FC = () => {
               Password
             </label>
             <div className="relative">
-              <Lock className="w-4 h-4 text-[#d4af37]/70 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <Lock className="w-4 h-4 text-[#d4af37]/80 absolute left-3.5 top-1/2 -translate-y-1/2" />
               <input
                 type={showPassword ? 'text' : 'password'}
                 required
@@ -131,12 +131,12 @@ export const SuperAdminLoginPage: React.FC = () => {
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 placeholder="Enter executive password"
-                className="w-full pl-10 pr-10 py-2.5 rounded-xl bg-[#050507] border border-slate-800 focus:border-[#d4af37] focus:outline-none text-sm text-white placeholder:text-slate-600"
+                className="w-full h-11 pl-10 pr-10 rounded-xl bg-[#090a0e] border border-white/[0.08] focus:border-[#d4af37]/70 focus:outline-none text-sm text-white placeholder:text-slate-600 transition-colors"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(s => !s)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-[#d4af37]"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-[#d4af37]"
               >
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
@@ -156,7 +156,7 @@ export const SuperAdminLoginPage: React.FC = () => {
                   value={twoFactorPin}
                   onChange={e => setTwoFactorPin(e.target.value)}
                   placeholder="Enter 2FA security PIN"
-                  className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-[#050507] border border-[#d4af37]/50 focus:border-[#d4af37] focus:outline-none text-sm text-white font-mono"
+                  className="w-full h-11 pl-10 pr-4 rounded-xl bg-[#090a0e] border border-[#d4af37]/50 focus:border-[#d4af37] focus:outline-none text-sm text-white tabular-nums"
                 />
               </div>
             </div>
@@ -165,27 +165,27 @@ export const SuperAdminLoginPage: React.FC = () => {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3 rounded-xl bg-gradient-to-r from-[#d4af37] via-[#f0cf65] to-[#b8891b] text-[#050507] font-bold text-sm flex items-center justify-center gap-2 hover:brightness-105 transition disabled:opacity-50"
+            className="w-full h-11 rounded-xl bg-[#d4af37] hover:bg-[#e5c354] text-[#090a0e] font-semibold text-sm flex items-center justify-center gap-2 transition disabled:opacity-50"
           >
-            <span>{loading ? 'Authenticating...' : 'Enter Super Admin Console'}</span>
+            <span>{loading ? 'Signing in...' : 'Sign In to Super Admin'}</span>
             <ArrowRight className="w-4 h-4" />
           </button>
 
-          <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-500">
+          <div className="pt-3 border-t border-white/[0.06] flex items-center justify-between text-xs text-slate-400">
             <button
               type="button"
               onClick={() => navigate('/login')}
               className="hover:text-[#d4af37] transition"
             >
-              Artist / Label Login
+              Artist & Label Login
             </button>
-            <span className="font-mono text-slate-600">Audit-Logged Session</span>
+            <span className="text-slate-500">Protected Session</span>
           </div>
         </form>
       </div>
 
-      <p className="text-center text-[11px] text-slate-600 mt-8">
-        Protected executive portal · Unauthorized access attempts are logged.
+      <p className="text-center text-xs text-slate-500 mt-8">
+        Rudraatma Music Distribution · Protected executive portal
       </p>
     </div>
   );

@@ -726,7 +726,7 @@ export const SuperAdminDashboardPage: React.FC = () => {
   );
 
   return (
-    <div className="min-h-screen bg-[#050507] text-slate-100 flex flex-row">
+    <div className="min-h-screen bg-[#090a0e] text-slate-100 flex flex-row overflow-x-hidden">
       {/* Main Content Workspace */}
       <div className="flex-1 min-w-0 flex flex-col">
         {/* Top Enterprise Navigation Bar */}
@@ -771,14 +771,17 @@ export const SuperAdminDashboardPage: React.FC = () => {
 
           {toast && (
             <div
-              className={`p-3.5 rounded-xl border text-xs flex items-center justify-between ${
+              className={`px-4 py-3 rounded-xl border text-xs font-medium flex items-center justify-between gap-3 ${
                 toast.type === 'ok'
-                  ? 'bg-emerald-950/60 border-emerald-700/50 text-emerald-200'
-                  : 'bg-red-950/60 border-red-700/50 text-red-200'
+                  ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-200'
+                  : 'bg-rose-500/10 border-rose-500/30 text-rose-200'
               }`}
             >
               <span>{toast.text}</span>
-              <button onClick={() => setToast(null)} className="text-slate-400 hover:text-white ml-4">
+              <button
+                onClick={() => setToast(null)}
+                className="text-slate-300 hover:text-white shrink-0 font-medium"
+              >
                 Dismiss
               </button>
             </div>
@@ -801,15 +804,15 @@ export const SuperAdminDashboardPage: React.FC = () => {
                 {headlineKpis.map(card => (
                   <div
                     key={card.label}
-                    className={`p-5 rounded-xl bg-[#0b0c10] border ${
-                      card.gold ? 'border-[#d4af37]/45' : 'border-slate-800/90'
+                    className={`p-5 rounded-2xl bg-[#111319] border shadow-sm ${
+                      card.gold ? 'border-[#d4af37]/40' : 'border-white/[0.08]'
                     }`}
                   >
-                    <p className="text-xs text-slate-400">{card.label}</p>
+                    <p className="text-xs font-medium text-slate-400">{card.label}</p>
                     <p
-                      className={`text-2xl sm:text-3xl font-bold font-mono tabular-nums mt-2 ${
+                      className={`text-2xl sm:text-3xl font-bold tabular-nums mt-2 tracking-tight ${
                         dataUnavailable
-                          ? 'text-red-300 text-sm'
+                          ? 'text-rose-300 text-sm'
                           : card.gold
                             ? 'text-[#f0cf65]'
                             : 'text-white'
@@ -817,7 +820,7 @@ export const SuperAdminDashboardPage: React.FC = () => {
                     >
                       {card.value}
                     </p>
-                    <p className="text-[11px] font-mono text-slate-500 mt-1.5">{card.sub}</p>
+                    <p className="text-xs text-slate-400 tabular-nums mt-1.5">{card.sub}</p>
                   </div>
                 ))}
               </div>
@@ -827,15 +830,15 @@ export const SuperAdminDashboardPage: React.FC = () => {
                 {detailedKpis.map(card => (
                   <div
                     key={card.label}
-                    className={`p-4 rounded-xl bg-[#0b0c10] border ${
-                      card.accent === 'gold' ? 'border-[#d4af37]/35' : 'border-slate-800/90'
+                    className={`p-4 rounded-2xl bg-[#111319] border ${
+                      card.accent === 'gold' ? 'border-[#d4af37]/30' : 'border-white/[0.08]'
                     }`}
                   >
-                    <p className="text-[11px] text-slate-400 mb-1">{card.label}</p>
+                    <p className="text-xs text-slate-400 mb-1.5">{card.label}</p>
                     <p
-                      className={`text-lg sm:text-xl font-bold font-mono tabular-nums ${
+                      className={`text-lg sm:text-xl font-semibold tabular-nums ${
                         dataUnavailable
-                          ? 'text-red-300 text-sm'
+                          ? 'text-rose-300 text-sm'
                           : card.accent === 'gold'
                             ? 'text-[#f0cf65]'
                             : 'text-white'
@@ -851,22 +854,29 @@ export const SuperAdminDashboardPage: React.FC = () => {
               {!dataUnavailable && (
                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
                   {(activeSubmenu === 'executive-overview' || activeSubmenu === 'user-analytics') && (
-                    <div className="p-5 rounded-2xl bg-[#0b0c10] border border-slate-800/90">
+                    <div className="p-5 rounded-2xl bg-[#111319] border border-white/[0.08]">
                       <h3 className="text-sm font-semibold text-white mb-4">
                         User Growth ({overviewRange})
                       </h3>
                       {!hasUserChartData ? (
-                        <div className="h-64 flex items-center justify-center rounded-xl bg-[#050507] border border-slate-800/80 text-xs text-slate-500">
-                          No Data Available — 0 user registrations recorded in this period.
+                        <div className="h-64 flex items-center justify-center rounded-xl bg-[#090a0e] border border-white/[0.06] text-xs text-slate-500 px-4 text-center">
+                          No user registrations recorded in this period.
                         </div>
                       ) : (
                         <div className="h-64">
                           <ResponsiveContainer width="100%" height="100%">
                             <AreaChart data={charts.userGrowth || []}>
-                              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                              <XAxis dataKey="month" stroke="#64748b" fontSize={11} />
-                              <YAxis stroke="#64748b" fontSize={11} allowDecimals={false} />
-                              <Tooltip contentStyle={{ backgroundColor: '#0b0c10', borderColor: '#d4af37', fontSize: 12 }} />
+                              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                              <XAxis dataKey="month" stroke="#94a3b8" fontSize={11} />
+                              <YAxis stroke="#94a3b8" fontSize={11} allowDecimals={false} />
+                              <Tooltip
+                                contentStyle={{
+                                  backgroundColor: '#111319',
+                                  borderColor: 'rgba(212,175,55,0.4)',
+                                  borderRadius: '12px',
+                                  fontSize: 12
+                                }}
+                              />
                               <Area type="monotone" dataKey="totalUsers" stroke="#d4af37" fill="#d4af37" fillOpacity={0.18} name="Total Users" />
                               <Area type="monotone" dataKey="newUsers" stroke="#38bdf8" fill="#38bdf8" fillOpacity={0.12} name="New Signups" />
                             </AreaChart>
@@ -877,22 +887,29 @@ export const SuperAdminDashboardPage: React.FC = () => {
                   )}
 
                   {(activeSubmenu === 'executive-overview' || activeSubmenu === 'revenue-analytics') && (
-                    <div className="p-5 rounded-2xl bg-[#0b0c10] border border-slate-800/90">
+                    <div className="p-5 rounded-2xl bg-[#111319] border border-white/[0.08]">
                       <h3 className="text-sm font-semibold text-white mb-4">
                         Verified Revenue (INR) & Releases ({overviewRange})
                       </h3>
                       {!hasRevenueChartData ? (
-                        <div className="h-64 flex items-center justify-center rounded-xl bg-[#050507] border border-slate-800/80 text-xs text-slate-500">
-                          No Data Available — 0 paid orders or releases recorded in this window.
+                        <div className="h-64 flex items-center justify-center rounded-xl bg-[#090a0e] border border-white/[0.06] text-xs text-slate-500 px-4 text-center">
+                          No paid orders or releases recorded in this window.
                         </div>
                       ) : (
                         <div className="h-64">
                           <ResponsiveContainer width="100%" height="100%">
                             <BarChart data={charts.revenueTrend || []}>
-                              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                              <XAxis dataKey="month" stroke="#64748b" fontSize={11} />
-                              <YAxis stroke="#64748b" fontSize={11} allowDecimals={false} />
-                              <Tooltip contentStyle={{ backgroundColor: '#0b0c10', borderColor: '#d4af37', fontSize: 12 }} />
+                              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                              <XAxis dataKey="month" stroke="#94a3b8" fontSize={11} />
+                              <YAxis stroke="#94a3b8" fontSize={11} allowDecimals={false} />
+                              <Tooltip
+                                contentStyle={{
+                                  backgroundColor: '#111319',
+                                  borderColor: 'rgba(212,175,55,0.4)',
+                                  borderRadius: '12px',
+                                  fontSize: 12
+                                }}
+                              />
                               <Bar dataKey="revenue" fill="#d4af37" radius={[4, 4, 0, 0]} name="Paid Revenue (₹)" />
                               <Bar dataKey="releases" fill="#60a5fa" radius={[4, 4, 0, 0]} name="Releases" />
                             </BarChart>
@@ -903,11 +920,11 @@ export const SuperAdminDashboardPage: React.FC = () => {
                   )}
 
                   {(activeSubmenu === 'executive-overview' || activeSubmenu === 'release-analytics') && (
-                    <div className="p-5 rounded-2xl bg-[#0b0c10] border border-slate-800/90">
+                    <div className="p-5 rounded-2xl bg-[#111319] border border-white/[0.08]">
                       <h3 className="text-sm font-semibold text-white mb-4">Catalog Release Status</h3>
                       {!hasReleasePieData ? (
-                        <div className="h-64 flex items-center justify-center rounded-xl bg-[#050507] border border-slate-800/80 text-xs text-slate-500">
-                          No Data Available — 0 releases uploaded to catalog.
+                        <div className="h-64 flex items-center justify-center rounded-xl bg-[#090a0e] border border-white/[0.06] text-xs text-slate-500 px-4 text-center">
+                          No releases uploaded to catalog yet.
                         </div>
                       ) : (
                         <div className="h-64 flex items-center">
@@ -929,7 +946,14 @@ export const SuperAdminDashboardPage: React.FC = () => {
                                     <Cell key={idx} fill={entry.color || '#d4af37'} />
                                   ))}
                               </Pie>
-                              <Tooltip contentStyle={{ backgroundColor: '#0b0c10', borderColor: '#d4af37', fontSize: 12 }} />
+                              <Tooltip
+                                contentStyle={{
+                                  backgroundColor: '#111319',
+                                  borderColor: 'rgba(212,175,55,0.4)',
+                                  borderRadius: '12px',
+                                  fontSize: 12
+                                }}
+                              />
                             </PieChart>
                           </ResponsiveContainer>
                         </div>
@@ -938,22 +962,29 @@ export const SuperAdminDashboardPage: React.FC = () => {
                   )}
 
                   {(activeSubmenu === 'executive-overview' || activeSubmenu === 'platform-activity') && (
-                    <div className="p-5 rounded-2xl bg-[#0b0c10] border border-slate-800/90">
+                    <div className="p-5 rounded-2xl bg-[#111319] border border-white/[0.08]">
                       <h3 className="text-sm font-semibold text-white mb-4">
                         Platform Activity ({overviewRange})
                       </h3>
                       {!hasActivityChartData ? (
-                        <div className="h-64 flex items-center justify-center rounded-xl bg-[#050507] border border-slate-800/80 text-xs text-slate-500">
-                          No Data Available — 0 recorded events in this period.
+                        <div className="h-64 flex items-center justify-center rounded-xl bg-[#090a0e] border border-white/[0.06] text-xs text-slate-500 px-4 text-center">
+                          No recorded platform events in this period.
                         </div>
                       ) : (
                         <div className="h-64">
                           <ResponsiveContainer width="100%" height="100%">
                             <BarChart data={charts.platformActivity || []}>
-                              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                              <XAxis dataKey="day" stroke="#64748b" fontSize={11} />
-                              <YAxis stroke="#64748b" fontSize={11} allowDecimals={false} />
-                              <Tooltip contentStyle={{ backgroundColor: '#0b0c10', borderColor: '#d4af37', fontSize: 12 }} />
+                              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                              <XAxis dataKey="day" stroke="#94a3b8" fontSize={11} />
+                              <YAxis stroke="#94a3b8" fontSize={11} allowDecimals={false} />
+                              <Tooltip
+                                contentStyle={{
+                                  backgroundColor: '#111319',
+                                  borderColor: 'rgba(212,175,55,0.4)',
+                                  borderRadius: '12px',
+                                  fontSize: 12
+                                }}
+                              />
                               <Bar dataKey="adminActions" fill="#d4af37" name="Admin Actions" />
                               <Bar dataKey="releases" fill="#10b981" name="Releases" />
                               <Bar dataKey="payments" fill="#f59e0b" name="Paid Orders" />
@@ -968,36 +999,36 @@ export const SuperAdminDashboardPage: React.FC = () => {
 
               {/* Top-Performing Content & Recent Activity */}
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 text-xs">
-                <div className="p-5 rounded-2xl bg-[#0b0c10] border border-slate-800/90 space-y-3">
-                  <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
+                <div className="p-5 rounded-2xl bg-[#111319] border border-white/[0.08] space-y-3">
+                  <div className="flex items-center justify-between border-b border-white/[0.06] pb-3">
                     <h3 className="text-sm font-semibold text-white flex items-center gap-2">
                       <Disc3 className="w-4 h-4 text-[#d4af37]" /> Top Catalog Content
                     </h3>
                     <button
                       onClick={() => handleSelectNavigation('releases', 'all-releases')}
-                      className="text-[11px] text-[#f0cf65] hover:underline"
+                      className="text-xs font-medium text-[#f0cf65] hover:underline"
                     >
                       View All Releases
                     </button>
                   </div>
                   {topContent.length === 0 ? (
-                    <p className="py-6 text-center text-slate-500">
-                      No Data Available — 0 catalog releases submitted.
+                    <p className="py-8 text-center text-slate-500">
+                      No catalog releases submitted yet.
                     </p>
                   ) : (
-                    <div className="divide-y divide-slate-800/70">
+                    <div className="divide-y divide-white/[0.06]">
                       {topContent.map(item => (
-                        <div key={item.id} className="py-2.5 flex items-center justify-between gap-3">
+                        <div key={item.id} className="py-3 flex items-center justify-between gap-3">
                           <div className="min-w-0">
                             <p className="font-semibold text-white truncate">{item.title}</p>
-                            <p className="text-[11px] text-slate-400 truncate">
+                            <p className="text-xs text-slate-400 truncate mt-0.5">
                               {item.artist} · {item.type} · {item.tracksCount} track(s)
                             </p>
                           </div>
-                          <div className="text-right shrink-0 font-mono tabular-nums">
-                            <p className="text-[#f0cf65] text-[11px]">{item.status}</p>
-                            <p className="text-[10px] text-slate-500">
-                              {item.streams > 0 ? `${item.streams.toLocaleString()} streams` : 'Streams pending DSP'}
+                          <div className="text-right shrink-0 tabular-nums">
+                            <p className="text-[#f0cf65] text-xs font-medium">{item.status}</p>
+                            <p className="text-[11px] text-slate-500 mt-0.5">
+                              {item.streams > 0 ? `${item.streams.toLocaleString('en-IN')} streams` : 'Streams pending'}
                             </p>
                           </div>
                         </div>
@@ -1006,32 +1037,36 @@ export const SuperAdminDashboardPage: React.FC = () => {
                   )}
                 </div>
 
-                <div className="p-5 rounded-2xl bg-[#0b0c10] border border-slate-800/90 space-y-3">
-                  <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
+                <div className="p-5 rounded-2xl bg-[#111319] border border-white/[0.08] space-y-3">
+                  <div className="flex items-center justify-between border-b border-white/[0.06] pb-3">
                     <h3 className="text-sm font-semibold text-white flex items-center gap-2">
                       <Clock className="w-4 h-4 text-[#d4af37]" /> Recent Activity Feed
                     </h3>
                     <button
                       onClick={() => handleSelectNavigation('security', 'audit-logs')}
-                      className="text-[11px] text-[#f0cf65] hover:underline"
+                      className="text-xs font-medium text-[#f0cf65] hover:underline"
                     >
                       Full Audit Trail
                     </button>
                   </div>
                   {recentActivity.length === 0 ? (
-                    <p className="py-6 text-center text-slate-500">
-                      No Data Available — 0 recent system events logged.
+                    <p className="py-8 text-center text-slate-500">
+                      No recent system events logged.
                     </p>
                   ) : (
-                    <div className="divide-y divide-slate-800/70 max-h-72 overflow-y-auto">
+                    <div className="divide-y divide-white/[0.06] max-h-72 overflow-y-auto">
                       {recentActivity.map(act => (
-                        <div key={act.id} className="py-2.5 flex items-start justify-between gap-3">
+                        <div key={act.id} className="py-3 flex items-start justify-between gap-3">
                           <div className="min-w-0">
                             <p className="text-slate-200 font-medium truncate">{act.title}</p>
-                            <p className="text-[11px] text-slate-400 truncate">{act.subtitle}</p>
+                            <p className="text-xs text-slate-400 truncate mt-0.5">{act.subtitle}</p>
                           </div>
-                          <span className="text-[10px] font-mono text-slate-500 shrink-0">
-                            {new Date(act.timestamp).toLocaleDateString()}
+                          <span className="text-xs text-slate-500 tabular-nums shrink-0">
+                            {new Date(act.timestamp).toLocaleDateString('en-IN', {
+                              day: '2-digit',
+                              month: 'short',
+                              year: 'numeric'
+                            })}
                           </span>
                         </div>
                       ))}
@@ -1085,7 +1120,7 @@ export const SuperAdminDashboardPage: React.FC = () => {
                 <select
                   value={kycStatusFilter}
                   onChange={e => setKycStatusFilter(e.target.value)}
-                  className="px-3 py-2 rounded-xl bg-[#0b0c10] border border-slate-800 text-xs text-white"
+                  className="h-9 px-3 rounded-xl bg-[#111319] border border-white/[0.08] focus:border-[#d4af37]/60 outline-none text-xs text-white"
                 >
                   <option value="all">All Submitted KYCs</option>
                   <option value="pending">Pending Review</option>
@@ -1093,55 +1128,127 @@ export const SuperAdminDashboardPage: React.FC = () => {
                   <option value="rejected">Rejected</option>
                   <option value="reupload required">Reupload Required</option>
                 </select>
-                <span className="text-xs font-mono text-slate-400">
+                <span className="text-xs text-slate-400 tabular-nums">
                   {kycRecords.length} KYC record(s)
                 </span>
               </div>
 
-              <div className="rounded-2xl bg-[#0b0c10] border border-slate-800/90 overflow-x-auto">
+              {/* Mobile KYC Cards */}
+              <div className="md:hidden space-y-3">
+                {kycRecords.length === 0 ? (
+                  <div className="p-8 rounded-2xl bg-[#111319] border border-white/[0.08] text-center text-xs text-slate-500">
+                    {dataUnavailable ? 'Data Unavailable.' : 'No KYC submissions found for this filter.'}
+                  </div>
+                ) : (
+                  kycRecords.map(rec => (
+                    <div
+                      key={rec.userId}
+                      className="p-4 rounded-2xl bg-[#111319] border border-white/[0.08] space-y-3 text-xs"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-white">{rec.fullName}</p>
+                          <p className="text-slate-400 break-all mt-0.5">{rec.email}</p>
+                        </div>
+                        <span
+                          className={`px-2.5 py-0.5 rounded-lg text-[11px] font-medium shrink-0 ${
+                            rec.kyc?.status === 'Approved'
+                              ? 'bg-emerald-500/15 text-emerald-300'
+                              : rec.kyc?.status === 'Pending'
+                                ? 'bg-amber-500/15 text-amber-300'
+                                : 'bg-rose-500/15 text-rose-300'
+                          }`}
+                        >
+                          {rec.kyc?.status || 'Pending'}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2.5 pt-2 border-t border-white/[0.06] tabular-nums">
+                        <div>
+                          <span className="text-slate-500 block">Legal Name</span>
+                          <span className="text-slate-200 font-medium">{rec.kyc?.fullLegalName || '—'}</span>
+                        </div>
+                        <div>
+                          <span className="text-slate-500 block">Submitted</span>
+                          <span className="text-slate-300">
+                            {rec.kyc?.submittedAt
+                              ? new Date(rec.kyc.submittedAt).toLocaleDateString('en-IN', {
+                                  day: '2-digit',
+                                  month: 'short',
+                                  year: 'numeric'
+                                })
+                              : '—'}
+                          </span>
+                        </div>
+                        <div className="col-span-2">
+                          <span className="text-slate-500 block">Mobile / PAN</span>
+                          <span className="text-slate-300">
+                            {rec.kyc?.mobileNumber || '—'}
+                            {rec.kyc?.panNumber ? ` · ${rec.kyc.panNumber}` : ''}
+                          </span>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => openKycInspector(rec)}
+                        className="w-full h-9 rounded-xl bg-[#d4af37]/15 hover:bg-[#d4af37]/25 border border-[#d4af37]/40 text-[#f0cf65] font-medium"
+                      >
+                        Verify Documents
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {/* Desktop KYC Table */}
+              <div className="hidden md:block rounded-2xl bg-[#111319] border border-white/[0.08] overflow-x-auto">
                 <table className="w-full text-left border-collapse text-xs">
                   <thead>
-                    <tr className="border-b border-slate-800 text-slate-400">
-                      <th className="py-3 px-4">Applicant</th>
-                      <th className="py-3 px-4">Legal Name</th>
-                      <th className="py-3 px-4">Mobile / PAN</th>
-                      <th className="py-3 px-4">Submitted</th>
-                      <th className="py-3 px-4">Status</th>
-                      <th className="py-3 px-4 text-right">Review</th>
+                    <tr className="border-b border-white/[0.08] bg-[#0d0f14] text-slate-400">
+                      <th className="py-3.5 px-4 font-medium">Applicant</th>
+                      <th className="py-3.5 px-4 font-medium">Legal Name</th>
+                      <th className="py-3.5 px-4 font-medium">Mobile / PAN</th>
+                      <th className="py-3.5 px-4 font-medium">Submitted</th>
+                      <th className="py-3.5 px-4 font-medium">Status</th>
+                      <th className="py-3.5 px-4 font-medium text-right">Review</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-800/70">
+                  <tbody className="divide-y divide-white/[0.06]">
                     {kycRecords.map(rec => (
-                      <tr key={rec.userId} className="hover:bg-white/[0.02]">
-                        <td className="py-3 px-4">
+                      <tr key={rec.userId} className="hover:bg-white/[0.02] transition-colors">
+                        <td className="py-3.5 px-4">
                           <div className="font-semibold text-white">{rec.fullName}</div>
-                          <div className="text-[11px] text-slate-400 font-mono">{rec.email}</div>
+                          <div className="text-xs text-slate-400 mt-0.5">{rec.email}</div>
                         </td>
-                        <td className="py-3 px-4 text-slate-200">{rec.kyc?.fullLegalName || '—'}</td>
-                        <td className="py-3 px-4 font-mono text-slate-300">
+                        <td className="py-3.5 px-4 text-slate-200">{rec.kyc?.fullLegalName || '—'}</td>
+                        <td className="py-3.5 px-4 tabular-nums text-slate-300">
                           {rec.kyc?.mobileNumber || '—'}
                           {rec.kyc?.panNumber ? ` · ${rec.kyc.panNumber}` : ''}
                         </td>
-                        <td className="py-3 px-4 text-slate-400 font-mono">
-                          {rec.kyc?.submittedAt ? new Date(rec.kyc.submittedAt).toLocaleDateString() : '—'}
+                        <td className="py-3.5 px-4 text-slate-400 tabular-nums whitespace-nowrap">
+                          {rec.kyc?.submittedAt
+                            ? new Date(rec.kyc.submittedAt).toLocaleDateString('en-IN', {
+                                day: '2-digit',
+                                month: 'short',
+                                year: 'numeric'
+                              })
+                            : '—'}
                         </td>
-                        <td className="py-3 px-4 font-mono font-semibold">
+                        <td className="py-3.5 px-4">
                           <span
-                            className={
+                            className={`px-2.5 py-0.5 rounded-lg text-[11px] font-medium ${
                               rec.kyc?.status === 'Approved'
-                                ? 'text-emerald-300'
+                                ? 'bg-emerald-500/15 text-emerald-300'
                                 : rec.kyc?.status === 'Pending'
-                                  ? 'text-amber-300'
-                                  : 'text-red-300'
-                            }
+                                  ? 'bg-amber-500/15 text-amber-300'
+                                  : 'bg-rose-500/15 text-rose-300'
+                            }`}
                           >
                             {rec.kyc?.status}
                           </span>
                         </td>
-                        <td className="py-3 px-4 text-right">
+                        <td className="py-3.5 px-4 text-right">
                           <button
                             onClick={() => openKycInspector(rec)}
-                            className="px-3 py-1.5 rounded-lg bg-[#d4af37]/15 border border-[#d4af37]/40 text-[#f0cf65] hover:bg-[#d4af37]/25 font-medium whitespace-nowrap"
+                            className="h-8 px-3 rounded-lg bg-[#d4af37]/15 border border-[#d4af37]/40 text-[#f0cf65] hover:bg-[#d4af37]/25 font-medium whitespace-nowrap"
                           >
                             Verify Documents
                           </button>
@@ -1163,107 +1270,288 @@ export const SuperAdminDashboardPage: React.FC = () => {
 
           {activeTab === 'users' && !isUserOnboardingView && !isUserKycView && (
             <div className="space-y-4">
-              <div className="p-4 rounded-2xl bg-[#0b0c10] border border-slate-800/90 flex flex-wrap items-center gap-3">
-                <div className="relative flex-1 min-w-[220px]">
-                  <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+              {/* Filter Bar */}
+              <div className="p-4 rounded-2xl bg-[#111319] border border-white/[0.08] flex flex-col lg:flex-row lg:items-center gap-3">
+                <div className="relative flex-1 min-w-0">
+                  <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
                   <input
                     type="text"
                     value={userSearch}
                     onChange={e => setUserSearch(e.target.value)}
                     placeholder="Search by name, email, or user ID..."
-                    className="w-full pl-9 pr-3 py-2 rounded-xl bg-[#050507] border border-slate-800 text-xs text-white"
+                    className="w-full h-10 pl-10 pr-3 rounded-xl bg-[#090a0e] border border-white/[0.08] focus:border-[#d4af37]/60 outline-none text-xs text-white"
                   />
                 </div>
-                <select
-                  value={userStatusFilter}
-                  onChange={e => setUserStatusFilter(e.target.value)}
-                  className="px-3 py-2 rounded-xl bg-[#050507] border border-slate-800 text-xs text-white"
-                >
-                  <option value="all">All Statuses</option>
-                  <option value="active">Active</option>
-                  <option value="suspended">Suspended</option>
-                  <option value="terminated">Terminated</option>
-                </select>
-                <input
-                  type="date"
-                  value={userDateFrom}
-                  onChange={e => setUserDateFrom(e.target.value)}
-                  className="px-3 py-2 rounded-xl bg-[#050507] border border-slate-800 text-xs text-white"
-                  title="Registered From"
-                />
-                <input
-                  type="date"
-                  value={userDateTo}
-                  onChange={e => setUserDateTo(e.target.value)}
-                  className="px-3 py-2 rounded-xl bg-[#050507] border border-slate-800 text-xs text-white"
-                  title="Registered To"
-                />
+                <div className="grid grid-cols-1 sm:grid-cols-3 lg:flex lg:items-center gap-2.5">
+                  <select
+                    value={userStatusFilter}
+                    onChange={e => setUserStatusFilter(e.target.value)}
+                    className="h-10 px-3 rounded-xl bg-[#090a0e] border border-white/[0.08] focus:border-[#d4af37]/60 outline-none text-xs text-white"
+                  >
+                    <option value="all">All Statuses</option>
+                    <option value="active">Active</option>
+                    <option value="suspended">Suspended</option>
+                    <option value="terminated">Terminated</option>
+                  </select>
+                  <label className="flex items-center gap-2 h-10 px-3 rounded-xl bg-[#090a0e] border border-white/[0.08] text-xs text-slate-400">
+                    <span className="shrink-0">From</span>
+                    <input
+                      type="date"
+                      value={userDateFrom}
+                      onChange={e => setUserDateFrom(e.target.value)}
+                      className="w-full bg-transparent text-xs text-white outline-none tabular-nums"
+                      aria-label="Registered From"
+                    />
+                  </label>
+                  <label className="flex items-center gap-2 h-10 px-3 rounded-xl bg-[#090a0e] border border-white/[0.08] text-xs text-slate-400">
+                    <span className="shrink-0">To</span>
+                    <input
+                      type="date"
+                      value={userDateTo}
+                      onChange={e => setUserDateTo(e.target.value)}
+                      className="w-full bg-transparent text-xs text-white outline-none tabular-nums"
+                      aria-label="Registered To"
+                    />
+                  </label>
+                  {(userSearch || userStatusFilter !== 'all' || userDateFrom || userDateTo) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setUserSearch('');
+                        setUserStatusFilter('all');
+                        setUserDateFrom('');
+                        setUserDateTo('');
+                      }}
+                      className="h-10 px-3 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] text-xs font-medium text-slate-200 whitespace-nowrap"
+                    >
+                      Clear Filters
+                    </button>
+                  )}
+                </div>
               </div>
 
-              <div className="rounded-2xl bg-[#0b0c10] border border-slate-800/90 overflow-x-auto">
-                <table className="w-full text-left border-collapse text-xs">
-                  <thead>
-                    <tr className="border-b border-slate-800 text-slate-400">
-                      <th className="py-3 px-4 font-medium">User</th>
-                      <th className="py-3 px-4 font-medium">Registered</th>
-                      <th className="py-3 px-4 font-medium">Completion</th>
-                      <th className="py-3 px-4 font-medium">KYC</th>
-                      <th className="py-3 px-4 font-medium">Plan</th>
-                      <th className="py-3 px-4 font-medium">Releases</th>
-                      <th className="py-3 px-4 font-medium">Status</th>
-                      <th className="py-3 px-4 font-medium text-right">Actions (Owner Approved)</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-800/70">
-                    {paginatedUsers.map(u => (
-                      <tr key={u.id} className="hover:bg-white/[0.02]">
-                        <td className="py-3 px-4">
-                          <div className="font-semibold text-white">
-                            {u.fullName}{' '}
+              {/* Mobile User Card List (Zero Horizontal Overflow or Clipped Text) */}
+              <div className="md:hidden space-y-3">
+                {paginatedUsers.length === 0 ? (
+                  <div className="p-8 rounded-2xl bg-[#111319] border border-white/[0.08] text-center text-xs text-slate-500">
+                    {dataUnavailable ? 'Data Unavailable — database error.' : '0 users match your current filter.'}
+                  </div>
+                ) : (
+                  paginatedUsers.map(u => (
+                    <div
+                      key={u.id}
+                      className="p-4 rounded-2xl bg-[#111319] border border-white/[0.08] space-y-3 text-xs"
+                    >
+                      <div className="flex items-start justify-between gap-2.5">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="text-sm font-semibold text-white">{u.fullName}</span>
                             {u.isTestRecord && (
-                              <span className="font-mono text-[10px] text-amber-300">[TEST/DEMO]</span>
+                              <span className="px-1.5 py-0.5 rounded-md bg-amber-500/15 border border-amber-500/25 text-[10px] font-medium text-amber-300">
+                                Test
+                              </span>
                             )}
                           </div>
-                          <div className="text-[11px] text-slate-400 font-mono">{u.email}</div>
-                        </td>
-                        <td className="py-3 px-4 font-mono text-[11px] text-slate-400 whitespace-nowrap">
-                          {u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '—'}
-                        </td>
-                        <td className="py-3 px-4 font-mono tabular-nums text-[#f0cf65]">{u.profileCompletion}%</td>
-                        <td className="py-3 px-4 font-mono text-[11px]">
+                          <p className="text-slate-400 break-all mt-0.5">{u.email}</p>
+                        </div>
+                        <span
+                          className={`px-2.5 py-0.5 rounded-lg text-[11px] font-medium capitalize shrink-0 ${
+                            u.accountStatus === 'active'
+                              ? 'bg-emerald-500/15 text-emerald-300'
+                              : u.accountStatus === 'suspended'
+                                ? 'bg-amber-500/15 text-amber-300'
+                                : 'bg-rose-500/15 text-rose-300'
+                          }`}
+                        >
+                          {u.accountStatus}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-2.5 pt-2.5 border-t border-white/[0.06] tabular-nums">
+                        <div>
+                          <span className="text-slate-500 block text-[11px]">Registered</span>
+                          <span className="text-slate-200 font-medium">
+                            {u.createdAt
+                              ? new Date(u.createdAt).toLocaleDateString('en-IN', {
+                                  day: '2-digit',
+                                  month: 'short',
+                                  year: 'numeric'
+                                })
+                              : '—'}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-slate-500 block text-[11px]">Profile</span>
+                          <span className="text-[#f0cf65] font-semibold">{u.profileCompletion}%</span>
+                        </div>
+                        <div>
+                          <span className="text-slate-500 block text-[11px]">KYC Status</span>
                           <span
-                            className={
+                            className={`font-medium ${
+                              u.kycStatus === 'Approved'
+                                ? 'text-emerald-300'
+                                : u.kycStatus === 'Pending'
+                                  ? 'text-amber-300'
+                                  : 'text-slate-300'
+                            }`}
+                          >
+                            {u.kycStatus}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-slate-500 block text-[11px]">Plan & Releases</span>
+                          <span className="text-slate-200">
+                            {u.planName} · {u.releasesCount} release(s)
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap gap-2 pt-2 border-t border-white/[0.06]">
+                        <button
+                          onClick={() => inspectUserDetail(u.id)}
+                          className="flex-1 h-9 px-3 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] text-slate-200 font-medium inline-flex items-center justify-center gap-1.5"
+                        >
+                          <Eye className="w-3.5 h-3.5" /> Inspect
+                        </button>
+                        {u.accountStatus === 'active' ? (
+                          <button
+                            onClick={() =>
+                              setPendingProposal({
+                                actionType: 'USER_SUSPEND',
+                                targetType: 'user',
+                                targetId: u.id,
+                                title: `Suspend Account · ${u.email}`,
+                                explanation: `Suspends user ${u.email} and revokes all active login tokens immediately.`,
+                                consequences: 'Artist loses dashboard access until explicitly reactivated; financial/audit records remain intact.',
+                                proposedChanges: { userId: u.id, email: u.email, newStatus: 'suspended' },
+                                payload: {},
+                                requiresReason: true
+                              })
+                            }
+                            className="h-9 px-3 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 font-medium"
+                          >
+                            Suspend
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() =>
+                              setPendingProposal({
+                                actionType: 'USER_REACTIVATE',
+                                targetType: 'user',
+                                targetId: u.id,
+                                title: `Reactivate Account · ${u.email}`,
+                                explanation: `Restores login & distribution access for ${u.email}.`,
+                                consequences: 'User can authenticate again using verified credentials & 2FA.',
+                                proposedChanges: { userId: u.id, email: u.email, newStatus: 'active' },
+                                payload: {}
+                              })
+                            }
+                            className="h-9 px-3 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 font-medium"
+                          >
+                            Reactivate
+                          </button>
+                        )}
+                        {u.accountStatus !== 'terminated' && (
+                          <button
+                            onClick={() =>
+                              setPendingProposal({
+                                actionType: 'USER_TERMINATE',
+                                targetType: 'user',
+                                targetId: u.id,
+                                title: `Terminate Account · ${u.email}`,
+                                explanation: `Permanently terminates account ${u.email} and invalidates all active sessions.`,
+                                consequences: 'Blocks future logins permanently unless explicitly restored by Super Admin. Financial ledger stays preserved.',
+                                proposedChanges: { userId: u.id, email: u.email, newStatus: 'terminated' },
+                                payload: {},
+                                requiresReason: true
+                              })
+                            }
+                            className="h-9 px-3 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 font-medium"
+                          >
+                            Terminate
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {/* Desktop Users Table */}
+              <div className="hidden md:block rounded-2xl bg-[#111319] border border-white/[0.08] overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="border-b border-white/[0.08] bg-[#0d0f14] text-slate-400">
+                      <th className="py-3.5 px-4 font-medium">User</th>
+                      <th className="py-3.5 px-4 font-medium">Registered</th>
+                      <th className="py-3.5 px-4 font-medium">Completion</th>
+                      <th className="py-3.5 px-4 font-medium">KYC</th>
+                      <th className="py-3.5 px-4 font-medium">Plan</th>
+                      <th className="py-3.5 px-4 font-medium">Releases</th>
+                      <th className="py-3.5 px-4 font-medium">Status</th>
+                      <th className="py-3.5 px-4 font-medium text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/[0.06]">
+                    {paginatedUsers.map(u => (
+                      <tr key={u.id} className="hover:bg-white/[0.02] transition-colors">
+                        <td className="py-3.5 px-4">
+                          <div className="font-semibold text-white flex items-center gap-2">
+                            <span>{u.fullName}</span>
+                            {u.isTestRecord && (
+                              <span className="px-1.5 py-0.5 rounded-md bg-amber-500/15 border border-amber-500/25 text-[10px] font-medium text-amber-300">
+                                Test
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-xs text-slate-400 mt-0.5">{u.email}</div>
+                        </td>
+                        <td className="py-3.5 px-4 text-slate-300 tabular-nums whitespace-nowrap">
+                          {u.createdAt
+                            ? new Date(u.createdAt).toLocaleDateString('en-IN', {
+                                day: '2-digit',
+                                month: 'short',
+                                year: 'numeric'
+                              })
+                            : '—'}
+                        </td>
+                        <td className="py-3.5 px-4 tabular-nums font-medium text-[#f0cf65]">
+                          {u.profileCompletion}%
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <span
+                            className={`font-medium ${
                               u.kycStatus === 'Approved'
                                 ? 'text-emerald-300'
                                 : u.kycStatus === 'Pending'
                                   ? 'text-amber-300'
                                   : 'text-slate-400'
-                            }
+                            }`}
                           >
                             {u.kycStatus}
                           </span>
                         </td>
-                        <td className="py-3 px-4 text-slate-300">{u.planName}</td>
-                        <td className="py-3 px-4 font-mono tabular-nums text-slate-300">{u.releasesCount}</td>
-                        <td className="py-3 px-4 font-mono uppercase text-[11px]">
+                        <td className="py-3.5 px-4 text-slate-300">{u.planName}</td>
+                        <td className="py-3.5 px-4 tabular-nums text-slate-300">{u.releasesCount}</td>
+                        <td className="py-3.5 px-4">
                           <span
-                            className={
+                            className={`px-2.5 py-0.5 rounded-lg text-[11px] font-medium capitalize ${
                               u.accountStatus === 'active'
-                                ? 'text-emerald-300'
+                                ? 'bg-emerald-500/15 text-emerald-300'
                                 : u.accountStatus === 'suspended'
-                                  ? 'text-amber-300'
-                                  : 'text-red-300'
-                            }
+                                  ? 'bg-amber-500/15 text-amber-300'
+                                  : 'bg-rose-500/15 text-rose-300'
+                            }`}
                           >
                             {u.accountStatus}
                           </span>
                         </td>
-                        <td className="py-3 px-4 text-right space-x-2 whitespace-nowrap">
+                        <td className="py-3.5 px-4 text-right space-x-2 whitespace-nowrap">
                           <button
                             onClick={() => inspectUserDetail(u.id)}
-                            className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 inline-flex items-center gap-1"
+                            className="h-8 px-2.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] text-slate-200 inline-flex items-center gap-1"
                           >
-                            <Eye className="w-3 h-3" /> Inspect
+                            <Eye className="w-3.5 h-3.5" /> Inspect
                           </button>
                           {u.accountStatus === 'active' && (
                             <button
@@ -1280,7 +1568,7 @@ export const SuperAdminDashboardPage: React.FC = () => {
                                   requiresReason: true
                                 })
                               }
-                              className="px-2.5 py-1 rounded-lg bg-amber-950/70 hover:bg-amber-900 text-amber-300 border border-amber-700/40"
+                              className="h-8 px-2.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30"
                             >
                               Suspend
                             </button>
@@ -1299,7 +1587,7 @@ export const SuperAdminDashboardPage: React.FC = () => {
                                   payload: {}
                                 })
                               }
-                              className="px-2.5 py-1 rounded-lg bg-emerald-950/70 hover:bg-emerald-900 text-emerald-300 border border-emerald-700/40"
+                              className="h-8 px-2.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30"
                             >
                               Reactivate
                             </button>
@@ -1319,7 +1607,7 @@ export const SuperAdminDashboardPage: React.FC = () => {
                                   requiresReason: true
                                 })
                               }
-                              className="px-2.5 py-1 rounded-lg bg-red-950/70 hover:bg-red-900 text-red-300 border border-red-700/40"
+                              className="h-8 px-2.5 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30"
                             >
                               Terminate
                             </button>
@@ -1336,30 +1624,31 @@ export const SuperAdminDashboardPage: React.FC = () => {
                     )}
                   </tbody>
                 </table>
-                {filteredUsers.length > PAGE_SIZE && (
-                  <div className="p-3 border-t border-slate-800 flex items-center justify-between text-xs font-mono text-slate-400">
-                    <span>
-                      Page {userPage} of {Math.ceil(filteredUsers.length / PAGE_SIZE)} ({filteredUsers.length} users)
-                    </span>
-                    <div className="space-x-2">
-                      <button
-                        disabled={userPage <= 1}
-                        onClick={() => setUserPage(p => Math.max(1, p - 1))}
-                        className="px-2.5 py-1 rounded bg-slate-800 disabled:opacity-40 text-white"
-                      >
-                        Prev
-                      </button>
-                      <button
-                        disabled={userPage >= Math.ceil(filteredUsers.length / PAGE_SIZE)}
-                        onClick={() => setUserPage(p => p + 1)}
-                        className="px-2.5 py-1 rounded bg-slate-800 disabled:opacity-40 text-white"
-                      >
-                        Next
-                      </button>
-                    </div>
-                  </div>
-                )}
               </div>
+
+              {filteredUsers.length > PAGE_SIZE && (
+                <div className="px-4 py-3 rounded-2xl bg-[#111319] border border-white/[0.08] flex items-center justify-between text-xs text-slate-400 tabular-nums">
+                  <span>
+                    Page {userPage} of {Math.ceil(filteredUsers.length / PAGE_SIZE)} ({filteredUsers.length} users)
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      disabled={userPage <= 1}
+                      onClick={() => setUserPage(p => Math.max(1, p - 1))}
+                      className="h-8 px-3 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] disabled:opacity-40 text-white"
+                    >
+                      Previous
+                    </button>
+                    <button
+                      disabled={userPage >= Math.ceil(filteredUsers.length / PAGE_SIZE)}
+                      onClick={() => setUserPage(p => p + 1)}
+                      className="h-8 px-3 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] disabled:opacity-40 text-white"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -1367,19 +1656,26 @@ export const SuperAdminDashboardPage: React.FC = () => {
           {activeTab === 'releases' && (
             <div className="space-y-4">
               {activeSubmenu === 'takedown-requests' ? (
-                <div className="rounded-2xl bg-[#0b0c10] border border-slate-800/90 p-5 space-y-3">
+                <div className="rounded-2xl bg-[#111319] border border-white/[0.08] p-5 space-y-3">
                   <h3 className="text-sm font-semibold text-white">Takedown Requests ({takedownsList.length})</h3>
                   {takedownsList.length === 0 ? (
-                    <p className="text-xs text-slate-500">0 takedown requests found in database.</p>
+                    <p className="text-xs text-slate-500 py-4">0 takedown requests found in database.</p>
                   ) : (
-                    <div className="space-y-2">
+                    <div className="space-y-2.5">
                       {takedownsList.map((td: any) => (
-                        <div key={td.id} className="p-3.5 rounded-xl bg-[#050507] border border-slate-800 text-xs flex justify-between gap-3">
-                          <div>
-                            <p className="font-semibold text-white">{td.userName} ({td.userEmail})</p>
-                            <p className="text-slate-300 mt-0.5">{td.details}</p>
+                        <div
+                          key={td.id}
+                          className="p-4 rounded-xl bg-[#090a0e] border border-white/[0.08] text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2.5"
+                        >
+                          <div className="min-w-0">
+                            <p className="font-semibold text-white">
+                              {td.userName} ({td.userEmail})
+                            </p>
+                            <p className="text-slate-300 mt-1">{td.details}</p>
                           </div>
-                          <span className="font-mono text-amber-300 shrink-0">{td.status} · {td.date}</span>
+                          <span className="text-amber-300 font-medium tabular-nums shrink-0">
+                            {td.status} · {td.date}
+                          </span>
                         </div>
                       ))}
                     </div>
@@ -1387,21 +1683,21 @@ export const SuperAdminDashboardPage: React.FC = () => {
                 </div>
               ) : (
                 <>
-                  <div className="p-4 rounded-2xl bg-[#0b0c10] border border-slate-800/90 flex flex-wrap items-center gap-3">
-                    <div className="relative flex-1 min-w-[220px]">
-                      <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <div className="p-4 rounded-2xl bg-[#111319] border border-white/[0.08] flex flex-col sm:flex-row sm:items-center gap-3">
+                    <div className="relative flex-1 min-w-0">
+                      <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
                       <input
                         type="text"
                         value={releaseSearch}
                         onChange={e => setReleaseSearch(e.target.value)}
                         placeholder="Search by release title, artist, UPC, or owner email..."
-                        className="w-full pl-9 pr-3 py-2 rounded-xl bg-[#050507] border border-slate-800 text-xs text-white"
+                        className="w-full h-10 pl-10 pr-3 rounded-xl bg-[#090a0e] border border-white/[0.08] focus:border-[#d4af37]/60 outline-none text-xs text-white"
                       />
                     </div>
                     <select
                       value={releaseStatusFilter}
                       onChange={e => setReleaseStatusFilter(e.target.value)}
-                      className="px-3 py-2 rounded-xl bg-[#050507] border border-slate-800 text-xs text-white"
+                      className="h-10 px-3 rounded-xl bg-[#090a0e] border border-white/[0.08] focus:border-[#d4af37]/60 outline-none text-xs text-white"
                     >
                       <option value="all">All Releases</option>
                       <option value="pending">Pending / Under Review</option>
@@ -1413,52 +1709,114 @@ export const SuperAdminDashboardPage: React.FC = () => {
                     </select>
                   </div>
 
-                  <div className="rounded-2xl bg-[#0b0c10] border border-slate-800/90 overflow-x-auto">
+                  {/* Mobile Release Cards */}
+                  <div className="md:hidden space-y-3">
+                    {paginatedReleases.length === 0 ? (
+                      <div className="p-8 rounded-2xl bg-[#111319] border border-white/[0.08] text-center text-xs text-slate-500">
+                        {dataUnavailable ? 'Data Unavailable.' : '0 releases match your filter.'}
+                      </div>
+                    ) : (
+                      paginatedReleases.map(r => (
+                        <div
+                          key={r.id}
+                          className="p-4 rounded-2xl bg-[#111319] border border-white/[0.08] space-y-3 text-xs"
+                        >
+                          <div className="flex items-start justify-between gap-2.5">
+                            <div className="min-w-0">
+                              <p className="text-sm font-semibold text-white">{r.title}</p>
+                              <p className="text-slate-400 mt-0.5">
+                                {r.artist} · {r.type} · {r.primaryGenre}
+                              </p>
+                            </div>
+                            <span
+                              className={`px-2.5 py-0.5 rounded-lg text-[11px] font-medium shrink-0 ${
+                                r.status === 'Approved' || r.status === 'Live' || r.status === 'Published'
+                                  ? 'bg-emerald-500/15 text-emerald-300'
+                                  : r.status === 'Rejected'
+                                    ? 'bg-rose-500/15 text-rose-300'
+                                    : 'bg-amber-500/15 text-amber-300'
+                              }`}
+                            >
+                              {r.status}
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2.5 pt-2.5 border-t border-white/[0.06] tabular-nums">
+                            <div className="col-span-2">
+                              <span className="text-slate-500 block text-[11px]">Owner</span>
+                              <span className="text-slate-200">{r.ownerName}</span>{' '}
+                              <span className="text-slate-400 break-all">({r.ownerEmail})</span>
+                            </div>
+                            <div>
+                              <span className="text-slate-500 block text-[11px]">UPC / Tracks</span>
+                              <span className="text-slate-300">
+                                {r.upc || 'Pending'} · {r.tracks?.length || 0} trk
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-slate-500 block text-[11px]">Release Date</span>
+                              <span className="text-slate-300">{r.releaseDate || '—'}</span>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => openReleaseInspector(r)}
+                            className="w-full h-9 rounded-xl bg-[#d4af37]/15 hover:bg-[#d4af37]/25 border border-[#d4af37]/40 text-[#f0cf65] font-medium"
+                          >
+                            Inspect & Correct
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+
+                  {/* Desktop Releases Table */}
+                  <div className="hidden md:block rounded-2xl bg-[#111319] border border-white/[0.08] overflow-x-auto">
                     <table className="w-full text-left border-collapse text-xs">
                       <thead>
-                        <tr className="border-b border-slate-800 text-slate-400">
-                          <th className="py-3 px-4">Release</th>
-                          <th className="py-3 px-4">Owner</th>
-                          <th className="py-3 px-4">UPC / Tracks</th>
-                          <th className="py-3 px-4">Release Date</th>
-                          <th className="py-3 px-4">Status</th>
-                          <th className="py-3 px-4 text-right">Actions</th>
+                        <tr className="border-b border-white/[0.08] bg-[#0d0f14] text-slate-400">
+                          <th className="py-3.5 px-4 font-medium">Release</th>
+                          <th className="py-3.5 px-4 font-medium">Owner</th>
+                          <th className="py-3.5 px-4 font-medium">UPC / Tracks</th>
+                          <th className="py-3.5 px-4 font-medium">Release Date</th>
+                          <th className="py-3.5 px-4 font-medium">Status</th>
+                          <th className="py-3.5 px-4 font-medium text-right">Actions</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-800/70">
+                      <tbody className="divide-y divide-white/[0.06]">
                         {paginatedReleases.map(r => (
-                          <tr key={r.id} className="hover:bg-white/[0.02]">
-                            <td className="py-3 px-4">
+                          <tr key={r.id} className="hover:bg-white/[0.02] transition-colors">
+                            <td className="py-3.5 px-4">
                               <div className="font-semibold text-white">{r.title}</div>
-                              <div className="text-[11px] text-slate-400">
+                              <div className="text-xs text-slate-400 mt-0.5">
                                 {r.artist} · {r.type} · {r.primaryGenre}
                               </div>
                             </td>
-                            <td className="py-3 px-4">
+                            <td className="py-3.5 px-4">
                               <div className="text-slate-200">{r.ownerName}</div>
-                              <div className="text-[11px] text-slate-500 font-mono">{r.ownerEmail}</div>
+                              <div className="text-xs text-slate-400 mt-0.5">{r.ownerEmail}</div>
                             </td>
-                            <td className="py-3 px-4 font-mono tabular-nums text-slate-300">
+                            <td className="py-3.5 px-4 tabular-nums text-slate-300">
                               {r.upc || 'Pending'} · {r.tracks?.length || 0} trk
                             </td>
-                            <td className="py-3 px-4 font-mono text-slate-400">{r.releaseDate}</td>
-                            <td className="py-3 px-4 font-mono font-semibold">
+                            <td className="py-3.5 px-4 tabular-nums text-slate-400 whitespace-nowrap">
+                              {r.releaseDate || '—'}
+                            </td>
+                            <td className="py-3.5 px-4">
                               <span
-                                className={
+                                className={`px-2.5 py-0.5 rounded-lg text-[11px] font-medium ${
                                   r.status === 'Approved' || r.status === 'Live' || r.status === 'Published'
-                                    ? 'text-emerald-300'
+                                    ? 'bg-emerald-500/15 text-emerald-300'
                                     : r.status === 'Rejected'
-                                      ? 'text-red-300'
-                                      : 'text-amber-300'
-                                }
+                                      ? 'bg-rose-500/15 text-rose-300'
+                                      : 'bg-amber-500/15 text-amber-300'
+                                }`}
                               >
                                 {r.status}
                               </span>
                             </td>
-                            <td className="py-3 px-4 text-right">
+                            <td className="py-3.5 px-4 text-right">
                               <button
                                 onClick={() => openReleaseInspector(r)}
-                                className="px-3 py-1.5 rounded-lg bg-[#d4af37]/15 border border-[#d4af37]/40 text-[#f0cf65] hover:bg-[#d4af37]/25 whitespace-nowrap"
+                                className="h-8 px-3 rounded-lg bg-[#d4af37]/15 border border-[#d4af37]/40 text-[#f0cf65] hover:bg-[#d4af37]/25 font-medium whitespace-nowrap"
                               >
                                 Inspect & Correct
                               </button>
@@ -1474,30 +1832,31 @@ export const SuperAdminDashboardPage: React.FC = () => {
                         )}
                       </tbody>
                     </table>
-                    {releasesList.length > PAGE_SIZE && (
-                      <div className="p-3 border-t border-slate-800 flex items-center justify-between text-xs font-mono text-slate-400">
-                        <span>
-                          Page {releasePage} of {Math.ceil(releasesList.length / PAGE_SIZE)} ({releasesList.length} releases)
-                        </span>
-                        <div className="space-x-2">
-                          <button
-                            disabled={releasePage <= 1}
-                            onClick={() => setReleasePage(p => Math.max(1, p - 1))}
-                            className="px-2.5 py-1 rounded bg-slate-800 disabled:opacity-40 text-white"
-                          >
-                            Prev
-                          </button>
-                          <button
-                            disabled={releasePage >= Math.ceil(releasesList.length / PAGE_SIZE)}
-                            onClick={() => setReleasePage(p => p + 1)}
-                            className="px-2.5 py-1 rounded bg-slate-800 disabled:opacity-40 text-white"
-                          >
-                            Next
-                          </button>
-                        </div>
-                      </div>
-                    )}
                   </div>
+
+                  {releasesList.length > PAGE_SIZE && (
+                    <div className="px-4 py-3 rounded-2xl bg-[#111319] border border-white/[0.08] flex items-center justify-between text-xs text-slate-400 tabular-nums">
+                      <span>
+                        Page {releasePage} of {Math.ceil(releasesList.length / PAGE_SIZE)} ({releasesList.length} releases)
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          disabled={releasePage <= 1}
+                          onClick={() => setReleasePage(p => Math.max(1, p - 1))}
+                          className="h-8 px-3 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] disabled:opacity-40 text-white"
+                        >
+                          Previous
+                        </button>
+                        <button
+                          disabled={releasePage >= Math.ceil(releasesList.length / PAGE_SIZE)}
+                          onClick={() => setReleasePage(p => p + 1)}
+                          className="h-8 px-3 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] disabled:opacity-40 text-white"
+                        >
+                          Next
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </>
               )}
             </div>
@@ -1506,7 +1865,7 @@ export const SuperAdminDashboardPage: React.FC = () => {
           {/* ==================== 4. ROYALTY & FINANCE ==================== */}
           {activeTab === 'finance' && (
             <div className="space-y-6">
-              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3.5">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
                 {[
                   { label: 'Total Orders', value: dataUnavailable || !paymentSummary ? 'Data Unavailable' : paymentSummary.totalOrders ?? 0 },
                   { label: 'Verified Paid Orders', value: dataUnavailable || !paymentSummary ? 'Data Unavailable' : paymentSummary.paidOrders ?? 0 },
@@ -1514,9 +1873,9 @@ export const SuperAdminDashboardPage: React.FC = () => {
                   { label: 'Refunded Orders', value: dataUnavailable || !paymentSummary ? 'Data Unavailable' : paymentSummary.refundedOrders ?? 0 },
                   { label: 'Verified Paid Revenue', value: dataUnavailable || !paymentSummary ? 'Data Unavailable' : `₹${Number(paymentSummary.totalRevenue ?? 0).toLocaleString('en-IN')}` }
                 ].map(s => (
-                  <div key={s.label} className="p-4 rounded-xl bg-[#0b0c10] border border-slate-800">
-                    <p className="text-[11px] text-slate-400">{s.label}</p>
-                    <p className="text-lg font-bold font-mono tabular-nums text-[#f0cf65] mt-1">{s.value}</p>
+                  <div key={s.label} className="p-4 rounded-2xl bg-[#111319] border border-white/[0.08]">
+                    <p className="text-xs text-slate-400">{s.label}</p>
+                    <p className="text-lg font-semibold tabular-nums text-[#f0cf65] mt-1.5">{s.value}</p>
                   </div>
                 ))}
               </div>
@@ -1533,77 +1892,188 @@ export const SuperAdminDashboardPage: React.FC = () => {
               ) : (
                 <>
                   {/* Date Filter Bar */}
-                  <div className="p-4 rounded-2xl bg-[#0b0c10] border border-slate-800/90 flex flex-wrap items-center justify-between gap-3 text-xs">
+                  <div className="p-4 rounded-2xl bg-[#111319] border border-white/[0.08] flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
                     <div>
                       <h3 className="text-sm font-semibold text-white">Razorpay Transactions Ledger</h3>
-                      <p className="text-[11px] text-slate-400">
+                      <p className="text-xs text-slate-400 mt-0.5">
                         Revenue totals sum verified paid orders only.
                       </p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
-                      <input
-                        type="date"
-                        value={paymentDateFrom}
-                        onChange={e => setPaymentDateFrom(e.target.value)}
-                        className="px-3 py-1.5 rounded-xl bg-[#050507] border border-slate-800 text-xs text-white"
-                        title="From Date"
-                      />
-                      <input
-                        type="date"
-                        value={paymentDateTo}
-                        onChange={e => setPaymentDateTo(e.target.value)}
-                        className="px-3 py-1.5 rounded-xl bg-[#050507] border border-slate-800 text-xs text-white"
-                        title="To Date"
-                      />
+                      <label className="flex items-center gap-2 h-9 px-3 rounded-xl bg-[#090a0e] border border-white/[0.08] text-xs text-slate-400">
+                        <span>From</span>
+                        <input
+                          type="date"
+                          value={paymentDateFrom}
+                          onChange={e => setPaymentDateFrom(e.target.value)}
+                          className="bg-transparent text-xs text-white outline-none tabular-nums"
+                          aria-label="From Date"
+                        />
+                      </label>
+                      <label className="flex items-center gap-2 h-9 px-3 rounded-xl bg-[#090a0e] border border-white/[0.08] text-xs text-slate-400">
+                        <span>To</span>
+                        <input
+                          type="date"
+                          value={paymentDateTo}
+                          onChange={e => setPaymentDateTo(e.target.value)}
+                          className="bg-transparent text-xs text-white outline-none tabular-nums"
+                          aria-label="To Date"
+                        />
+                      </label>
+                      {(paymentDateFrom || paymentDateTo) && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPaymentDateFrom('');
+                            setPaymentDateTo('');
+                          }}
+                          className="h-9 px-3 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] text-slate-200 font-medium"
+                        >
+                          Clear
+                        </button>
+                      )}
                     </div>
                   </div>
 
-                  <div className="rounded-2xl bg-[#0b0c10] border border-slate-800/90 overflow-x-auto">
+                  {/* Mobile Transactions Cards */}
+                  <div className="md:hidden space-y-3">
+                    {paginatedOrders.length === 0 ? (
+                      <div className="p-8 rounded-2xl bg-[#111319] border border-white/[0.08] text-center text-xs text-slate-500">
+                        {dataUnavailable ? 'Data Unavailable.' : '0 payment orders match this date filter.'}
+                      </div>
+                    ) : (
+                      paginatedOrders.map(o => (
+                        <div
+                          key={o.orderId}
+                          className="p-4 rounded-2xl bg-[#111319] border border-white/[0.08] space-y-3 text-xs"
+                        >
+                          <div className="flex items-start justify-between gap-2.5">
+                            <div className="min-w-0">
+                              <div className="flex flex-wrap items-center gap-1.5 font-semibold text-white">
+                                <span className="break-all">{o.orderId}</span>
+                                {o.isTestMode && (
+                                  <span className="px-1.5 py-0.5 rounded-md bg-amber-500/15 text-amber-300 text-[10px] font-medium">
+                                    Test
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-slate-400 break-all mt-0.5">
+                                {o.paymentId || o.failureReason || '—'}
+                              </p>
+                            </div>
+                            <span
+                              className={`px-2.5 py-0.5 rounded-lg text-[11px] font-medium capitalize shrink-0 ${
+                                o.status === 'paid'
+                                  ? 'bg-emerald-500/15 text-emerald-300'
+                                  : o.status === 'refunded'
+                                    ? 'bg-sky-500/15 text-sky-300'
+                                    : 'bg-rose-500/15 text-rose-300'
+                              }`}
+                            >
+                              {o.status}
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2.5 pt-2.5 border-t border-white/[0.06] tabular-nums">
+                            <div>
+                              <span className="text-slate-500 block text-[11px]">Customer</span>
+                              <span className="text-slate-200">{o.userName}</span>
+                              <span className="text-slate-400 block break-all">{o.userEmail}</span>
+                            </div>
+                            <div>
+                              <span className="text-slate-500 block text-[11px]">Plan & Amount</span>
+                              <span className="text-slate-200 block">{o.planName}</span>
+                              <span className="text-[#f0cf65] font-semibold">₹{o.amount}</span>
+                            </div>
+                          </div>
+                          <div className="flex flex-wrap gap-2 pt-2 border-t border-white/[0.06]">
+                            <button
+                              onClick={() => setInvoiceModal(o)}
+                              className="flex-1 h-9 px-3 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] text-slate-200 inline-flex items-center justify-center gap-1.5"
+                            >
+                              <FileText className="w-3.5 h-3.5" /> Invoice
+                            </button>
+                            {o.status === 'paid' && (
+                              <button
+                                onClick={() =>
+                                  setPendingProposal({
+                                    actionType: 'PAYMENT_REFUND',
+                                    targetType: 'payment',
+                                    targetId: o.orderId,
+                                    title: `Refund Paid Order · ${o.orderId} (₹${o.amount})`,
+                                    explanation: `Marks verified paid order ${o.orderId} for ${o.userEmail} as refunded.`,
+                                    consequences: 'Deducts ₹' + o.amount + ' from verified revenue totals and writes an immutable financial audit entry.',
+                                    proposedChanges: { orderId: o.orderId, amountINR: o.amount, newStatus: 'refunded' },
+                                    payload: {},
+                                    requiresReason: true
+                                  })
+                                }
+                                className="h-9 px-3 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 inline-flex items-center gap-1.5"
+                              >
+                                <RotateCcw className="w-3.5 h-3.5" /> Refund
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+
+                  {/* Desktop Transactions Table */}
+                  <div className="hidden md:block rounded-2xl bg-[#111319] border border-white/[0.08] overflow-x-auto">
                     <table className="w-full text-left border-collapse text-xs">
                       <thead>
-                        <tr className="border-b border-slate-800 text-slate-400">
-                          <th className="py-3 px-4">Order / Payment ID</th>
-                          <th className="py-3 px-4">Customer</th>
-                          <th className="py-3 px-4">Plan</th>
-                          <th className="py-3 px-4">Amount</th>
-                          <th className="py-3 px-4">Status</th>
-                          <th className="py-3 px-4 text-right">Actions</th>
+                        <tr className="border-b border-white/[0.08] bg-[#0d0f14] text-slate-400">
+                          <th className="py-3.5 px-4 font-medium">Order / Payment ID</th>
+                          <th className="py-3.5 px-4 font-medium">Customer</th>
+                          <th className="py-3.5 px-4 font-medium">Plan</th>
+                          <th className="py-3.5 px-4 font-medium">Amount</th>
+                          <th className="py-3.5 px-4 font-medium">Status</th>
+                          <th className="py-3.5 px-4 font-medium text-right">Actions</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-800/70">
+                      <tbody className="divide-y divide-white/[0.06]">
                         {paginatedOrders.map(o => (
-                          <tr key={o.orderId} className="hover:bg-white/[0.02]">
-                            <td className="py-3 px-4 font-mono">
-                              <div className="text-white">
-                                {o.orderId} {o.isTestMode && <span className="text-amber-300">[TEST]</span>}
+                          <tr key={o.orderId} className="hover:bg-white/[0.02] transition-colors">
+                            <td className="py-3.5 px-4 tabular-nums">
+                              <div className="text-white font-medium flex items-center gap-1.5">
+                                <span>{o.orderId}</span>
+                                {o.isTestMode && (
+                                  <span className="px-1.5 py-0.5 rounded-md bg-amber-500/15 text-amber-300 text-[10px] font-medium">
+                                    Test
+                                  </span>
+                                )}
                               </div>
-                              <div className="text-[11px] text-slate-500">{o.paymentId || o.failureReason || '—'}</div>
+                              <div className="text-xs text-slate-400 mt-0.5">
+                                {o.paymentId || o.failureReason || '—'}
+                              </div>
                             </td>
-                            <td className="py-3 px-4">
-                              <div className="text-slate-200">{o.userName}</div>
-                              <div className="text-[11px] text-slate-500">{o.userEmail}</div>
+                            <td className="py-3.5 px-4">
+                              <div className="text-slate-200 font-medium">{o.userName}</div>
+                              <div className="text-xs text-slate-400 mt-0.5">{o.userEmail}</div>
                             </td>
-                            <td className="py-3 px-4 text-slate-300">{o.planName}</td>
-                            <td className="py-3 px-4 font-mono tabular-nums text-[#f0cf65]">₹{o.amount}</td>
-                            <td className="py-3 px-4 font-mono uppercase text-[11px]">
+                            <td className="py-3.5 px-4 text-slate-300">{o.planName}</td>
+                            <td className="py-3.5 px-4 tabular-nums font-semibold text-[#f0cf65]">
+                              ₹{o.amount}
+                            </td>
+                            <td className="py-3.5 px-4">
                               <span
-                                className={
+                                className={`px-2.5 py-0.5 rounded-lg text-[11px] font-medium capitalize ${
                                   o.status === 'paid'
-                                    ? 'text-emerald-300'
+                                    ? 'bg-emerald-500/15 text-emerald-300'
                                     : o.status === 'refunded'
-                                      ? 'text-blue-300'
-                                      : 'text-red-300'
-                                }
+                                      ? 'bg-sky-500/15 text-sky-300'
+                                      : 'bg-rose-500/15 text-rose-300'
+                                }`}
                               >
                                 {o.status}
                               </span>
                             </td>
-                            <td className="py-3 px-4 text-right space-x-2 whitespace-nowrap">
+                            <td className="py-3.5 px-4 text-right space-x-2 whitespace-nowrap">
                               <button
                                 onClick={() => setInvoiceModal(o)}
-                                className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 inline-flex items-center gap-1"
+                                className="h-8 px-2.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] text-slate-200 inline-flex items-center gap-1"
                               >
-                                <FileText className="w-3 h-3" /> Invoice
+                                <FileText className="w-3.5 h-3.5" /> Invoice
                               </button>
                               {o.status === 'paid' && (
                                 <button
@@ -1620,9 +2090,9 @@ export const SuperAdminDashboardPage: React.FC = () => {
                                       requiresReason: true
                                     })
                                   }
-                                  className="px-2.5 py-1 rounded-lg bg-red-950/70 hover:bg-red-900 text-red-300 border border-red-700/40 inline-flex items-center gap-1"
+                                  className="h-8 px-2.5 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 inline-flex items-center gap-1"
                                 >
-                                  <RotateCcw className="w-3 h-3" /> Refund
+                                  <RotateCcw className="w-3.5 h-3.5" /> Refund
                                 </button>
                               )}
                             </td>
@@ -1740,43 +2210,43 @@ export const SuperAdminDashboardPage: React.FC = () => {
                       : section.items;
 
                   return (
-                    <div key={section.title} className="rounded-2xl bg-[#0b0c10] border border-slate-800/90 p-5 space-y-3">
+                    <div key={section.title} className="rounded-2xl bg-[#111319] border border-white/[0.08] p-5 space-y-3.5">
                       <h3 className="text-sm font-semibold text-white">
                         {section.title} ({items.length})
                       </h3>
                       {items.length === 0 ? (
-                        <p className="text-xs text-slate-500">No entries in this queue.</p>
+                        <p className="text-xs text-slate-500 py-4">No entries in this queue.</p>
                       ) : (
-                        <div className="space-y-2.5">
+                        <div className="space-y-3">
                           {items.map((item: any) => (
                             <div
                               key={item.id}
-                              className="p-4 rounded-xl bg-[#050507] border border-slate-800 flex flex-wrap items-start justify-between gap-4"
+                              className="p-4 rounded-xl bg-[#090a0e] border border-white/[0.08] flex flex-col sm:flex-row sm:items-start justify-between gap-4"
                             >
-                              <div className="space-y-1 max-w-2xl">
+                              <div className="space-y-1.5 min-w-0 max-w-2xl">
                                 <div className="flex flex-wrap items-center gap-2 text-xs">
                                   <span className="font-semibold text-white">
                                     {item.subject || item.name || 'Inquiry'}
                                   </span>
-                                  <span className="font-mono text-[10px] text-[#f0cf65] uppercase">
-                                    · {item.status || 'Open'}
+                                  <span className="px-2 py-0.5 rounded-md bg-[#d4af37]/15 text-[11px] font-medium text-[#f0cf65]">
+                                    {item.status || 'Open'}
                                   </span>
-                                  <span className="font-mono text-[10px] text-amber-300 uppercase">
-                                    · Priority: {item.priority || 'Medium'}
+                                  <span className="px-2 py-0.5 rounded-md bg-amber-500/15 text-[11px] font-medium text-amber-300">
+                                    Priority: {item.priority || 'Medium'}
                                   </span>
-                                  <span className="font-mono text-[10px] text-slate-400">
-                                    · Owner: {item.assignedTo || 'Unassigned'}
+                                  <span className="text-[11px] text-slate-400">
+                                    Owner: {item.assignedTo || 'Unassigned'}
                                   </span>
                                   {item.rating && (
-                                    <span className="text-[11px] font-mono text-amber-400">
+                                    <span className="text-xs font-medium text-amber-400 tabular-nums">
                                       · Rating: {item.rating}/5
                                     </span>
                                   )}
                                 </div>
-                                <p className="text-[11px] text-slate-400 font-mono">
+                                <p className="text-xs text-slate-400">
                                   {item.userEmail || item.email} · {item.category || item.role || 'General'}
                                 </p>
-                                <p className="text-xs text-slate-300">
+                                <p className="text-xs text-slate-300 leading-relaxed">
                                   {item.message || item.feedback || item.messages?.[0]?.text || ''}
                                 </p>
                                 {item.adminResponse && (
@@ -1785,9 +2255,9 @@ export const SuperAdminDashboardPage: React.FC = () => {
                                   </p>
                                 )}
                                 {Array.isArray(item.resolutionHistory) && item.resolutionHistory.length > 0 && (
-                                  <p className="text-[11px] font-mono text-slate-500">
-                                    Last Updated by {item.resolutionHistory[0].actor} ·{' '}
-                                    {new Date(item.resolutionHistory[0].timestamp).toLocaleString()}
+                                  <p className="text-[11px] text-slate-500 tabular-nums">
+                                    Last updated by {item.resolutionHistory[0].actor} ·{' '}
+                                    {new Date(item.resolutionHistory[0].timestamp).toLocaleString('en-IN')}
                                   </p>
                                 )}
                               </div>
@@ -1808,7 +2278,7 @@ export const SuperAdminDashboardPage: React.FC = () => {
                                   setReplyAssignedTo(item.assignedTo || '');
                                   setReplyText(item.adminResponse || '');
                                 }}
-                                className="px-3 py-1.5 rounded-lg bg-[#d4af37]/15 border border-[#d4af37]/40 text-xs text-[#f0cf65] hover:bg-[#d4af37]/25 whitespace-nowrap"
+                                className="h-9 px-3.5 rounded-xl bg-[#d4af37]/15 border border-[#d4af37]/40 text-xs font-medium text-[#f0cf65] hover:bg-[#d4af37]/25 whitespace-nowrap shrink-0 self-start"
                               >
                                 Respond / Assign
                               </button>
@@ -1933,30 +2403,33 @@ export const SuperAdminDashboardPage: React.FC = () => {
 
       {/* User Inspector Modal */}
       {inspectedUser && (
-        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
-          <div className="max-w-3xl w-full max-h-[88vh] overflow-y-auto rounded-2xl bg-[#0b0c10] border border-[#d4af37]/40 p-6 space-y-5">
-            <div className="flex items-start justify-between border-b border-slate-800 pb-3">
-              <div>
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="max-w-3xl w-full max-h-[88vh] overflow-y-auto rounded-2xl bg-[#111319] border border-[#d4af37]/30 p-5 sm:p-6 space-y-5 shadow-2xl">
+            <div className="flex items-start justify-between gap-3 border-b border-white/[0.08] pb-3.5">
+              <div className="min-w-0">
                 <h3 className="text-lg font-bold text-white">{inspectedUser.user.fullName}</h3>
-                <p className="text-xs font-mono text-slate-400">
-                  {inspectedUser.user.email} · {inspectedUser.user.id} · Completion {inspectedUser.user.profileCompletion}%
+                <p className="text-xs text-slate-400 tabular-nums mt-0.5 break-all">
+                  {inspectedUser.user.email} · ID: {inspectedUser.user.id} · Completion {inspectedUser.user.profileCompletion}%
                 </p>
               </div>
-              <button onClick={() => setInspectedUser(null)} className="text-xs text-slate-400 hover:text-white">
+              <button
+                onClick={() => setInspectedUser(null)}
+                className="h-8 px-3 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] text-xs text-slate-300 hover:text-white shrink-0"
+              >
                 Close
               </button>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-              <div className="p-3 rounded-xl bg-[#050507] border border-slate-800">
+              <div className="p-3.5 rounded-xl bg-[#090a0e] border border-white/[0.08]">
                 <p className="text-slate-400">Account Status</p>
-                <p className="font-semibold text-[#f0cf65] uppercase mt-1">{inspectedUser.user.accountStatus}</p>
+                <p className="font-semibold text-[#f0cf65] capitalize mt-1">{inspectedUser.user.accountStatus}</p>
               </div>
-              <div className="p-3 rounded-xl bg-[#050507] border border-slate-800">
+              <div className="p-3.5 rounded-xl bg-[#090a0e] border border-white/[0.08]">
                 <p className="text-slate-400">KYC Status</p>
                 <p className="font-semibold text-white mt-1">{inspectedUser.user.kyc?.status || 'Not Submitted'}</p>
               </div>
-              <div className="p-3 rounded-xl bg-[#050507] border border-slate-800">
+              <div className="p-3.5 rounded-xl bg-[#090a0e] border border-white/[0.08]">
                 <p className="text-slate-400">Subscription</p>
                 <p className="font-semibold text-white mt-1">
                   {inspectedUser.subscription?.planName || 'None'} ({inspectedUser.subscription?.status || 'none'})
@@ -1966,13 +2439,13 @@ export const SuperAdminDashboardPage: React.FC = () => {
 
             <div className="space-y-2">
               <h4 className="text-xs font-semibold text-[#f0cf65]">Releases ({inspectedUser.releases?.length || 0})</h4>
-              <div className="max-h-40 overflow-y-auto space-y-1.5 text-xs">
+              <div className="max-h-40 overflow-y-auto space-y-2 text-xs">
                 {(inspectedUser.releases || []).map((r: any) => (
-                  <div key={r.id} className="p-2.5 rounded-lg bg-[#050507] border border-slate-800 flex justify-between">
-                    <span>
+                  <div key={r.id} className="p-3 rounded-xl bg-[#090a0e] border border-white/[0.08] flex justify-between gap-2">
+                    <span className="text-slate-200 font-medium">
                       {r.title} ({r.artist})
                     </span>
-                    <span className="font-mono text-slate-400">{r.status}</span>
+                    <span className="text-slate-400 shrink-0">{r.status}</span>
                   </div>
                 ))}
               </div>
@@ -1980,13 +2453,13 @@ export const SuperAdminDashboardPage: React.FC = () => {
 
             <div className="space-y-2">
               <h4 className="text-xs font-semibold text-[#f0cf65]">Payments ({inspectedUser.payments?.length || 0})</h4>
-              <div className="max-h-40 overflow-y-auto space-y-1.5 text-xs">
+              <div className="max-h-40 overflow-y-auto space-y-2 text-xs tabular-nums">
                 {(inspectedUser.payments || []).map((p: any) => (
-                  <div key={p.orderId} className="p-2.5 rounded-lg bg-[#050507] border border-slate-800 flex justify-between font-mono">
-                    <span>
+                  <div key={p.orderId} className="p-3 rounded-xl bg-[#090a0e] border border-white/[0.08] flex justify-between gap-2">
+                    <span className="text-slate-200 break-all">
                       {p.orderId} · {p.planName}
                     </span>
-                    <span>
+                    <span className="text-[#f0cf65] font-medium shrink-0">
                       ₹{p.amount} ({p.status})
                     </span>
                   </div>
@@ -1999,38 +2472,43 @@ export const SuperAdminDashboardPage: React.FC = () => {
 
       {/* KYC Verification Modal (Routes Actions to 6-Step Owner Approval) */}
       {inspectedKyc && (
-        <div className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-4">
-          <div className="max-w-4xl w-full max-h-[90vh] overflow-y-auto rounded-2xl bg-[#0b0c10] border border-[#d4af37]/40 p-6 space-y-5">
-            <div className="flex items-start justify-between border-b border-slate-800 pb-3">
-              <div>
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="max-w-4xl w-full max-h-[90vh] overflow-y-auto rounded-2xl bg-[#111319] border border-[#d4af37]/30 p-5 sm:p-6 space-y-5 shadow-2xl">
+            <div className="flex items-start justify-between gap-3 border-b border-white/[0.08] pb-3.5">
+              <div className="min-w-0">
                 <h3 className="text-lg font-bold text-white">KYC Verification · {inspectedKyc.fullName}</h3>
-                <p className="text-xs font-mono text-slate-400">{inspectedKyc.email} · Private Audit-Logged Viewer</p>
+                <p className="text-xs text-slate-400 mt-0.5 break-all">
+                  {inspectedKyc.email} · Private Audit-Logged Viewer
+                </p>
               </div>
-              <button onClick={() => setInspectedKyc(null)} className="text-xs text-slate-400 hover:text-white">
+              <button
+                onClick={() => setInspectedKyc(null)}
+                className="h-8 px-3 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] text-xs text-slate-300 hover:text-white shrink-0"
+              >
                 Close
               </button>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-              <div className="p-3 rounded-xl bg-[#050507] border border-slate-800">
+              <div className="p-3.5 rounded-xl bg-[#090a0e] border border-white/[0.08]">
                 <span className="text-slate-400">Full Legal Name:</span>{' '}
                 <span className="text-white font-semibold">{inspectedKyc.kyc?.fullLegalName}</span>
               </div>
-              <div className="p-3 rounded-xl bg-[#050507] border border-slate-800">
+              <div className="p-3.5 rounded-xl bg-[#090a0e] border border-white/[0.08] tabular-nums">
                 <span className="text-slate-400">Date of Birth:</span>{' '}
-                <span className="text-white font-mono">{inspectedKyc.kyc?.dateOfBirth}</span>
+                <span className="text-white font-medium">{inspectedKyc.kyc?.dateOfBirth}</span>
               </div>
-              <div className="p-3 rounded-xl bg-[#050507] border border-slate-800">
+              <div className="p-3.5 rounded-xl bg-[#090a0e] border border-white/[0.08] tabular-nums">
                 <span className="text-slate-400">Mobile Number:</span>{' '}
-                <span className="text-white font-mono">{inspectedKyc.kyc?.mobileNumber}</span>
+                <span className="text-white font-medium">{inspectedKyc.kyc?.mobileNumber}</span>
               </div>
-              <div className="p-3 rounded-xl bg-[#050507] border border-slate-800">
+              <div className="p-3.5 rounded-xl bg-[#090a0e] border border-white/[0.08] tabular-nums">
                 <span className="text-slate-400">PAN / Aadhaar Last 4:</span>{' '}
-                <span className="text-white font-mono">
+                <span className="text-white font-medium">
                   {inspectedKyc.kyc?.panNumber || '—'} / {inspectedKyc.kyc?.aadhaarNumberLast4 || '—'}
                 </span>
               </div>
-              <div className="sm:col-span-2 p-3 rounded-xl bg-[#050507] border border-slate-800">
+              <div className="sm:col-span-2 p-3.5 rounded-xl bg-[#090a0e] border border-white/[0.08]">
                 <span className="text-slate-400">Address:</span>{' '}
                 <span className="text-white">{inspectedKyc.kyc?.address}</span>
               </div>
@@ -2043,7 +2521,7 @@ export const SuperAdminDashboardPage: React.FC = () => {
                 { key: 'panCard', label: 'PAN Card' },
                 { key: 'profilePhoto', label: 'Profile Photograph' }
               ].map(d => (
-                <div key={d.key} className="p-3 rounded-xl bg-[#050507] border border-slate-800 space-y-2">
+                <div key={d.key} className="p-3.5 rounded-xl bg-[#090a0e] border border-white/[0.08] space-y-2">
                   <p className="text-xs font-semibold text-[#f0cf65]">{d.label}</p>
                   {kycDocPreviews[d.key] ? (
                     <img
@@ -2053,7 +2531,7 @@ export const SuperAdminDashboardPage: React.FC = () => {
                       className="w-full h-44 object-contain rounded-lg bg-black"
                     />
                   ) : (
-                    <div className="h-24 flex items-center justify-center text-[11px] text-slate-500 border border-dashed border-slate-800 rounded-lg">
+                    <div className="h-24 flex items-center justify-center text-xs text-slate-500 border border-dashed border-white/[0.08] rounded-lg">
                       Not uploaded or preview loading
                     </div>
                   )}
@@ -2061,7 +2539,7 @@ export const SuperAdminDashboardPage: React.FC = () => {
               ))}
             </div>
 
-            <div className="flex flex-wrap justify-end gap-2.5 pt-2 border-t border-slate-800">
+            <div className="flex flex-wrap justify-end gap-2.5 pt-3 border-t border-white/[0.08]">
               <button
                 onClick={() =>
                   setPendingProposal({
@@ -2076,7 +2554,7 @@ export const SuperAdminDashboardPage: React.FC = () => {
                     requiresReason: true
                   })
                 }
-                className="px-4 py-2 rounded-xl bg-amber-950/70 border border-amber-700/50 text-amber-300 text-xs font-semibold"
+                className="h-9 px-4 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-semibold"
               >
                 Request Re-upload
               </button>
@@ -2094,7 +2572,7 @@ export const SuperAdminDashboardPage: React.FC = () => {
                     requiresReason: true
                   })
                 }
-                className="px-4 py-2 rounded-xl bg-red-950/70 border border-red-700/50 text-red-300 text-xs font-semibold"
+                className="h-9 px-4 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs font-semibold"
               >
                 Reject KYC
               </button>
@@ -2111,9 +2589,9 @@ export const SuperAdminDashboardPage: React.FC = () => {
                     payload: {}
                   })
                 }
-                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold"
+                className="h-9 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold"
               >
-                Approve KYC (Owner Confirm)
+                Approve KYC
               </button>
             </div>
           </div>
@@ -2122,102 +2600,105 @@ export const SuperAdminDashboardPage: React.FC = () => {
 
       {/* Release Inspector & Metadata Correction Modal */}
       {inspectedRelease && (
-        <div className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-4">
-          <div className="max-w-3xl w-full max-h-[88vh] overflow-y-auto rounded-2xl bg-[#0b0c10] border border-[#d4af37]/40 p-6 space-y-5">
-            <div className="flex items-start justify-between border-b border-slate-800 pb-3">
-              <div>
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="max-w-3xl w-full max-h-[88vh] overflow-y-auto rounded-2xl bg-[#111319] border border-[#d4af37]/30 p-5 sm:p-6 space-y-5 shadow-2xl">
+            <div className="flex flex-wrap items-start justify-between gap-3 border-b border-white/[0.08] pb-3.5">
+              <div className="min-w-0">
                 <h3 className="text-lg font-bold text-white">{inspectedRelease.title}</h3>
-                <p className="text-xs text-slate-400">
+                <p className="text-xs text-slate-400 mt-0.5 tabular-nums">
                   {inspectedRelease.artist} · Label: {inspectedRelease.label} · UPC: {inspectedRelease.upc || 'Pending'}
                 </p>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 shrink-0">
                 <button
                   onClick={() => setEditingMetadata(v => !v)}
-                  className="px-3 py-1.5 rounded-lg bg-[#050507] border border-[#d4af37]/40 text-xs text-[#f0cf65] inline-flex items-center gap-1.5"
+                  className="h-8 px-3 rounded-lg bg-[#090a0e] border border-[#d4af37]/40 text-xs text-[#f0cf65] inline-flex items-center gap-1.5"
                 >
-                  <Pencil className="w-3 h-3" /> {editingMetadata ? 'View Details' : 'Correct Metadata'}
+                  <Pencil className="w-3.5 h-3.5" /> {editingMetadata ? 'View Details' : 'Correct Metadata'}
                 </button>
-                <button onClick={() => setInspectedRelease(null)} className="text-xs text-slate-400 hover:text-white">
+                <button
+                  onClick={() => setInspectedRelease(null)}
+                  className="h-8 px-3 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] text-xs text-slate-300 hover:text-white"
+                >
                   Close
                 </button>
               </div>
             </div>
 
             {editingMetadata ? (
-              <div className="p-4 rounded-xl bg-[#050507] border border-slate-800 space-y-3 text-xs">
+              <div className="p-4 rounded-xl bg-[#090a0e] border border-white/[0.08] space-y-3 text-xs">
                 <p className="font-semibold text-[#f0cf65]">Metadata Correction (Owner Approval Required)</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-slate-400 mb-1">Release Title</label>
+                    <label className="block text-slate-400 mb-1.5">Release Title</label>
                     <input
                       type="text"
                       value={metadataForm.title}
                       onChange={e => setMetadataForm({ ...metadataForm, title: e.target.value })}
-                      className="w-full px-3 py-2 rounded-lg bg-[#0b0c10] border border-slate-800 text-white"
+                      className="w-full h-9 px-3 rounded-xl bg-[#111319] border border-white/[0.08] focus:border-[#d4af37]/60 outline-none text-white"
                     />
                   </div>
                   <div>
-                    <label className="block text-slate-400 mb-1">Primary Artist</label>
+                    <label className="block text-slate-400 mb-1.5">Primary Artist</label>
                     <input
                       type="text"
                       value={metadataForm.artist}
                       onChange={e => setMetadataForm({ ...metadataForm, artist: e.target.value })}
-                      className="w-full px-3 py-2 rounded-lg bg-[#0b0c10] border border-slate-800 text-white"
+                      className="w-full h-9 px-3 rounded-xl bg-[#111319] border border-white/[0.08] focus:border-[#d4af37]/60 outline-none text-white"
                     />
                   </div>
                   <div>
-                    <label className="block text-slate-400 mb-1">UPC Code</label>
+                    <label className="block text-slate-400 mb-1.5">UPC Code</label>
                     <input
                       type="text"
                       value={metadataForm.upc}
                       onChange={e => setMetadataForm({ ...metadataForm, upc: e.target.value })}
-                      className="w-full px-3 py-2 rounded-lg bg-[#0b0c10] border border-slate-800 text-white font-mono"
+                      className="w-full h-9 px-3 rounded-xl bg-[#111319] border border-white/[0.08] focus:border-[#d4af37]/60 outline-none text-white tabular-nums"
                     />
                   </div>
                   <div>
-                    <label className="block text-slate-400 mb-1">Record Label</label>
+                    <label className="block text-slate-400 mb-1.5">Record Label</label>
                     <input
                       type="text"
                       value={metadataForm.label}
                       onChange={e => setMetadataForm({ ...metadataForm, label: e.target.value })}
-                      className="w-full px-3 py-2 rounded-lg bg-[#0b0c10] border border-slate-800 text-white"
+                      className="w-full h-9 px-3 rounded-xl bg-[#111319] border border-white/[0.08] focus:border-[#d4af37]/60 outline-none text-white"
                     />
                   </div>
                   <div>
-                    <label className="block text-slate-400 mb-1">Primary Genre</label>
+                    <label className="block text-slate-400 mb-1.5">Primary Genre</label>
                     <input
                       type="text"
                       value={metadataForm.primaryGenre}
                       onChange={e => setMetadataForm({ ...metadataForm, primaryGenre: e.target.value })}
-                      className="w-full px-3 py-2 rounded-lg bg-[#0b0c10] border border-slate-800 text-white"
+                      className="w-full h-9 px-3 rounded-xl bg-[#111319] border border-white/[0.08] focus:border-[#d4af37]/60 outline-none text-white"
                     />
                   </div>
                   <div>
-                    <label className="block text-slate-400 mb-1">Language</label>
+                    <label className="block text-slate-400 mb-1.5">Language</label>
                     <input
                       type="text"
                       value={metadataForm.language}
                       onChange={e => setMetadataForm({ ...metadataForm, language: e.target.value })}
-                      className="w-full px-3 py-2 rounded-lg bg-[#0b0c10] border border-slate-800 text-white"
+                      className="w-full h-9 px-3 rounded-xl bg-[#111319] border border-white/[0.08] focus:border-[#d4af37]/60 outline-none text-white"
                     />
                   </div>
                   <div>
-                    <label className="block text-slate-400 mb-1">Release Date</label>
+                    <label className="block text-slate-400 mb-1.5">Release Date</label>
                     <input
                       type="text"
                       value={metadataForm.releaseDate}
                       onChange={e => setMetadataForm({ ...metadataForm, releaseDate: e.target.value })}
-                      className="w-full px-3 py-2 rounded-lg bg-[#0b0c10] border border-slate-800 text-white font-mono"
+                      className="w-full h-9 px-3 rounded-xl bg-[#111319] border border-white/[0.08] focus:border-[#d4af37]/60 outline-none text-white tabular-nums"
                     />
                   </div>
                   <div>
-                    <label className="block text-slate-400 mb-1">Territories</label>
+                    <label className="block text-slate-400 mb-1.5">Territories</label>
                     <input
                       type="text"
                       value={metadataForm.territories}
                       onChange={e => setMetadataForm({ ...metadataForm, territories: e.target.value })}
-                      className="w-full px-3 py-2 rounded-lg bg-[#0b0c10] border border-slate-800 text-white"
+                      className="w-full h-9 px-3 rounded-xl bg-[#111319] border border-white/[0.08] focus:border-[#d4af37]/60 outline-none text-white"
                     />
                   </div>
                 </div>
@@ -2235,9 +2716,9 @@ export const SuperAdminDashboardPage: React.FC = () => {
                         payload: { updates: metadataForm }
                       })
                     }
-                    className="px-4 py-2 rounded-xl bg-[#d4af37] hover:bg-[#f0cf65] text-black font-bold"
+                    className="h-9 px-4 rounded-xl bg-[#d4af37] hover:bg-[#e5c354] text-[#090a0e] font-semibold"
                   >
-                    Save Metadata Changes (Owner Approval)
+                    Save Metadata Changes
                   </button>
                 </div>
               </div>
@@ -2249,15 +2730,15 @@ export const SuperAdminDashboardPage: React.FC = () => {
                       src={inspectedRelease.artworkUrl || inspectedRelease.coverUrl}
                       alt={inspectedRelease.title}
                       referrerPolicy="no-referrer"
-                      className="w-40 h-40 object-cover rounded-xl border border-slate-800"
+                      className="w-40 h-40 object-cover rounded-xl border border-white/[0.08]"
                     />
                   ) : (
-                    <div className="w-40 h-40 rounded-xl bg-[#050507] border border-slate-800 flex flex-col items-center justify-center text-slate-500 gap-1.5">
+                    <div className="w-40 h-40 rounded-xl bg-[#090a0e] border border-white/[0.08] flex flex-col items-center justify-center text-slate-500 gap-1.5">
                       <Disc3 className="w-8 h-8 text-[#d4af37]/60" />
                       <span>No Artwork Uploaded</span>
                     </div>
                   )}
-                  <div className="space-y-1.5 text-slate-300">
+                  <div className="space-y-2 text-slate-300">
                     <p>
                       <span className="text-slate-500">Copyright:</span> © {inspectedRelease.copyrightYear} {inspectedRelease.copyrightOwner}
                     </p>
@@ -2270,7 +2751,7 @@ export const SuperAdminDashboardPage: React.FC = () => {
                     <p>
                       <span className="text-slate-500">Language / Genre:</span> {inspectedRelease.language} / {inspectedRelease.primaryGenre}
                     </p>
-                    <p>
+                    <p className="tabular-nums">
                       <span className="text-slate-500">Release Date:</span> {inspectedRelease.releaseDate || '—'}
                     </p>
                   </div>
@@ -2279,12 +2760,12 @@ export const SuperAdminDashboardPage: React.FC = () => {
                 <div className="space-y-2">
                   <h4 className="text-xs font-semibold text-[#f0cf65]">Tracks ({inspectedRelease.tracks?.length || 0})</h4>
                   {(inspectedRelease.tracks || []).map((t: any, idx: number) => (
-                    <div key={idx} className="p-3 rounded-xl bg-[#050507] border border-slate-800 space-y-2 text-xs">
-                      <div className="flex justify-between">
+                    <div key={idx} className="p-3.5 rounded-xl bg-[#090a0e] border border-white/[0.08] space-y-2 text-xs">
+                      <div className="flex justify-between gap-2">
                         <span className="font-semibold text-white">
                           {t.trackNumber}. {t.title} {t.explicit ? '[E]' : ''}
                         </span>
-                        <span className="font-mono text-slate-400">ISRC: {t.isrc || 'Auto'}</span>
+                        <span className="text-slate-400 tabular-nums shrink-0">ISRC: {t.isrc || 'Auto'}</span>
                       </div>
                       {t.audioFileUrl && <audio controls src={apiUrl(t.audioFileUrl)} className="w-full h-8" />}
                     </div>
@@ -2292,11 +2773,11 @@ export const SuperAdminDashboardPage: React.FC = () => {
                 </div>
 
                 {Array.isArray(inspectedRelease.metadataHistory) && inspectedRelease.metadataHistory.length > 0 && (
-                  <div className="space-y-1.5 text-[11px] font-mono text-slate-400">
-                    <p className="text-[#f0cf65]">Metadata Audit History</p>
+                  <div className="space-y-2 text-xs text-slate-400">
+                    <p className="font-semibold text-[#f0cf65]">Metadata Audit History</p>
                     {inspectedRelease.metadataHistory.slice(0, 5).map((mh: any, idx: number) => (
-                      <div key={idx} className="p-2 rounded bg-[#050507] border border-slate-800">
-                        {new Date(mh.updatedAt).toLocaleString()} by {mh.updatedBy}: {Object.keys(mh.changes || {}).join(', ')}
+                      <div key={idx} className="p-2.5 rounded-xl bg-[#090a0e] border border-white/[0.08] tabular-nums">
+                        {new Date(mh.updatedAt).toLocaleString('en-IN')} by {mh.updatedBy}: {Object.keys(mh.changes || {}).join(', ')}
                       </div>
                     ))}
                   </div>
@@ -2304,7 +2785,7 @@ export const SuperAdminDashboardPage: React.FC = () => {
               </>
             )}
 
-            <div className="flex flex-wrap justify-end gap-2 pt-3 border-t border-slate-800">
+            <div className="flex flex-wrap justify-end gap-2 pt-3 border-t border-white/[0.08]">
               <button
                 onClick={() =>
                   setPendingProposal({
@@ -2319,7 +2800,7 @@ export const SuperAdminDashboardPage: React.FC = () => {
                     requiresReason: true
                   })
                 }
-                className="px-4 py-2 rounded-xl bg-amber-950/70 border border-amber-700/50 text-amber-300 text-xs font-semibold"
+                className="h-9 px-4 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-semibold"
               >
                 Request Corrections
               </button>
@@ -2337,7 +2818,7 @@ export const SuperAdminDashboardPage: React.FC = () => {
                     requiresReason: true
                   })
                 }
-                className="px-4 py-2 rounded-xl bg-red-950/70 border border-red-700/50 text-red-300 text-xs font-semibold"
+                className="h-9 px-4 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs font-semibold"
               >
                 Reject Release
               </button>
@@ -2354,7 +2835,7 @@ export const SuperAdminDashboardPage: React.FC = () => {
                     payload: {}
                   })
                 }
-                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold"
+                className="h-9 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold"
               >
                 Approve Release
               </button>
@@ -2371,7 +2852,7 @@ export const SuperAdminDashboardPage: React.FC = () => {
                     payload: {}
                   })
                 }
-                className="px-4 py-2 rounded-xl bg-[#d4af37] hover:bg-[#f0cf65] text-black text-xs font-bold"
+                className="h-9 px-4 rounded-xl bg-[#d4af37] hover:bg-[#e5c354] text-[#090a0e] text-xs font-semibold"
               >
                 Publish Live
               </button>
@@ -2382,26 +2863,29 @@ export const SuperAdminDashboardPage: React.FC = () => {
 
       {/* Invoice Modal */}
       {invoiceModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
-          <div className="max-w-md w-full rounded-2xl bg-[#0b0c10] border border-[#d4af37]/40 p-6 space-y-4 text-xs">
-            <div className="flex justify-between items-center border-b border-slate-800 pb-3">
-              <h3 className="text-sm font-bold text-[#f0cf65]">TAX INVOICE · RUDRAATMA MUSIC</h3>
-              <button onClick={() => setInvoiceModal(null)} className="text-slate-400 hover:text-white">
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="max-w-md w-full rounded-2xl bg-[#111319] border border-[#d4af37]/30 p-6 space-y-4 text-xs shadow-2xl">
+            <div className="flex justify-between items-center border-b border-white/[0.08] pb-3.5">
+              <h3 className="text-sm font-semibold text-[#f0cf65]">Tax Invoice — Rudraatma Music</h3>
+              <button
+                onClick={() => setInvoiceModal(null)}
+                className="h-8 px-3 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] text-slate-300 hover:text-white"
+              >
                 Close
               </button>
             </div>
-            <div className="space-y-1.5 font-mono text-slate-300">
-              <p>Invoice / Order ID: {invoiceModal.orderId}</p>
-              <p>Payment ID: {invoiceModal.paymentId || 'N/A'}</p>
+            <div className="space-y-2 text-slate-300 tabular-nums">
+              <p><span className="text-slate-500">Order ID:</span> {invoiceModal.orderId}</p>
+              <p><span className="text-slate-500">Payment ID:</span> {invoiceModal.paymentId || 'N/A'}</p>
               <p>
-                Customer: {invoiceModal.userName} ({invoiceModal.userEmail})
+                <span className="text-slate-500">Customer:</span> {invoiceModal.userName} ({invoiceModal.userEmail})
               </p>
-              <p>Plan: {invoiceModal.planName}</p>
+              <p><span className="text-slate-500">Plan:</span> {invoiceModal.planName}</p>
               <p>
-                Amount: ₹{invoiceModal.amount} {invoiceModal.currency}
+                <span className="text-slate-500">Amount:</span> ₹{invoiceModal.amount} {invoiceModal.currency}
               </p>
-              <p>Status: {invoiceModal.status.toUpperCase()}</p>
-              <p>Date: {new Date(invoiceModal.paidAt || invoiceModal.createdAt).toLocaleString()}</p>
+              <p><span className="text-slate-500">Status:</span> <span className="capitalize">{invoiceModal.status}</span></p>
+              <p><span className="text-slate-500">Date:</span> {new Date(invoiceModal.paidAt || invoiceModal.createdAt).toLocaleString('en-IN')}</p>
             </div>
           </div>
         </div>
@@ -2409,27 +2893,27 @@ export const SuperAdminDashboardPage: React.FC = () => {
 
       {/* Support Reply, Priority & Assignment Modal */}
       {replyModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
-          <div className="max-w-md w-full rounded-2xl bg-[#0b0c10] border border-[#d4af37]/40 p-6 space-y-4">
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="max-w-md w-full rounded-2xl bg-[#111319] border border-[#d4af37]/30 p-6 space-y-4 shadow-2xl">
             <div className="flex items-center justify-between gap-2">
-              <h3 className="text-sm font-bold text-white truncate">Respond · {replyModal.title}</h3>
+              <h3 className="text-sm font-semibold text-white truncate">Respond · {replyModal.title}</h3>
               <button
                 onClick={handleAiDraftSupportReply}
                 disabled={draftingAiReply}
-                className="px-2.5 py-1 rounded-lg bg-[#d4af37]/15 border border-[#d4af37]/40 text-[11px] text-[#f0cf65] inline-flex items-center gap-1 shrink-0"
+                className="h-8 px-3 rounded-lg bg-[#d4af37]/15 border border-[#d4af37]/40 text-xs font-medium text-[#f0cf65] inline-flex items-center gap-1.5 shrink-0"
               >
-                <Sparkles className="w-3 h-3" />
+                <Sparkles className="w-3.5 h-3.5" />
                 {draftingAiReply ? 'Drafting...' : 'AI Draft Reply'}
               </button>
             </div>
 
-            <div className="grid grid-cols-2 gap-2.5 text-xs">
+            <div className="grid grid-cols-2 gap-3 text-xs">
               <div>
-                <label className="block text-[11px] text-slate-400 mb-1">Ticket Status</label>
+                <label className="block text-xs text-slate-400 mb-1.5">Ticket Status</label>
                 <select
                   value={replyStatus}
                   onChange={e => setReplyStatus(e.target.value as any)}
-                  className="w-full px-3 py-2 rounded-xl bg-[#050507] border border-slate-800 text-white"
+                  className="w-full h-9 px-3 rounded-xl bg-[#090a0e] border border-white/[0.08] focus:border-[#d4af37]/60 outline-none text-white"
                 >
                   <option value="Open">Open</option>
                   <option value="Pending">Pending</option>
@@ -2437,11 +2921,11 @@ export const SuperAdminDashboardPage: React.FC = () => {
                 </select>
               </div>
               <div>
-                <label className="block text-[11px] text-slate-400 mb-1">Priority</label>
+                <label className="block text-xs text-slate-400 mb-1.5">Priority</label>
                 <select
                   value={replyPriority}
                   onChange={e => setReplyPriority(e.target.value as any)}
-                  className="w-full px-3 py-2 rounded-xl bg-[#050507] border border-slate-800 text-white"
+                  className="w-full h-9 px-3 rounded-xl bg-[#090a0e] border border-white/[0.08] focus:border-[#d4af37]/60 outline-none text-white"
                 >
                   <option value="Low">Low</option>
                   <option value="Medium">Medium</option>
@@ -2452,13 +2936,13 @@ export const SuperAdminDashboardPage: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-[11px] text-slate-400 mb-1">Assigned Desk / Owner</label>
+              <label className="block text-xs text-slate-400 mb-1.5">Assigned Desk / Owner</label>
               <input
                 type="text"
                 value={replyAssignedTo}
                 onChange={e => setReplyAssignedTo(e.target.value)}
                 placeholder="e.g., Super Admin Desk, Royalty Desk..."
-                className="w-full px-3 py-2 rounded-xl bg-[#050507] border border-slate-800 text-xs text-white"
+                className="w-full h-9 px-3 rounded-xl bg-[#090a0e] border border-white/[0.08] focus:border-[#d4af37]/60 outline-none text-xs text-white"
               />
             </div>
 
@@ -2467,18 +2951,18 @@ export const SuperAdminDashboardPage: React.FC = () => {
               value={replyText}
               onChange={e => setReplyText(e.target.value)}
               placeholder="Write official response (AI never sends replies without your review)..."
-              className="w-full px-3 py-2 rounded-xl bg-[#050507] border border-slate-800 text-xs text-white"
+              className="w-full p-3 rounded-xl bg-[#090a0e] border border-white/[0.08] focus:border-[#d4af37]/60 outline-none text-xs text-white"
             />
             <div className="flex justify-end gap-2">
               <button
                 onClick={() => setReplyModal(null)}
-                className="px-4 py-2 rounded-xl bg-slate-800 text-xs text-slate-300"
+                className="h-9 px-4 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] text-xs font-medium text-slate-300"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSupportReplyConfirm}
-                className="px-4 py-2 rounded-xl bg-[#d4af37] text-black text-xs font-bold"
+                className="h-9 px-4 rounded-xl bg-[#d4af37] hover:bg-[#e5c354] text-[#090a0e] text-xs font-semibold"
               >
                 Send Response
               </button>

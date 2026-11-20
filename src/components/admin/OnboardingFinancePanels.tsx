@@ -97,7 +97,7 @@ export const ArtistOnboardingPanel: React.FC<
   return (
     <div className="space-y-5">
       {/* Onboarding Counters */}
-      <div className="grid grid-cols-2 sm:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         {[
           { label: 'Total Artists', val: counts?.totalArtists },
           { label: 'New (7d)', val: counts?.newRegistrations },
@@ -106,9 +106,9 @@ export const ArtistOnboardingPanel: React.FC<
           { label: 'Approved', val: counts?.approved },
           { label: 'Rejected / Changes', val: counts?.rejectedOrChanges }
         ].map(c => (
-          <div key={c.label} className="p-3.5 rounded-xl bg-[#0b0c10] border border-slate-800/90">
-            <p className="text-[11px] text-slate-400">{c.label}</p>
-            <p className={`text-xl font-bold font-mono tabular-nums mt-1 ${c.gold ? 'text-[#f0cf65]' : 'text-white'}`}>
+          <div key={c.label} className="p-4 rounded-2xl bg-[#111319] border border-white/[0.08]">
+            <p className="text-xs text-slate-400">{c.label}</p>
+            <p className={`text-xl font-bold tabular-nums mt-1.5 ${c.gold ? 'text-[#f0cf65]' : 'text-white'}`}>
               {dataUnavailable ? '—' : Number(c.val ?? 0)}
             </p>
           </div>
@@ -116,7 +116,7 @@ export const ArtistOnboardingPanel: React.FC<
       </div>
 
       {/* Filters & Search */}
-      <div className="p-4 rounded-2xl bg-[#0b0c10] border border-slate-800/90 flex flex-wrap items-center justify-between gap-3">
+      <div className="p-4 rounded-2xl bg-[#111319] border border-white/[0.08] flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-1.5 text-xs">
           {[
             { id: 'all', label: 'All Artists' },
@@ -130,10 +130,10 @@ export const ArtistOnboardingPanel: React.FC<
               key={tab.id}
               type="button"
               onClick={() => setStatusFilter(tab.id)}
-              className={`px-3 py-1.5 rounded-lg border whitespace-nowrap ${
+              className={`h-8 px-3 rounded-lg border whitespace-nowrap transition-colors ${
                 statusFilter === tab.id
-                  ? 'bg-[#d4af37]/15 border-[#d4af37]/60 text-[#f0cf65] font-semibold'
-                  : 'bg-[#050507] border-slate-800 text-slate-400 hover:text-white'
+                  ? 'bg-[#d4af37]/15 border-[#d4af37]/50 text-[#f0cf65] font-semibold'
+                  : 'bg-[#090a0e] border-white/[0.08] text-slate-400 hover:text-white'
               }`}
             >
               {tab.label}
@@ -143,19 +143,19 @@ export const ArtistOnboardingPanel: React.FC<
 
         <div className="flex items-center gap-2 flex-1 min-w-[220px] max-w-sm">
           <div className="relative flex-1">
-            <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Search display name, legal name, email..."
-              className="w-full pl-8 pr-3 py-1.5 rounded-xl bg-[#050507] border border-slate-800 text-xs text-white"
+              className="w-full h-9 pl-9 pr-3 rounded-xl bg-[#090a0e] border border-white/[0.08] focus:border-[#d4af37]/60 focus:outline-none text-xs text-white"
             />
           </div>
           <button
             type="button"
             onClick={loadProfiles}
-            className="p-2 rounded-xl bg-[#050507] border border-slate-800 text-slate-300 hover:text-white"
+            className="h-9 w-9 flex items-center justify-center rounded-xl bg-[#090a0e] border border-white/[0.08] text-slate-300 hover:text-white transition-colors"
             title="Refresh Queue"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
@@ -163,93 +163,136 @@ export const ArtistOnboardingPanel: React.FC<
         </div>
       </div>
 
-      {/* Onboarding Queue Table */}
-      <div className="rounded-2xl bg-[#0b0c10] border border-slate-800/90 overflow-x-auto">
-        <table className="w-full text-left border-collapse text-xs">
-          <thead>
-            <tr className="border-b border-slate-800 text-slate-400">
-              <th className="py-3 px-4">Artist / Label</th>
-              <th className="py-3 px-4">Completion</th>
-              <th className="py-3 px-4">Profile Status</th>
-              <th className="py-3 px-4">Email</th>
-              <th className="py-3 px-4">Plan / Promo</th>
-              <th className="py-3 px-4 text-right">Governance</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-800/70">
-            {items.map(item => (
-              <tr key={item.userId} className="hover:bg-white/[0.02]">
-                <td className="py-3 px-4">
-                  <div className="font-semibold text-white">
+      {/* Onboarding Queue */}
+      <div className="rounded-2xl bg-[#111319] border border-white/[0.08] overflow-hidden">
+        {/* Mobile Card View */}
+        <div className="md:hidden divide-y divide-white/[0.06]">
+          {items.map(item => (
+            <div key={item.userId} className="p-4 space-y-2.5 text-xs">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="font-semibold text-white truncate">
                     {item.artistProfile?.displayName || item.fullName}
-                  </div>
-                  <div className="text-[11px] text-slate-400 font-mono">
-                    {item.email} · {item.artistProfile?.artistType || 'Individual Artist'}
-                  </div>
-                </td>
-                <td className="py-3 px-4 font-mono tabular-nums text-[#f0cf65]">
+                  </p>
+                  <p className="text-slate-400 truncate">{item.email}</p>
+                </div>
+                <span className="font-semibold text-[#f0cf65] tabular-nums shrink-0">
                   {item.completionPercent}%
-                </td>
-                <td className="py-3 px-4 font-mono text-[11px]">
-                  <span
-                    className={
-                      item.profileStatus === 'Approved'
-                        ? 'text-emerald-300'
-                        : item.profileStatus === 'Rejected'
-                          ? 'text-rose-300'
-                          : item.profileStatus === 'Submitted' || item.profileStatus === 'Under Review'
-                            ? 'text-amber-300'
-                            : 'text-slate-400'
-                    }
-                  >
-                    {item.profileStatus}
-                  </span>
-                </td>
-                <td className="py-3 px-4 font-mono text-[11px]">
-                  {item.emailVerified ? (
-                    <span className="text-emerald-300">Verified</span>
-                  ) : (
-                    <span className="text-rose-300">Unverified</span>
-                  )}
-                </td>
-                <td className="py-3 px-4 text-[11px] text-slate-300">
+                </span>
+              </div>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-300">
+                <span>Status: {item.profileStatus}</span>
+                <span>Email: {item.emailVerified ? 'Verified' : 'Unverified'}</span>
+                <span>
                   {item.promoAllocation
-                    ? `Promo Slot #${item.promoAllocation.slotNumber}/10 (${item.promoAllocation.status})`
-                    : item.planName || 'None'}
-                </td>
-                <td className="py-3 px-4 text-right whitespace-nowrap space-x-2">
-                  <button
-                    type="button"
-                    onClick={() => setInspectedProfile(item)}
-                    className="px-2.5 py-1 rounded-lg bg-[#d4af37]/15 border border-[#d4af37]/40 text-[#f0cf65] inline-flex items-center gap-1"
-                  >
-                    <Eye className="w-3 h-3" /> Review Profile
-                  </button>
-                </td>
+                    ? `Promo Slot #${item.promoAllocation.slotNumber}/10`
+                    : item.planName || 'No Plan'}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setInspectedProfile(item)}
+                className="w-full h-9 rounded-xl bg-[#d4af37]/15 border border-[#d4af37]/40 text-[#f0cf65] font-medium inline-flex items-center justify-center gap-1.5"
+              >
+                <Eye className="w-3.5 h-3.5" /> Review Profile
+              </button>
+            </div>
+          ))}
+          {items.length === 0 && (
+            <p className="py-10 text-center text-xs text-slate-500">
+              {dataUnavailable ? 'Data Unavailable.' : '0 artist profiles match your filter.'}
+            </p>
+          )}
+        </div>
+
+        {/* Desktop Table View */}
+        <div className="hidden md:block overflow-x-auto">
+          <table className="w-full text-left border-collapse text-xs">
+            <thead>
+              <tr className="border-b border-white/[0.07] bg-[#0d0f14] text-slate-400">
+                <th className="py-3.5 px-4 font-medium">Artist / Label</th>
+                <th className="py-3.5 px-4 font-medium">Completion</th>
+                <th className="py-3.5 px-4 font-medium">Profile Status</th>
+                <th className="py-3.5 px-4 font-medium">Email</th>
+                <th className="py-3.5 px-4 font-medium">Plan / Promo</th>
+                <th className="py-3.5 px-4 font-medium text-right">Action</th>
               </tr>
-            ))}
-            {items.length === 0 && (
-              <tr>
-                <td colSpan={6} className="py-10 text-center text-slate-500">
-                  {dataUnavailable ? 'Data Unavailable.' : '0 artist profiles match your filter.'}
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-white/[0.06]">
+              {items.map(item => (
+                <tr key={item.userId} className="hover:bg-white/[0.02]">
+                  <td className="py-3.5 px-4">
+                    <div className="font-semibold text-white">
+                      {item.artistProfile?.displayName || item.fullName}
+                    </div>
+                    <div className="text-xs text-slate-400">
+                      {item.email} · {item.artistProfile?.artistType || 'Individual Artist'}
+                    </div>
+                  </td>
+                  <td className="py-3.5 px-4 font-medium tabular-nums text-[#f0cf65]">
+                    {item.completionPercent}%
+                  </td>
+                  <td className="py-3.5 px-4">
+                    <span
+                      className={`font-medium ${
+                        item.profileStatus === 'Approved'
+                          ? 'text-emerald-300'
+                          : item.profileStatus === 'Rejected'
+                            ? 'text-rose-300'
+                            : item.profileStatus === 'Submitted' || item.profileStatus === 'Under Review'
+                              ? 'text-amber-300'
+                              : 'text-slate-400'
+                      }`}
+                    >
+                      {item.profileStatus}
+                    </span>
+                  </td>
+                  <td className="py-3.5 px-4">
+                    {item.emailVerified ? (
+                      <span className="text-emerald-300 font-medium">Verified</span>
+                    ) : (
+                      <span className="text-rose-300 font-medium">Unverified</span>
+                    )}
+                  </td>
+                  <td className="py-3.5 px-4 text-slate-300">
+                    {item.promoAllocation
+                      ? `Promo Slot #${item.promoAllocation.slotNumber}/10 (${item.promoAllocation.status})`
+                      : item.planName || 'None'}
+                  </td>
+                  <td className="py-3.5 px-4 text-right whitespace-nowrap">
+                    <button
+                      type="button"
+                      onClick={() => setInspectedProfile(item)}
+                      className="h-8 px-3 rounded-lg bg-[#d4af37]/15 border border-[#d4af37]/40 text-[#f0cf65] hover:bg-[#d4af37]/25 font-medium inline-flex items-center gap-1.5 transition-colors"
+                    >
+                      <Eye className="w-3.5 h-3.5" /> Review Profile
+                    </button>
+                  </td>
+                </tr>
+              ))}
+              {items.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="py-10 text-center text-slate-500">
+                    {dataUnavailable ? 'Data Unavailable.' : '0 artist profiles match your filter.'}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
-      {/* Profile Inspection & Review Modal */}
+      {/* Profile Inspection Modal */}
       {inspectedProfile && (
-        <div className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-4">
-          <div className="max-w-3xl w-full max-h-[90vh] overflow-y-auto rounded-2xl bg-[#0b0c10] border border-[#d4af37]/40 p-6 space-y-5">
-            <div className="flex items-start justify-between border-b border-slate-800 pb-3">
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="max-w-3xl w-full max-h-[90vh] overflow-y-auto rounded-2xl bg-[#111319] border border-white/[0.1] p-6 space-y-5 shadow-2xl">
+            <div className="flex items-start justify-between border-b border-white/[0.08] pb-3.5">
               <div>
                 <h3 className="text-lg font-bold text-white">
                   Artist Profile Review · {inspectedProfile.artistProfile?.displayName || inspectedProfile.fullName}
                 </h3>
-                <p className="text-xs font-mono text-slate-400">
-                  {inspectedProfile.email} · {inspectedProfile.completionPercent}% Complete · Status: {inspectedProfile.profileStatus}
+                <p className="text-xs text-slate-400 mt-0.5 tabular-nums">
+                  {inspectedProfile.email} · {inspectedProfile.completionPercent}% Complete · {inspectedProfile.profileStatus}
                 </p>
               </div>
               <button
@@ -262,11 +305,11 @@ export const ArtistOnboardingPanel: React.FC<
             </div>
 
             {inspectedProfile.artistProfile?.profileImageUrl && (
-              <div className="flex items-center gap-4 p-3 rounded-xl bg-[#050507] border border-slate-800">
+              <div className="flex items-center gap-4 p-3.5 rounded-xl bg-[#090a0e] border border-white/[0.06]">
                 <img
                   src={apiUrl(inspectedProfile.artistProfile.profileImageUrl)}
                   alt="Artist Profile"
-                  className="w-16 h-16 rounded-xl object-cover border border-slate-700"
+                  className="w-16 h-16 rounded-xl object-cover border border-white/[0.1]"
                 />
                 <div className="text-xs space-y-1">
                   <div className="font-semibold text-white">
@@ -293,15 +336,15 @@ export const ArtistOnboardingPanel: React.FC<
                 ['Phone Number', inspectedProfile.artistProfile?.phoneNumber],
                 ['Email OTP Verified', inspectedProfile.emailVerified ? 'Yes' : 'No']
               ].map(([label, val]) => (
-                <div key={String(label)} className="p-3 rounded-xl bg-[#050507] border border-slate-800">
-                  <div className="text-[11px] text-slate-400">{label}</div>
+                <div key={String(label)} className="p-3 rounded-xl bg-[#090a0e] border border-white/[0.06]">
+                  <div className="text-xs text-slate-400">{label}</div>
                   <div className="font-medium text-white mt-0.5 break-all">{val || '—'}</div>
                 </div>
               ))}
             </div>
 
-            <div className="p-3.5 rounded-xl bg-[#050507] border border-slate-800 text-xs space-y-1">
-              <div className="text-[11px] text-slate-400">Artist Biography</div>
+            <div className="p-3.5 rounded-xl bg-[#090a0e] border border-white/[0.06] text-xs space-y-1">
+              <div className="text-xs text-slate-400">Artist Biography</div>
               <p className="text-slate-200 leading-relaxed whitespace-pre-wrap">
                 {inspectedProfile.artistProfile?.biography || '—'}
               </p>
@@ -335,12 +378,12 @@ export const ArtistOnboardingPanel: React.FC<
             )}
 
             {inspectedProfile.missingFields?.length > 0 && (
-              <div className="p-3 rounded-xl bg-amber-950/40 border border-amber-700/40 text-xs text-amber-200">
+              <div className="p-3.5 rounded-xl bg-amber-950/35 border border-amber-500/35 text-xs text-amber-200">
                 Incomplete fields: {inspectedProfile.missingFields.join(', ')}
               </div>
             )}
 
-            <div className="flex flex-wrap justify-end gap-2 pt-3 border-t border-slate-800">
+            <div className="flex flex-wrap justify-end gap-2 pt-3 border-t border-white/[0.08]">
               {inspectedProfile.profileStatus === 'Submitted' && (
                 <button
                   type="button"
@@ -348,7 +391,7 @@ export const ArtistOnboardingPanel: React.FC<
                     handleMarkUnderReview(inspectedProfile.userId);
                     setInspectedProfile(null);
                   }}
-                  className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold whitespace-nowrap"
+                  className="h-9 px-3.5 rounded-xl bg-white/[0.08] hover:bg-white/[0.12] text-slate-200 text-xs font-semibold whitespace-nowrap"
                 >
                   Mark Under Review
                 </button>
@@ -364,14 +407,14 @@ export const ArtistOnboardingPanel: React.FC<
                     targetType: 'artist_profile',
                     targetId: target.userId,
                     title: `Request Profile Changes · ${target.email}`,
-                    explanation: `Requests profile corrections from ${target.email} and notifies them via email & in-app alert.`,
+                    explanation: `Requests profile corrections from ${target.email} and notifies them via email & alert.`,
                     consequences: 'Release upload stays locked until artist edits and resubmits.',
                     proposedChanges: { userId: target.userId, status: 'Changes Requested' },
                     payload: {},
                     requiresReason: true
                   });
                 }}
-                className="px-3.5 py-2 rounded-xl bg-amber-950/70 border border-amber-700/50 text-amber-300 text-xs font-semibold whitespace-nowrap"
+                className="h-9 px-3.5 rounded-xl bg-amber-950/70 border border-amber-500/40 text-amber-300 text-xs font-semibold whitespace-nowrap"
               >
                 Request Changes
               </button>
@@ -393,7 +436,7 @@ export const ArtistOnboardingPanel: React.FC<
                     requiresReason: true
                   });
                 }}
-                className="px-3.5 py-2 rounded-xl bg-red-950/70 border border-red-700/50 text-red-300 text-xs font-semibold whitespace-nowrap"
+                className="h-9 px-3.5 rounded-xl bg-red-950/70 border border-red-500/40 text-red-300 text-xs font-semibold whitespace-nowrap"
               >
                 Reject Profile
               </button>
@@ -409,14 +452,14 @@ export const ArtistOnboardingPanel: React.FC<
                     targetType: 'artist_profile',
                     targetId: target.userId,
                     title: `Approve Artist Profile · ${target.email}`,
-                    explanation: `Approves ${target.email} as a verified Rudraatma Music artist and atomically checks eligibility for First-10 Complimentary 1-Month Plan.`,
+                    explanation: `Approves ${target.email} as a verified Rudraatma Music artist and checks eligibility for First-10 Free Plan.`,
                     consequences:
-                      'Unlocks Artist Profile approval; if slots remain (<10) and artist is verified & unpaid, grants 1 month free access with zero auto-charge.',
+                      'Unlocks Artist Profile approval; if slots remain (<10) and artist is verified & unpaid, grants 1 month free access.',
                     proposedChanges: { userId: target.userId, status: 'Approved' },
                     payload: {}
                   });
                 }}
-                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white text-xs font-bold whitespace-nowrap"
+                className="h-9 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white text-xs font-semibold whitespace-nowrap"
               >
                 Approve Artist Profile
               </button>
@@ -462,27 +505,27 @@ export const PromotionalProgramPanel: React.FC<PanelCommonProps> = ({
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h3 className="text-sm font-semibold text-white flex items-center gap-2">
             <Award className="w-4 h-4 text-[#d4af37]" />
-            First 10 Approved Artists — 1 Month Free Plan Governance
+            First 10 Approved Artists — 1 Month Free Plan
           </h3>
-          <p className="text-xs text-slate-400">
-            Strictly capped at 10 atomic PostgreSQL slots · Verified email & non-test artists only · Zero auto-charge
+          <p className="text-xs text-slate-400 mt-0.5">
+            Capped at 10 verified slots · Verified email artists only · Zero auto-charge
           </p>
         </div>
         <button
           type="button"
           onClick={loadPromo}
-          className="px-3 py-1.5 rounded-xl bg-[#050507] border border-slate-800 text-xs text-slate-300 inline-flex items-center gap-1.5 whitespace-nowrap"
+          className="h-9 px-3.5 rounded-xl bg-[#111319] border border-white/[0.08] hover:border-[#d4af37]/40 text-xs font-medium text-slate-300 inline-flex items-center gap-1.5 whitespace-nowrap"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
           Refresh Slots
         </button>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         {[
           { label: 'Total Slot Cap', val: data?.totalSlots ?? 10 },
           { label: 'Slots Used', val: data?.slotsUsed ?? 0, gold: true },
@@ -491,9 +534,9 @@ export const PromotionalProgramPanel: React.FC<PanelCommonProps> = ({
           { label: 'Expired Plans', val: data?.expiredCount ?? 0 },
           { label: 'Revoked Slots', val: data?.revokedCount ?? 0 }
         ].map(k => (
-          <div key={k.label} className="p-3.5 rounded-xl bg-[#0b0c10] border border-slate-800">
-            <p className="text-[11px] text-slate-400">{k.label}</p>
-            <p className={`text-xl font-bold font-mono tabular-nums mt-1 ${k.gold ? 'text-[#f0cf65]' : 'text-white'}`}>
+          <div key={k.label} className="p-4 rounded-2xl bg-[#111319] border border-white/[0.08]">
+            <p className="text-xs text-slate-400">{k.label}</p>
+            <p className={`text-xl font-bold tabular-nums mt-1.5 ${k.gold ? 'text-[#f0cf65]' : 'text-white'}`}>
               {k.val}
             </p>
           </div>
@@ -501,7 +544,7 @@ export const PromotionalProgramPanel: React.FC<PanelCommonProps> = ({
       </div>
 
       {eligible.length > 0 && (
-        <div className="rounded-2xl bg-[#0b0c10] border border-slate-800 p-4 space-y-2.5">
+        <div className="rounded-2xl bg-[#111319] border border-white/[0.08] p-4 space-y-2.5">
           <h4 className="text-xs font-semibold text-[#f0cf65]">
             Eligible Pending Applications ({eligible.length})
           </h4>
@@ -509,49 +552,49 @@ export const PromotionalProgramPanel: React.FC<PanelCommonProps> = ({
             {eligible.map(app => (
               <div
                 key={app.userId}
-                className="p-2.5 rounded-xl bg-[#050507] border border-slate-800 flex items-center justify-between gap-2"
+                className="p-3 rounded-xl bg-[#090a0e] border border-white/[0.06] flex flex-wrap items-center justify-between gap-2"
               >
                 <div>
                   <span className="font-semibold text-white">{app.displayName}</span>
-                  <span className="text-slate-400 font-mono ml-2">({app.email})</span>
+                  <span className="text-slate-400 ml-2">({app.email})</span>
                 </div>
-                <span className="font-mono text-[11px] text-amber-300">{app.profileStatus}</span>
+                <span className="text-xs font-medium text-amber-300">{app.profileStatus}</span>
               </div>
             ))}
           </div>
         </div>
       )}
 
-      <div className="rounded-2xl bg-[#0b0c10] border border-slate-800/90 overflow-x-auto">
-        <div className="p-4 border-b border-slate-800">
+      <div className="rounded-2xl bg-[#111319] border border-white/[0.08] overflow-x-auto">
+        <div className="p-4 border-b border-white/[0.07]">
           <h4 className="text-sm font-semibold text-white">Allocated Promotional Slots ({approved.length}/10)</h4>
         </div>
         <table className="w-full text-left border-collapse text-xs">
           <thead>
-            <tr className="border-b border-slate-800 text-slate-400">
-              <th className="py-3 px-4">Slot #</th>
-              <th className="py-3 px-4">Artist</th>
-              <th className="py-3 px-4">Activated</th>
-              <th className="py-3 px-4">Expires</th>
-              <th className="py-3 px-4">Status</th>
-              <th className="py-3 px-4 text-right">Actions</th>
+            <tr className="border-b border-white/[0.07] bg-[#0d0f14] text-slate-400">
+              <th className="py-3 px-4 font-medium">Slot</th>
+              <th className="py-3 px-4 font-medium">Artist</th>
+              <th className="py-3 px-4 font-medium">Activated</th>
+              <th className="py-3 px-4 font-medium">Expires</th>
+              <th className="py-3 px-4 font-medium">Status</th>
+              <th className="py-3 px-4 font-medium text-right">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-800/70">
+          <tbody className="divide-y divide-white/[0.06]">
             {approved.map(p => (
               <tr key={p.id} className="hover:bg-white/[0.02]">
-                <td className="py-3 px-4 font-mono font-bold text-[#f0cf65] tabular-nums">#{p.slotNumber}</td>
+                <td className="py-3 px-4 font-bold text-[#f0cf65] tabular-nums">#{p.slotNumber}</td>
                 <td className="py-3 px-4">
                   <div className="font-semibold text-white">{p.artistDisplayName}</div>
-                  <div className="text-[11px] text-slate-400 font-mono">{p.userEmail}</div>
+                  <div className="text-xs text-slate-400">{p.userEmail}</div>
                 </td>
-                <td className="py-3 px-4 font-mono text-slate-300">
+                <td className="py-3 px-4 text-slate-300 tabular-nums whitespace-nowrap">
                   {String(p.activatedAt || '').slice(0, 10)}
                 </td>
-                <td className="py-3 px-4 font-mono text-slate-300">
+                <td className="py-3 px-4 text-slate-300 tabular-nums whitespace-nowrap">
                   {String(p.expiresAt || '').slice(0, 10)}
                 </td>
-                <td className="py-3 px-4 font-mono uppercase text-[11px]">
+                <td className="py-3 px-4 font-medium">
                   <span
                     className={
                       p.status === 'ACTIVE'
@@ -581,7 +624,7 @@ export const PromotionalProgramPanel: React.FC<PanelCommonProps> = ({
                           requiresReason: true
                         })
                       }
-                      className="px-2.5 py-1 rounded-lg bg-red-950/70 border border-red-700/50 text-red-300 whitespace-nowrap"
+                      className="h-8 px-3 rounded-lg bg-red-950/70 border border-red-500/40 text-red-300 font-medium whitespace-nowrap"
                     >
                       Revoke Access
                     </button>
@@ -679,20 +722,20 @@ export const FinancialGovernancePanel: React.FC<PanelCommonProps> = ({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h3 className="text-sm font-semibold text-white flex items-center gap-2">
             <IndianRupee className="w-4 h-4 text-[#d4af37]" />
-            Verified Financial Governance & DSP Royalty Statements
+            Financial Governance & Royalty Statements
           </h3>
-          <p className="text-xs text-slate-400">
-            Zero fabricated balances · Cleared vs In Clearance vs Projected royalties strictly separated
+          <p className="text-xs text-slate-400 mt-0.5">
+            Verified cleared, in-clearance, and projected royalties separated across artist ledgers
           </p>
         </div>
         <button
           type="button"
           onClick={loadGovernance}
-          className="px-3 py-1.5 rounded-xl bg-[#050507] border border-slate-800 text-xs text-slate-300 inline-flex items-center gap-1.5 whitespace-nowrap"
+          className="h-9 px-3.5 rounded-xl bg-[#111319] border border-white/[0.08] text-xs font-medium text-slate-300 hover:text-white inline-flex items-center gap-1.5 whitespace-nowrap"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
           Sync Ledger
@@ -700,18 +743,16 @@ export const FinancialGovernancePanel: React.FC<PanelCommonProps> = ({
       </div>
 
       {/* Record Verified DSP Royalty Statement */}
-      <form onSubmit={handleImportStatement} className="p-5 rounded-2xl bg-[#0b0c10] border border-slate-800 space-y-4">
-        <div className="flex items-center justify-between">
-          <h4 className="text-xs font-semibold text-[#f0cf65] flex items-center gap-1.5">
-            <Plus className="w-3.5 h-3.5" /> Record Verified DSP Royalty Statement
-          </h4>
-        </div>
+      <form onSubmit={handleImportStatement} className="p-5 rounded-2xl bg-[#111319] border border-white/[0.08] space-y-4">
+        <h4 className="text-xs font-semibold text-[#f0cf65] flex items-center gap-1.5">
+          <Plus className="w-3.5 h-3.5" /> Record Verified DSP Royalty Statement
+        </h4>
         <div className="grid grid-cols-1 sm:grid-cols-6 gap-3 text-xs">
           <select
             required
             value={form.userId}
             onChange={e => setForm({ ...form, userId: e.target.value })}
-            className="sm:col-span-2 px-3 py-2 rounded-xl bg-[#050507] border border-slate-800 text-white"
+            className="sm:col-span-2 h-10 px-3 rounded-xl bg-[#090a0e] border border-white/[0.08] text-white"
           >
             <option value="">Select Artist...</option>
             {balances.map(b => (
@@ -725,12 +766,12 @@ export const FinancialGovernancePanel: React.FC<PanelCommonProps> = ({
             required
             value={form.month}
             onChange={e => setForm({ ...form, month: e.target.value })}
-            className="px-3 py-2 rounded-xl bg-[#050507] border border-slate-800 text-white font-mono"
+            className="h-10 px-3 rounded-xl bg-[#090a0e] border border-white/[0.08] text-white tabular-nums"
           />
           <select
             value={form.status}
             onChange={e => setForm({ ...form, status: e.target.value as any })}
-            className="px-3 py-2 rounded-xl bg-[#050507] border border-slate-800 text-white"
+            className="h-10 px-3 rounded-xl bg-[#090a0e] border border-white/[0.08] text-white"
           >
             <option value="Cleared">Cleared</option>
             <option value="In Clearance">In Clearance</option>
@@ -745,7 +786,7 @@ export const FinancialGovernancePanel: React.FC<PanelCommonProps> = ({
             placeholder="Net INR"
             value={form.netRoyalty}
             onChange={e => setForm({ ...form, netRoyalty: e.target.value })}
-            className="px-3 py-2 rounded-xl bg-[#050507] border border-slate-800 text-white font-mono"
+            className="h-10 px-3 rounded-xl bg-[#090a0e] border border-white/[0.08] text-white tabular-nums"
           />
           <input
             type="number"
@@ -753,14 +794,14 @@ export const FinancialGovernancePanel: React.FC<PanelCommonProps> = ({
             placeholder="Streams"
             value={form.streams}
             onChange={e => setForm({ ...form, streams: e.target.value })}
-            className="px-3 py-2 rounded-xl bg-[#050507] border border-slate-800 text-white font-mono"
+            className="h-10 px-3 rounded-xl bg-[#090a0e] border border-white/[0.08] text-white tabular-nums"
           />
         </div>
         <div className="flex justify-end">
           <button
             type="submit"
             disabled={importing}
-            className="px-4 py-2 rounded-xl bg-[#d4af37] hover:bg-[#f0cf65] text-black text-xs font-bold whitespace-nowrap"
+            className="h-10 px-4 rounded-xl bg-[#d4af37] hover:bg-[#e5c354] text-[#090a0e] text-xs font-semibold whitespace-nowrap"
           >
             {importing ? 'Recording...' : 'Record Verified DSP Statement'}
           </button>
@@ -768,31 +809,31 @@ export const FinancialGovernancePanel: React.FC<PanelCommonProps> = ({
       </form>
 
       {/* Pending Settlements */}
-      <div className="rounded-2xl bg-[#0b0c10] border border-slate-800 overflow-x-auto">
-        <div className="p-4 border-b border-slate-800">
+      <div className="rounded-2xl bg-[#111319] border border-white/[0.08] overflow-x-auto">
+        <div className="p-4 border-b border-white/[0.07]">
           <h4 className="text-sm font-semibold text-white">
             Pending Payout Settlements ({pendingPayouts.length})
           </h4>
         </div>
         <table className="w-full text-left border-collapse text-xs">
           <thead>
-            <tr className="border-b border-slate-800 text-slate-400">
-              <th className="py-3 px-4">Reference</th>
-              <th className="py-3 px-4">User ID</th>
-              <th className="py-3 px-4">Method</th>
-              <th className="py-3 px-4">Amount</th>
-              <th className="py-3 px-4">Status</th>
-              <th className="py-3 px-4 text-right">Actions</th>
+            <tr className="border-b border-white/[0.07] bg-[#0d0f14] text-slate-400">
+              <th className="py-3 px-4 font-medium">Reference</th>
+              <th className="py-3 px-4 font-medium">User ID</th>
+              <th className="py-3 px-4 font-medium">Method</th>
+              <th className="py-3 px-4 font-medium">Amount</th>
+              <th className="py-3 px-4 font-medium">Status</th>
+              <th className="py-3 px-4 font-medium text-right">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-800/70">
+          <tbody className="divide-y divide-white/[0.06]">
             {pendingPayouts.map(p => (
               <tr key={p.id}>
-                <td className="py-3 px-4 font-mono text-white">{p.reference}</td>
-                <td className="py-3 px-4 font-mono text-slate-400">{p.userId}</td>
+                <td className="py-3 px-4 font-medium text-white tabular-nums">{p.reference}</td>
+                <td className="py-3 px-4 text-slate-400 tabular-nums">{p.userId}</td>
                 <td className="py-3 px-4 text-slate-300">{p.method} ({p.details})</td>
-                <td className="py-3 px-4 font-mono text-[#f0cf65] tabular-nums">₹{Number(p.amountINR).toFixed(2)}</td>
-                <td className="py-3 px-4 font-mono text-amber-300">{p.status}</td>
+                <td className="py-3 px-4 font-semibold text-[#f0cf65] tabular-nums">₹{Number(p.amountINR).toFixed(2)}</td>
+                <td className="py-3 px-4 font-medium text-amber-300">{p.status}</td>
                 <td className="py-3 px-4 text-right space-x-2 whitespace-nowrap">
                   {p.status === 'Pending' && (
                     <>
@@ -810,7 +851,7 @@ export const FinancialGovernancePanel: React.FC<PanelCommonProps> = ({
                             payload: {}
                           })
                         }
-                        className="px-2.5 py-1 rounded-lg bg-emerald-950/70 border border-emerald-700/50 text-emerald-300"
+                        className="h-8 px-3 rounded-lg bg-emerald-950/70 border border-emerald-500/40 text-emerald-300 font-medium"
                       >
                         Mark Paid
                       </button>
@@ -829,7 +870,7 @@ export const FinancialGovernancePanel: React.FC<PanelCommonProps> = ({
                             requiresReason: true
                           })
                         }
-                        className="px-2.5 py-1 rounded-lg bg-red-950/70 border border-red-700/50 text-red-300"
+                        className="h-8 px-3 rounded-lg bg-red-950/70 border border-red-500/40 text-red-300 font-medium"
                       >
                         Reject
                       </button>
@@ -850,40 +891,40 @@ export const FinancialGovernancePanel: React.FC<PanelCommonProps> = ({
       </div>
 
       {/* Verified Artist Balances */}
-      <div className="rounded-2xl bg-[#0b0c10] border border-slate-800 overflow-x-auto">
-        <div className="p-4 border-b border-slate-800 flex items-center justify-between">
+      <div className="rounded-2xl bg-[#111319] border border-white/[0.08] overflow-x-auto">
+        <div className="p-4 border-b border-white/[0.07] flex flex-wrap items-center justify-between gap-2">
           <h4 className="text-sm font-semibold text-white">Verified Artist Balances ({balances.length})</h4>
-          <span className="text-[11px] font-mono text-slate-400">
+          <span className="text-xs text-slate-400 tabular-nums">
             Statements: {statements.length} · Successful Payouts: {successfulPayouts.length}
           </span>
         </div>
         <table className="w-full text-left border-collapse text-xs">
           <thead>
-            <tr className="border-b border-slate-800 text-slate-400">
-              <th className="py-3 px-4">Artist</th>
-              <th className="py-3 px-4">Cleared Balance</th>
-              <th className="py-3 px-4">In Clearance</th>
-              <th className="py-3 px-4">Projected</th>
-              <th className="py-3 px-4">Paid Out</th>
+            <tr className="border-b border-white/[0.07] bg-[#0d0f14] text-slate-400">
+              <th className="py-3 px-4 font-medium">Artist</th>
+              <th className="py-3 px-4 font-medium">Cleared Balance</th>
+              <th className="py-3 px-4 font-medium">In Clearance</th>
+              <th className="py-3 px-4 font-medium">Projected</th>
+              <th className="py-3 px-4 font-medium">Paid Out</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-800/70">
+          <tbody className="divide-y divide-white/[0.06]">
             {balances.map(b => (
               <tr key={b.userId}>
                 <td className="py-3 px-4">
                   <div className="text-white font-semibold">{b.displayName}</div>
-                  <div className="text-[11px] text-slate-400 font-mono">{b.email}</div>
+                  <div className="text-xs text-slate-400">{b.email}</div>
                 </td>
-                <td className="py-3 px-4 font-mono text-emerald-300 tabular-nums">
+                <td className="py-3 px-4 font-medium text-emerald-300 tabular-nums">
                   ₹{Number(b.clearedBalance || 0).toFixed(2)}
                 </td>
-                <td className="py-3 px-4 font-mono text-amber-300 tabular-nums">
+                <td className="py-3 px-4 font-medium text-amber-300 tabular-nums">
                   ₹{Number(b.pendingRoyalties || 0).toFixed(2)}
                 </td>
-                <td className="py-3 px-4 font-mono text-slate-400 tabular-nums">
+                <td className="py-3 px-4 text-slate-400 tabular-nums">
                   ₹{Number(b.projectedRoyalties || 0).toFixed(2)}
                 </td>
-                <td className="py-3 px-4 font-mono text-white tabular-nums">
+                <td className="py-3 px-4 font-medium text-white tabular-nums">
                   ₹{Number(b.completedPayouts || 0).toFixed(2)}
                 </td>
               </tr>
@@ -951,24 +992,24 @@ export const InfrastructurePanel: React.FC<{
         <div>
           <h3 className="text-sm font-semibold text-white flex items-center gap-2">
             <Server className="w-4 h-4 text-[#d4af37]" />
-            Infrastructure, Connection Pool, Email Queue & Backup Snapshot
+            Infrastructure & Backup Snapshot
           </h3>
-          <p className="text-xs text-slate-400">
-            Live database pool counters, asynchronous notification relay queue, and safe snapshot export
+          <p className="text-xs text-slate-400 mt-0.5">
+            Live database pool counters, email queue metrics, and JSON data backup export
           </p>
         </div>
         <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={loadInfra}
-            className="px-3 py-1.5 rounded-xl bg-[#050507] border border-slate-800 text-xs text-slate-300 inline-flex items-center gap-1.5 whitespace-nowrap"
+            className="h-9 px-3.5 rounded-xl bg-[#111319] border border-white/[0.08] text-xs font-medium text-slate-300 hover:text-white inline-flex items-center gap-1.5 whitespace-nowrap"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} /> Refresh
           </button>
           <button
             type="button"
             onClick={handleDownloadBackup}
-            className="px-3.5 py-1.5 rounded-xl bg-[#d4af37] hover:bg-[#f0cf65] text-black text-xs font-bold inline-flex items-center gap-1.5 whitespace-nowrap"
+            className="h-9 px-3.5 rounded-xl bg-[#d4af37] hover:bg-[#e5c354] text-[#090a0e] text-xs font-semibold inline-flex items-center gap-1.5 whitespace-nowrap"
           >
             <Download className="w-3.5 h-3.5" /> Download Backup JSON
           </button>
@@ -976,32 +1017,32 @@ export const InfrastructurePanel: React.FC<{
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-        <div className="p-4 rounded-2xl bg-[#0b0c10] border border-slate-800 space-y-1.5">
+        <div className="p-4 rounded-2xl bg-[#111319] border border-white/[0.08] space-y-1.5">
           <p className="font-semibold text-[#f0cf65]">Database Engine & Pool</p>
-          <p className="font-mono text-white">{infra?.database?.mode || 'Checking...'}</p>
-          <p className="font-mono text-slate-400">
+          <p className="text-white font-medium">{infra?.database?.mode || 'Checking...'}</p>
+          <p className="text-slate-400 tabular-nums">
             Pool Total: {infra?.database?.pool?.totalCount ?? 0} · Idle: {infra?.database?.pool?.idleCount ?? 0} · Waiting:{' '}
             {infra?.database?.pool?.waitingCount ?? 0}
           </p>
         </div>
 
-        <div className="p-4 rounded-2xl bg-[#0b0c10] border border-slate-800 space-y-1.5">
+        <div className="p-4 rounded-2xl bg-[#111319] border border-white/[0.08] space-y-1.5">
           <p className="font-semibold text-[#f0cf65]">Email Delivery Queue</p>
-          <p className="font-mono text-white">
+          <p className="text-white font-medium tabular-nums">
             Sent: {infra?.emailQueue?.sent ?? 0} · Queued: {infra?.emailQueue?.queued ?? 0} · Failed:{' '}
             {infra?.emailQueue?.failed ?? 0}
           </p>
-          <p className="font-mono text-slate-400">
+          <p className="text-slate-400 tabular-nums">
             Promo Slots Used: {infra?.promotionalSlots?.used ?? 0} / {infra?.promotionalSlots?.total ?? 10}
           </p>
         </div>
 
-        <div className="p-4 rounded-2xl bg-[#0b0c10] border border-slate-800 space-y-1.5">
+        <div className="p-4 rounded-2xl bg-[#111319] border border-white/[0.08] space-y-1.5">
           <p className="font-semibold text-[#f0cf65]">Rate & Upload Guards</p>
-          <p className="font-mono text-slate-300">
+          <p className="text-slate-200 tabular-nums">
             Auth Limit: {infra?.limits?.authRateLimitPer15Min ?? 15} req / 15m
           </p>
-          <p className="font-mono text-slate-400">
+          <p className="text-slate-400 tabular-nums">
             Max Audio: {infra?.limits?.maxAudioSizeMB ?? 150}MB · Artwork: {infra?.limits?.maxArtworkSizeMB ?? 25}MB · Profile:{' '}
             {infra?.limits?.maxProfileImageSizeMB ?? 10}MB
           </p>

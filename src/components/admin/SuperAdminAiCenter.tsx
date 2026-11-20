@@ -8,8 +8,7 @@ import {
   Sliders,
   Activity,
   Play,
-  Cpu,
-  AlertTriangle
+  Cpu
 } from 'lucide-react';
 import { apiUrl } from '../../utils/api';
 import type { OwnerApprovalProposalInput } from './adminTypes';
@@ -202,26 +201,26 @@ export const SuperAdminAiReviewCenter: React.FC<Props> = ({
 
   return (
     <div className="space-y-6">
-      <div className="p-3.5 rounded-xl bg-[#0b0c10] border border-[#d4af37]/30 flex flex-wrap items-center justify-between gap-2 text-xs">
-        <span className="font-mono text-[#f0cf65]">
-          Submenu View: {activeSubmenu.replace(/-/g, ' ').toUpperCase()}
+      <div className="p-4 rounded-2xl bg-[#111319] border border-white/[0.08] flex flex-wrap items-center justify-between gap-2 text-xs">
+        <span className="font-semibold text-[#f0cf65] capitalize">
+          {activeSubmenu.replace(/-/g, ' ')}
         </span>
         <span className="text-slate-400">
-          AI provides evidence & risk scores only — final decisions require explicit Owner confirmation.
+          AI provides evidence & risk scores only — final release decisions require Owner confirmation.
         </span>
       </div>
 
-      {/* 10 AI KPIs */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+      {/* KPIs */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         {kpis.map(k => (
           <div
             key={k.label}
-            className={`p-4 rounded-xl bg-[#0b0c10] border ${
-              k.gold ? 'border-[#d4af37]/40' : 'border-slate-800/90'
+            className={`p-4 rounded-2xl bg-[#111319] border ${
+              k.gold ? 'border-[#d4af37]/30' : 'border-white/[0.08]'
             }`}
           >
-            <p className="text-[11px] text-slate-400">{k.label}</p>
-            <p className={`text-lg font-bold font-mono tabular-nums mt-1 ${k.gold ? 'text-[#f0cf65]' : 'text-white'}`}>
+            <p className="text-xs text-slate-400">{k.label}</p>
+            <p className={`text-lg font-bold tabular-nums mt-1.5 ${k.gold ? 'text-[#f0cf65]' : 'text-white'}`}>
               {k.value}
             </p>
           </div>
@@ -229,68 +228,68 @@ export const SuperAdminAiReviewCenter: React.FC<Props> = ({
       </div>
 
       {/* Filters */}
-      <div className="p-4 rounded-2xl bg-[#0b0c10] border border-slate-800/90 flex flex-wrap items-center gap-3">
+      <div className="p-4 rounded-2xl bg-[#111319] border border-white/[0.08] flex flex-wrap items-center gap-3">
         <div className="relative flex-1 min-w-[220px]">
-          <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Search by song title, artist, user email, or release ID..."
-            className="w-full pl-9 pr-3 py-2 rounded-xl bg-[#050507] border border-slate-800 text-xs text-white"
+            className="w-full h-10 pl-9 pr-3 rounded-xl bg-[#090a0e] border border-white/[0.08] text-xs text-white focus:border-[#d4af37]/60 focus:outline-none"
           />
         </div>
         <select
           value={riskFilter}
           onChange={e => setRiskFilter(e.target.value)}
-          className="px-3 py-2 rounded-xl bg-[#050507] border border-slate-800 text-xs text-white"
+          className="h-10 px-3 rounded-xl bg-[#090a0e] border border-white/[0.08] text-xs text-white"
         >
           <option value="all">All Risk Levels</option>
-          <option value="LOW">LOW RISK</option>
-          <option value="MEDIUM">MEDIUM RISK</option>
-          <option value="HIGH">HIGH RISK</option>
-          <option value="PENDING">NOT SCANNED</option>
+          <option value="LOW">Low Risk</option>
+          <option value="MEDIUM">Medium Risk</option>
+          <option value="HIGH">High Risk</option>
+          <option value="PENDING">Not Scanned</option>
         </select>
         <button
           onClick={loadData}
-          className="px-3 py-2 rounded-xl bg-[#d4af37]/15 border border-[#d4af37]/40 text-xs text-[#f0cf65] flex items-center gap-1.5"
+          className="h-10 px-3.5 rounded-xl bg-[#d4af37]/15 border border-[#d4af37]/40 text-xs font-medium text-[#f0cf65] flex items-center gap-1.5"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} /> Refresh
         </button>
       </div>
 
       {/* AI Review Table */}
-      <div className="rounded-2xl bg-[#0b0c10] border border-slate-800/90 overflow-x-auto">
+      <div className="rounded-2xl bg-[#111319] border border-white/[0.08] overflow-x-auto">
         <table className="w-full text-left border-collapse text-xs">
           <thead>
-            <tr className="border-b border-slate-800 text-slate-400">
-              <th className="py-3 px-4">Release & Artist</th>
-              <th className="py-3 px-4">Submitter</th>
-              <th className="py-3 px-4">Duration</th>
-              <th className="py-3 px-4">AI Risk</th>
-              <th className="py-3 px-4">AcoustID / Dup</th>
-              <th className="py-3 px-4">Quality / AI</th>
-              <th className="py-3 px-4">Decision</th>
-              <th className="py-3 px-4 text-right">Actions</th>
+            <tr className="border-b border-white/[0.07] bg-[#0d0f14] text-slate-400">
+              <th className="py-3 px-4 font-medium">Release & Artist</th>
+              <th className="py-3 px-4 font-medium">Submitter</th>
+              <th className="py-3 px-4 font-medium">Duration</th>
+              <th className="py-3 px-4 font-medium">AI Risk</th>
+              <th className="py-3 px-4 font-medium">AcoustID / Dup</th>
+              <th className="py-3 px-4 font-medium">Quality / AI</th>
+              <th className="py-3 px-4 font-medium">Decision</th>
+              <th className="py-3 px-4 font-medium text-right">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-800/70">
+          <tbody className="divide-y divide-white/[0.06]">
             {filteredBySubmenu.map(r => (
               <tr key={r.releaseId} className="hover:bg-white/[0.02]">
-                <td className="py-3 px-4">
+                <td className="py-3.5 px-4">
                   <div className="font-semibold text-white">{r.title}</div>
-                  <div className="text-[11px] text-slate-400">
+                  <div className="text-xs text-slate-400">
                     {r.artist} · {r.releaseId}
                   </div>
                 </td>
-                <td className="py-3 px-4">
-                  <div className="text-slate-200 font-mono text-[11px]">{r.userEmail}</div>
-                  <div className="text-[10px] text-slate-500 font-mono">{r.userId}</div>
+                <td className="py-3.5 px-4">
+                  <div className="text-slate-200">{r.userEmail}</div>
+                  <div className="text-[11px] text-slate-500">{r.userId}</div>
                 </td>
-                <td className="py-3 px-4 font-mono tabular-nums text-slate-300">
+                <td className="py-3.5 px-4 tabular-nums text-slate-300">
                   {r.durationSec ? `${Math.round(r.durationSec)}s` : '—'}
                 </td>
-                <td className="py-3 px-4 font-mono font-bold">
+                <td className="py-3.5 px-4 font-semibold">
                   <span
                     className={
                       r.riskLevel === 'HIGH'
@@ -305,39 +304,39 @@ export const SuperAdminAiReviewCenter: React.FC<Props> = ({
                     {r.riskLevel}
                   </span>
                 </td>
-                <td className="py-3 px-4 font-mono text-[11px]">
+                <td className="py-3.5 px-4 tabular-nums">
                   <div className="text-slate-200">{r.acoustIdStatus}</div>
                   {(r.acoustIdMatchesCount > 0 || r.duplicateCount > 0) && (
-                    <div className="text-amber-400">
+                    <div className="text-amber-400 text-[11px]">
                       {r.acoustIdMatchesCount} ext · {r.duplicateCount} dup
                     </div>
                   )}
                 </td>
-                <td className="py-3 px-4 text-[11px]">
+                <td className="py-3.5 px-4">
                   <span className={r.audioQualityValid ? 'text-emerald-300' : 'text-amber-300'}>
                     Audio: {r.audioQualityValid === null ? '—' : r.audioQualityValid ? 'OK' : 'Warn'}
                   </span>
                   <div className="text-slate-400">AI: {r.metadataStatus}</div>
                 </td>
-                <td className="py-3 px-4">
-                  <div className="text-[11px] font-semibold text-[#f0cf65]">{r.finalDecision}</div>
+                <td className="py-3.5 px-4">
+                  <div className="font-semibold text-[#f0cf65]">{r.finalDecision}</div>
                   {r.pendingAppeals > 0 && (
-                    <span className="text-[10px] text-amber-300 font-mono">{r.pendingAppeals} appeal(s)</span>
+                    <span className="text-[11px] text-amber-300">{r.pendingAppeals} appeal(s)</span>
                   )}
                 </td>
-                <td className="py-3 px-4 text-right space-x-1.5 whitespace-nowrap">
+                <td className="py-3.5 px-4 text-right space-x-1.5 whitespace-nowrap">
                   <button
                     onClick={() => openDetail(r.releaseId)}
-                    className="px-2.5 py-1 rounded-lg bg-[#d4af37]/15 border border-[#d4af37]/40 text-[#f0cf65] inline-flex items-center gap-1"
+                    className="h-8 px-3 rounded-lg bg-[#d4af37]/15 border border-[#d4af37]/40 text-[#f0cf65] inline-flex items-center gap-1.5 font-medium"
                   >
-                    <Eye className="w-3 h-3" /> Report
+                    <Eye className="w-3.5 h-3.5" /> Report
                   </button>
                   <button
                     onClick={() => runAction(r.releaseId, 'rerun_scan')}
-                    className="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 inline-flex items-center gap-1"
+                    className="h-8 px-2.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] text-slate-200 inline-flex items-center"
                     title="Re-run AI Scan"
                   >
-                    <Play className="w-3 h-3" />
+                    <Play className="w-3.5 h-3.5" />
                   </button>
                 </td>
               </tr>
@@ -355,28 +354,28 @@ export const SuperAdminAiReviewCenter: React.FC<Props> = ({
 
       {/* Detailed AI Report & Override Modal */}
       {detail && (
-        <div className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-4">
-          <div className="max-w-5xl w-full max-h-[92vh] overflow-y-auto rounded-2xl bg-[#0b0c10] border border-[#d4af37]/40 p-6 space-y-5 text-xs">
-            <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-800 pb-4">
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="max-w-5xl w-full max-h-[92vh] overflow-y-auto rounded-2xl bg-[#111319] border border-white/[0.1] p-6 space-y-5 text-xs shadow-2xl">
+            <div className="flex flex-wrap items-start justify-between gap-3 border-b border-white/[0.08] pb-4">
               <div>
                 <h3 className="text-lg font-bold text-white flex items-center gap-2">
                   <Sparkles className="w-5 h-5 text-[#d4af37]" />
-                  {detail.release.title} — AI Compliance & Risk Report
+                  {detail.release.title} — Compliance & Risk Report
                 </h3>
-                <p className="text-slate-400 font-mono mt-0.5">
+                <p className="text-slate-400 mt-0.5">
                   {detail.release.artist} · {detail.owner?.email} · Status: {detail.release.status}
                 </p>
               </div>
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => downloadReport(detail.release.id)}
-                  className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 inline-flex items-center gap-1.5"
+                  className="h-9 px-3 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] text-slate-200 inline-flex items-center gap-1.5 font-medium"
                 >
                   <Download className="w-3.5 h-3.5" /> Download Report
                 </button>
                 <button
                   onClick={() => setDetail(null)}
-                  className="px-3 py-1.5 rounded-lg bg-slate-900 text-slate-400 hover:text-white"
+                  className="h-9 px-3 rounded-xl bg-[#090a0e] text-slate-400 hover:text-white"
                 >
                   Close
                 </button>
@@ -386,30 +385,29 @@ export const SuperAdminAiReviewCenter: React.FC<Props> = ({
             {detail.aiResult ? (
               <div className="space-y-4">
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <div className="p-3 rounded-xl bg-[#050507] border border-slate-800">
+                  <div className="p-3.5 rounded-xl bg-[#090a0e] border border-white/[0.06]">
                     <p className="text-slate-400">Risk Classification</p>
                     <p className="text-base font-bold text-[#f0cf65] mt-0.5">{detail.aiResult.riskLevel}</p>
                   </div>
-                  <div className="p-3 rounded-xl bg-[#050507] border border-slate-800">
+                  <div className="p-3.5 rounded-xl bg-[#090a0e] border border-white/[0.06]">
                     <p className="text-slate-400">Recommended Decision</p>
                     <p className="text-sm font-semibold text-white mt-0.5">{detail.aiResult.recommendedDecision}</p>
                   </div>
-                  <div className="p-3 rounded-xl bg-[#050507] border border-slate-800">
+                  <div className="p-3.5 rounded-xl bg-[#090a0e] border border-white/[0.06]">
                     <p className="text-slate-400">AcoustID Status</p>
-                    <p className="text-sm font-mono text-white mt-0.5">{detail.aiResult.acoustIdStatus}</p>
+                    <p className="text-sm font-medium text-white mt-0.5">{detail.aiResult.acoustIdStatus}</p>
                   </div>
-                  <div className="p-3 rounded-xl bg-[#050507] border border-slate-800">
+                  <div className="p-3.5 rounded-xl bg-[#090a0e] border border-white/[0.06]">
                     <p className="text-slate-400">Fingerprint</p>
-                    <p className="text-[11px] font-mono text-slate-300 truncate mt-0.5">
+                    <p className="text-xs text-slate-300 truncate mt-0.5 tabular-nums">
                       {detail.aiResult.fingerprintHash || detail.aiResult.fingerprintStatus}
                     </p>
                   </div>
                 </div>
 
-                {/* Audio Technical Quality */}
-                <div className="p-4 rounded-xl bg-[#050507] border border-slate-800 space-y-2">
+                <div className="p-4 rounded-xl bg-[#090a0e] border border-white/[0.06] space-y-2">
                   <h4 className="font-semibold text-[#f0cf65]">Audio Technical Analysis (FFmpeg)</h4>
-                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 font-mono text-[11px] text-slate-300">
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs text-slate-300 tabular-nums">
                     <div>Format: {detail.aiResult.audioQuality?.codec}</div>
                     <div>Duration: {Math.round(detail.aiResult.audioQuality?.durationSec || 0)}s</div>
                     <div>Sample Rate: {detail.aiResult.audioQuality?.sampleRateHz} Hz</div>
@@ -425,32 +423,30 @@ export const SuperAdminAiReviewCenter: React.FC<Props> = ({
                   )}
                 </div>
 
-                {/* AcoustID & Duplicate Evidence */}
-                <div className="p-4 rounded-xl bg-[#050507] border border-slate-800 space-y-2">
+                <div className="p-4 rounded-xl bg-[#090a0e] border border-white/[0.06] space-y-2">
                   <h4 className="font-semibold text-[#f0cf65]">AcoustID & Duplicate Evidence</h4>
                   {detail.aiResult.acoustIdMatches?.length > 0 ? (
                     <div className="space-y-1.5">
                       {detail.aiResult.acoustIdMatches.map((m: any, idx: number) => (
-                        <div key={idx} className="p-2 rounded bg-[#0b0c10] border border-slate-800 flex justify-between font-mono text-[11px]">
+                        <div key={idx} className="p-2.5 rounded-lg bg-[#111319] border border-white/[0.06] flex justify-between text-xs">
                           <span>
                             {m.title || 'Untitled'} — {m.artist || 'Unknown'} (MBID: {m.musicbrainzId || '—'})
                           </span>
-                          <span className="text-amber-400">Score: {Math.round((m.score || 0) * 100)}%</span>
+                          <span className="text-amber-400 tabular-nums">Score: {Math.round((m.score || 0) * 100)}%</span>
                         </div>
                       ))}
                     </div>
                   ) : (
                     <p className="text-slate-400">
-                      AcoustID Result: {detail.aiResult.acoustIdStatus} (not legal proof of originality).
+                      AcoustID Result: {detail.aiResult.acoustIdStatus}
                     </p>
                   )}
                 </div>
 
-                {/* Gemini Report */}
-                <div className="p-4 rounded-xl bg-[#050507] border border-slate-800 space-y-2.5">
+                <div className="p-4 rounded-xl bg-[#090a0e] border border-white/[0.06] space-y-2.5">
                   <div className="flex justify-between items-center">
                     <h4 className="font-semibold text-[#f0cf65]">Gemini AI Compliance Analysis</h4>
-                    <span className="font-mono text-[11px] text-slate-400">
+                    <span className="text-xs text-slate-400">
                       {detail.aiResult.geminiReport?.status} · {detail.aiResult.geminiReport?.model}
                     </span>
                   </div>
@@ -477,21 +473,20 @@ export const SuperAdminAiReviewCenter: React.FC<Props> = ({
                       {detail.aiResult.geminiReport?.recommendedAction}
                     </div>
                   </div>
-                  <p className="text-[11px] text-slate-500 italic">{detail.aiResult.geminiReport?.disclaimer}</p>
+                  <p className="text-xs text-slate-500 italic">{detail.aiResult.geminiReport?.disclaimer}</p>
                 </div>
               </div>
             ) : (
-              <div className="p-4 rounded-xl bg-[#050507] border border-slate-800 text-slate-400">
+              <div className="p-4 rounded-xl bg-[#090a0e] border border-white/[0.06] text-slate-400">
                 No AI scan result recorded for this release yet. Click "Re-run AI Scan" below.
               </div>
             )}
 
-            {/* Admin Actions routed through Owner Approval Safeguard */}
-            <div className="flex flex-wrap justify-between items-center gap-2 pt-3 border-t border-slate-800">
+            <div className="flex flex-wrap justify-between items-center gap-2 pt-3 border-t border-white/[0.08]">
               <div className="flex flex-wrap gap-2">
                 <button
                   onClick={() => runAction(detail.release.id, 'rerun_scan')}
-                  className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-medium"
+                  className="h-9 px-3.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] text-white font-medium"
                 >
                   Re-run AI Scan
                 </button>
@@ -499,7 +494,7 @@ export const SuperAdminAiReviewCenter: React.FC<Props> = ({
                   onClick={() =>
                     setActionModal({ releaseId: detail.release.id, title: detail.release.title, action: 'add_note' })
                   }
-                  className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200"
+                  className="h-9 px-3.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] text-slate-200 font-medium"
                 >
                   Add Internal Note
                 </button>
@@ -515,7 +510,7 @@ export const SuperAdminAiReviewCenter: React.FC<Props> = ({
                       'Sets release status to Action Required and notifies the artist.'
                     )
                   }
-                  className="px-3 py-2 rounded-xl bg-amber-950/70 border border-amber-700/50 text-amber-300 font-semibold"
+                  className="h-9 px-3.5 rounded-xl bg-amber-950/70 border border-amber-500/40 text-amber-300 font-semibold"
                 >
                   Request Corrections
                 </button>
@@ -529,7 +524,7 @@ export const SuperAdminAiReviewCenter: React.FC<Props> = ({
                       'Marks release Rejected and dispatches official rejection notice to artist.'
                     )
                   }
-                  className="px-3 py-2 rounded-xl bg-red-950/80 border border-red-700/50 text-red-300 font-semibold"
+                  className="h-9 px-3.5 rounded-xl bg-red-950/70 border border-red-500/40 text-red-300 font-semibold"
                 >
                   Reject Release
                 </button>
@@ -543,9 +538,9 @@ export const SuperAdminAiReviewCenter: React.FC<Props> = ({
                       'Marks release Approved and sends approval notification to artist.'
                     )
                   }
-                  className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold"
+                  className="h-9 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold"
                 >
-                  Approve (Owner Confirm)
+                  Approve Release
                 </button>
               </div>
             </div>
@@ -555,9 +550,9 @@ export const SuperAdminAiReviewCenter: React.FC<Props> = ({
 
       {/* Fallback Note/Reason Modal */}
       {actionModal && (
-        <div className="fixed inset-0 z-[60] bg-black/80 flex items-center justify-center p-4">
-          <div className="max-w-md w-full rounded-2xl bg-[#0b0c10] border border-[#d4af37]/40 p-6 space-y-4">
-            <h3 className="text-sm font-bold text-white uppercase">
+        <div className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="max-w-md w-full rounded-2xl bg-[#111319] border border-white/[0.1] p-6 space-y-4">
+            <h3 className="text-sm font-bold text-white capitalize">
               {actionModal.action.replace(/_/g, ' ')} · {actionModal.title}
             </h3>
             <textarea
@@ -565,12 +560,12 @@ export const SuperAdminAiReviewCenter: React.FC<Props> = ({
               value={actionReason}
               onChange={e => setActionReason(e.target.value)}
               placeholder="Enter instructions or internal note..."
-              className="w-full px-3 py-2 rounded-xl bg-[#050507] border border-slate-800 text-xs text-white"
+              className="w-full px-3.5 py-2.5 rounded-xl bg-[#090a0e] border border-white/[0.08] text-xs text-white"
             />
             <div className="flex justify-end gap-2">
               <button
                 onClick={() => setActionModal(null)}
-                className="px-4 py-2 rounded-xl bg-slate-800 text-xs text-slate-300"
+                className="h-9 px-4 rounded-xl bg-white/[0.06] text-xs text-slate-300 font-medium"
               >
                 Cancel
               </button>
@@ -583,7 +578,7 @@ export const SuperAdminAiReviewCenter: React.FC<Props> = ({
                     appealDecision: actionModal.appealDecision
                   })
                 }
-                className="px-4 py-2 rounded-xl bg-[#d4af37] text-black text-xs font-bold"
+                className="h-9 px-4 rounded-xl bg-[#d4af37] text-[#090a0e] text-xs font-semibold"
               >
                 Save Note
               </button>
@@ -702,79 +697,79 @@ export const SuperAdminAiSettings: React.FC<Props> = ({
 
   return (
     <div className="space-y-6">
-      <div className="p-3.5 rounded-xl bg-[#0b0c10] border border-[#d4af37]/30 flex flex-wrap items-center justify-between gap-2 text-xs">
-        <span className="font-mono text-[#f0cf65]">
-          AI Configuration Section: {activeSubmenu.replace(/-/g, ' ').toUpperCase()}
+      <div className="p-4 rounded-2xl bg-[#111319] border border-white/[0.08] flex flex-wrap items-center justify-between gap-2 text-xs">
+        <span className="font-semibold text-[#f0cf65] capitalize">
+          {activeSubmenu.replace(/-/g, ' ')}
         </span>
         <span className="text-slate-400">
-          API secrets stay isolated on Render backend; AI remains strictly advisory.
+          API secrets stay isolated on the server backend; AI remains strictly advisory.
         </span>
       </div>
 
       {/* Real AI Usage & Tokens Section */}
       {(activeSubmenu === 'ai-usage-costs' || usageData) && (
-        <div className="p-5 rounded-2xl bg-[#0b0c10] border border-slate-800/90 space-y-4">
+        <div className="p-5 rounded-2xl bg-[#111319] border border-white/[0.08] space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
               <h3 className="text-sm font-semibold text-white flex items-center gap-2">
-                <Cpu className="w-4 h-4 text-[#d4af37]" /> Real AI Usage & Logged Tokens
+                <Cpu className="w-4 h-4 text-[#d4af37]" /> AI Usage & Token Logs
               </h3>
-              <p className="text-[11px] text-slate-400">
-                Measured directly from backend Gemini API invocations. Billing rates depend on your Google Cloud billing plan.
+              <p className="text-xs text-slate-400 mt-0.5">
+                Measured directly from backend Gemini API invocations.
               </p>
             </div>
-            <span className="font-mono text-[11px] text-[#f0cf65]">
+            <span className="text-xs font-medium text-[#f0cf65]">
               Model: {usageData?.summary?.activeModel || settings.activeModel || 'gemini-4-hydrogen'}
             </span>
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-            <div className="p-3 rounded-xl bg-[#050507] border border-slate-800">
+            <div className="p-3.5 rounded-xl bg-[#090a0e] border border-white/[0.06]">
               <p className="text-slate-400">Logged AI Calls</p>
-              <p className="text-lg font-bold font-mono tabular-nums text-white mt-0.5">
+              <p className="text-lg font-bold tabular-nums text-white mt-1">
                 {usageData?.summary?.totalCalls ?? 0}
               </p>
             </div>
-            <div className="p-3 rounded-xl bg-[#050507] border border-slate-800">
+            <div className="p-3.5 rounded-xl bg-[#090a0e] border border-white/[0.06]">
               <p className="text-slate-400">Successful Calls</p>
-              <p className="text-lg font-bold font-mono tabular-nums text-emerald-300 mt-0.5">
+              <p className="text-lg font-bold tabular-nums text-emerald-300 mt-1">
                 {usageData?.summary?.successfulCalls ?? 0}
               </p>
             </div>
-            <div className="p-3 rounded-xl bg-[#050507] border border-slate-800">
+            <div className="p-3.5 rounded-xl bg-[#090a0e] border border-white/[0.06]">
               <p className="text-slate-400">Failed / Unconfigured</p>
-              <p className="text-lg font-bold font-mono tabular-nums text-amber-300 mt-0.5">
+              <p className="text-lg font-bold tabular-nums text-amber-300 mt-1">
                 {usageData?.summary?.failedCalls ?? 0}
               </p>
             </div>
-            <div className="p-3 rounded-xl bg-[#050507] border border-slate-800">
+            <div className="p-3.5 rounded-xl bg-[#090a0e] border border-white/[0.06]">
               <p className="text-slate-400">Total Tokens Logged</p>
-              <p className="text-lg font-bold font-mono tabular-nums text-[#f0cf65] mt-0.5">
+              <p className="text-lg font-bold tabular-nums text-[#f0cf65] mt-1">
                 {(usageData?.summary?.totalTokens ?? 0).toLocaleString()}
               </p>
             </div>
           </div>
 
           {(usageData?.logs || []).length > 0 && activeSubmenu === 'ai-usage-costs' && (
-            <div className="rounded-xl border border-slate-800 overflow-x-auto max-h-56">
+            <div className="rounded-xl border border-white/[0.07] overflow-x-auto max-h-56">
               <table className="w-full text-left text-xs">
                 <thead>
-                  <tr className="border-b border-slate-800 bg-[#050507] text-slate-400">
-                    <th className="py-2 px-3">Timestamp</th>
-                    <th className="py-2 px-3">Source</th>
-                    <th className="py-2 px-3">Model</th>
-                    <th className="py-2 px-3">Tokens</th>
-                    <th className="py-2 px-3">Status</th>
+                  <tr className="border-b border-white/[0.07] bg-[#0d0f14] text-slate-400">
+                    <th className="py-2.5 px-3 font-medium">Timestamp</th>
+                    <th className="py-2.5 px-3 font-medium">Source</th>
+                    <th className="py-2.5 px-3 font-medium">Model</th>
+                    <th className="py-2.5 px-3 font-medium">Tokens</th>
+                    <th className="py-2.5 px-3 font-medium">Status</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-800/70 font-mono text-[11px]">
+                <tbody className="divide-y divide-white/[0.06] text-xs">
                   {usageData!.logs.slice(0, 20).map((l: any) => (
                     <tr key={l.id}>
-                      <td className="py-2 px-3 text-slate-400">{new Date(l.createdAt).toLocaleString()}</td>
-                      <td className="py-2 px-3 text-slate-200">{l.source}</td>
-                      <td className="py-2 px-3 text-slate-300">{l.model}</td>
-                      <td className="py-2 px-3 text-[#f0cf65]">{l.totalTokens}</td>
-                      <td className={`py-2 px-3 ${l.status === 'SUCCESS' ? 'text-emerald-300' : 'text-red-300'}`}>
+                      <td className="py-2.5 px-3 text-slate-400 tabular-nums">{new Date(l.createdAt).toLocaleString()}</td>
+                      <td className="py-2.5 px-3 text-slate-200">{l.source}</td>
+                      <td className="py-2.5 px-3 text-slate-300">{l.model}</td>
+                      <td className="py-2.5 px-3 text-[#f0cf65] tabular-nums">{l.totalTokens}</td>
+                      <td className={`py-2.5 px-3 font-medium ${l.status === 'SUCCESS' ? 'text-emerald-300' : 'text-red-300'}`}>
                         {l.status}
                       </td>
                     </tr>
@@ -787,19 +782,19 @@ export const SuperAdminAiSettings: React.FC<Props> = ({
       )}
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        <div className="p-6 rounded-2xl bg-[#0b0c10] border border-slate-800/90 space-y-4">
+        <div className="p-6 rounded-2xl bg-[#111319] border border-white/[0.08] space-y-4">
           <h3 className="text-sm font-semibold text-white flex items-center gap-2">
-            <Sliders className="w-4 h-4 text-[#d4af37]" /> AI Engine Controls, Model & Permissions
+            <Sliders className="w-4 h-4 text-[#d4af37]" /> AI Engine Controls & Model
           </h3>
 
-          <div className="p-3 rounded-xl bg-[#050507] border border-slate-800 space-y-1.5">
-            <label className="block text-[11px] font-semibold text-[#f0cf65]">
-              Active Gemini Model Selection
+          <div className="p-3.5 rounded-xl bg-[#090a0e] border border-white/[0.06] space-y-1.5">
+            <label className="block text-xs font-semibold text-[#f0cf65]">
+              Active Gemini Model
             </label>
             <select
               value={settings.activeModel || 'gemini-4-hydrogen'}
               onChange={e => setSettings({ ...settings, activeModel: e.target.value })}
-              className="w-full px-3 py-2 rounded-lg bg-[#0b0c10] border border-slate-700 text-xs text-white font-mono"
+              className="w-full h-10 px-3 rounded-xl bg-[#111319] border border-white/[0.1] text-xs text-white"
             >
               <option value="gemini-4-hydrogen">gemini-4-hydrogen (Recommended Executive Reasoning)</option>
               <option value="gemini-4-argon">gemini-4-argon</option>
@@ -811,74 +806,73 @@ export const SuperAdminAiSettings: React.FC<Props> = ({
             {toggles.map(t => (
               <label
                 key={t.key}
-                className="flex items-center justify-between p-3 rounded-xl bg-[#050507] border border-slate-800 cursor-pointer"
+                className="flex items-center justify-between p-3.5 rounded-xl bg-[#090a0e] border border-white/[0.06] cursor-pointer"
               >
-                <div>
+                <div className="pr-3">
                   <p className="text-xs font-semibold text-white">{t.label}</p>
-                  <p className="text-[11px] text-slate-400">{t.desc}</p>
+                  <p className="text-xs text-slate-400 mt-0.5">{t.desc}</p>
                 </div>
                 <input
                   type="checkbox"
                   checked={Boolean(settings[t.key])}
                   onChange={e => setSettings({ ...settings, [t.key]: e.target.checked })}
-                  className="w-4 h-4 accent-[#d4af37]"
+                  className="w-4 h-4 accent-[#d4af37] shrink-0"
                 />
               </label>
             ))}
           </div>
 
-          <div className="grid grid-cols-3 gap-3 pt-2">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
             <div>
-              <label className="block text-[11px] text-slate-400 mb-1">Confidence Threshold (%)</label>
+              <label className="block text-xs text-slate-400 mb-1">Confidence Threshold (%)</label>
               <input
                 type="number"
                 min={50}
                 max={100}
                 value={settings.confidenceThreshold}
                 onChange={e => setSettings({ ...settings, confidenceThreshold: Number(e.target.value) })}
-                className="w-full px-3 py-2 rounded-xl bg-[#050507] border border-slate-800 text-xs text-[#f0cf65] font-mono"
+                className="w-full h-10 px-3 rounded-xl bg-[#090a0e] border border-white/[0.08] text-xs text-[#f0cf65] tabular-nums"
               />
             </div>
             <div>
-              <label className="block text-[11px] text-slate-400 mb-1">Max Audio Size (MB)</label>
+              <label className="block text-xs text-slate-400 mb-1">Max Audio Size (MB)</label>
               <input
                 type="number"
                 min={10}
                 max={500}
                 value={settings.maxAudioFileSizeMB}
                 onChange={e => setSettings({ ...settings, maxAudioFileSizeMB: Number(e.target.value) })}
-                className="w-full px-3 py-2 rounded-xl bg-[#050507] border border-slate-800 text-xs text-[#f0cf65] font-mono"
+                className="w-full h-10 px-3 rounded-xl bg-[#090a0e] border border-white/[0.08] text-xs text-[#f0cf65] tabular-nums"
               />
             </div>
             <div>
-              <label className="block text-[11px] text-slate-400 mb-1">Job Concurrency</label>
+              <label className="block text-xs text-slate-400 mb-1">Job Concurrency</label>
               <input
                 type="number"
                 min={1}
                 max={5}
                 value={settings.jobConcurrency}
                 onChange={e => setSettings({ ...settings, jobConcurrency: Number(e.target.value) })}
-                className="w-full px-3 py-2 rounded-xl bg-[#050507] border border-slate-800 text-xs text-[#f0cf65] font-mono"
+                className="w-full h-10 px-3 rounded-xl bg-[#090a0e] border border-white/[0.08] text-xs text-[#f0cf65] tabular-nums"
               />
             </div>
           </div>
 
           <button
             onClick={handleSave}
-            className="w-full py-2.5 rounded-xl bg-gradient-to-r from-[#d4af37] to-[#b8891b] text-black font-bold text-xs"
+            className="w-full h-10 rounded-xl bg-[#d4af37] hover:bg-[#e5c354] text-[#090a0e] font-semibold text-xs transition-colors"
           >
-            Save AI Configuration (Owner Approval)
+            Save AI Configuration
           </button>
         </div>
 
-        {/* Live Integration Status & Connection Tests */}
-        <div className="p-6 rounded-2xl bg-[#0b0c10] border border-slate-800/90 space-y-4">
+        <div className="p-6 rounded-2xl bg-[#111319] border border-white/[0.08] space-y-4">
           <div>
             <h3 className="text-sm font-semibold text-white flex items-center gap-2">
               <Activity className="w-4 h-4 text-[#d4af37]" /> Service Integration Status
             </h3>
-            <p className="text-[11px] text-slate-400 mt-0.5">
-              API secrets remain isolated in Render environment variables and are never exposed to the browser.
+            <p className="text-xs text-slate-400 mt-0.5">
+              API secrets remain isolated in server environment variables and are never exposed to the browser.
             </p>
           </div>
 
@@ -889,7 +883,7 @@ export const SuperAdminAiSettings: React.FC<Props> = ({
               { id: 'chromaprint', label: 'Chromaprint (fpcalc)' },
               { id: 'ffmpeg', label: 'FFmpeg Audio Engine' },
               { id: 'database', label: 'PostgreSQL Database' },
-              { id: 'storage', label: 'Media & DBbyte Storage' }
+              { id: 'storage', label: 'Media Storage' }
             ].map(svc => {
               const statusText = integrations[svc.id] || 'Unknown';
               const isOk =
@@ -900,24 +894,24 @@ export const SuperAdminAiSettings: React.FC<Props> = ({
                 statusText.includes('In-Memory');
               const tr = testResults[svc.id];
               return (
-                <div key={svc.id} className="p-3.5 rounded-xl bg-[#050507] border border-slate-800 space-y-1.5">
+                <div key={svc.id} className="p-3.5 rounded-xl bg-[#090a0e] border border-white/[0.06] space-y-1.5">
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <p className="text-xs font-semibold text-white">{svc.label}</p>
-                      <p className={`text-[11px] font-mono ${isOk ? 'text-emerald-300' : 'text-amber-300'}`}>
+                      <p className={`text-xs ${isOk ? 'text-emerald-300' : 'text-amber-300'}`}>
                         {statusText}
                       </p>
                     </div>
                     <button
                       onClick={() => handleTest(svc.id)}
                       disabled={testing === svc.id}
-                      className="px-3 py-1.5 rounded-lg bg-[#d4af37]/15 border border-[#d4af37]/40 text-xs text-[#f0cf65] hover:bg-[#d4af37]/25 disabled:opacity-50"
+                      className="h-8 px-3 rounded-lg bg-[#d4af37]/15 border border-[#d4af37]/40 text-xs font-medium text-[#f0cf65] hover:bg-[#d4af37]/25 disabled:opacity-50"
                     >
                       {testing === svc.id ? 'Testing...' : 'Test Connection'}
                     </button>
                   </div>
                   {tr && (
-                    <p className={`text-[11px] ${tr.ok ? 'text-emerald-400' : 'text-red-300'}`}>
+                    <p className={`text-xs ${tr.ok ? 'text-emerald-400' : 'text-red-300'}`}>
                       {tr.message}
                     </p>
                   )}

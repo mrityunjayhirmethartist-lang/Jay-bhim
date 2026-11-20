@@ -63,16 +63,16 @@ const ToggleRow: React.FC<{
   checked: boolean;
   onChange: (next: boolean) => void;
 }> = ({ label, description, checked, onChange }) => (
-  <label className="p-3.5 rounded-xl bg-[#050507] border border-slate-800 hover:border-slate-700 flex items-start justify-between gap-4 cursor-pointer">
-    <div className="space-y-0.5">
-      <span className="text-xs font-semibold text-white block">{label}</span>
-      <span className="text-[11px] text-slate-400 block">{description}</span>
+  <label className="p-4 rounded-xl bg-[#090a0e] border border-white/[0.08] hover:border-white/[0.15] flex items-start justify-between gap-4 cursor-pointer transition-colors">
+    <div className="space-y-1">
+      <span className="text-sm font-medium text-white block">{label}</span>
+      <span className="text-xs text-slate-400 leading-relaxed block">{description}</span>
     </div>
     <input
       type="checkbox"
       checked={checked}
       onChange={e => onChange(e.target.checked)}
-      className="w-4 h-4 mt-0.5 accent-[#d4af37] shrink-0"
+      className="w-4 h-4 mt-1 accent-[#d4af37] shrink-0 cursor-pointer"
     />
   </label>
 );
@@ -314,7 +314,7 @@ export const SuperAdminSettingsHub: React.FC<Props> = ({
 
   if (!autoSettings) {
     return (
-      <div className="p-8 rounded-xl bg-[#0b0c10] border border-slate-800 text-xs text-slate-400">
+      <div className="p-8 rounded-2xl bg-[#111319] border border-white/[0.08] text-xs text-slate-400">
         Loading Settings & AI Automation Configuration...
       </div>
     );
@@ -322,11 +322,8 @@ export const SuperAdminSettingsHub: React.FC<Props> = ({
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-      {/* Left 10-Section Settings Index */}
-      <aside className="lg:col-span-3 rounded-xl bg-[#0b0c10] border border-slate-800 p-3 space-y-1 h-fit">
-        <p className="px-2.5 py-1.5 text-[10px] font-mono uppercase tracking-wider text-[#f0cf65]">
-          Settings Modules (10)
-        </p>
+      {/* Mobile Horizontal Module Switcher */}
+      <div className="lg:hidden flex items-center gap-2 overflow-x-auto pb-1">
         {SECTIONS.map(sec => {
           const Icon = sec.icon;
           const active = activeSection === sec.id;
@@ -334,10 +331,33 @@ export const SuperAdminSettingsHub: React.FC<Props> = ({
             <button
               key={sec.id}
               onClick={() => onSelectSubmenu('settings', sec.id)}
-              className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-xs font-medium text-left transition-colors ${
+              className={`h-9 px-3.5 rounded-xl text-xs font-medium inline-flex items-center gap-2 whitespace-nowrap shrink-0 transition-colors ${
                 active
                   ? 'bg-[#d4af37]/15 text-[#f0cf65] border border-[#d4af37]/40 font-semibold'
-                  : 'text-slate-300 hover:text-white hover:bg-[#121318] border border-transparent'
+                  : 'bg-[#111319] text-slate-300 border border-white/[0.08]'
+              }`}
+            >
+              <Icon className={`w-3.5 h-3.5 ${active ? 'text-[#d4af37]' : 'text-slate-400'}`} />
+              {sec.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Desktop Left 10-Section Settings Index */}
+      <aside className="hidden lg:block lg:col-span-3 rounded-2xl bg-[#111319] border border-white/[0.08] p-3 space-y-1 h-fit">
+        <p className="px-3 py-2 text-xs font-semibold text-[#f0cf65]">Settings Modules</p>
+        {SECTIONS.map(sec => {
+          const Icon = sec.icon;
+          const active = activeSection === sec.id;
+          return (
+            <button
+              key={sec.id}
+              onClick={() => onSelectSubmenu('settings', sec.id)}
+              className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-medium text-left transition-colors ${
+                active
+                  ? 'bg-[#d4af37]/15 text-[#f0cf65] border border-[#d4af37]/40 font-semibold'
+                  : 'text-slate-300 hover:text-white hover:bg-white/[0.04] border border-transparent'
               }`}
             >
               <Icon className={`w-4 h-4 shrink-0 ${active ? 'text-[#d4af37]' : 'text-slate-400'}`} />
@@ -348,30 +368,30 @@ export const SuperAdminSettingsHub: React.FC<Props> = ({
       </aside>
 
       {/* Right Active Settings Section Panel */}
-      <div className="lg:col-span-9 space-y-5">
+      <div className="lg:col-span-9 space-y-5 min-w-0">
         {/* Top Save & Status Bar */}
-        <div className="rounded-xl bg-[#0b0c10] border border-slate-800 p-4 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h2 className="text-sm font-bold text-white">
+        <div className="rounded-2xl bg-[#111319] border border-white/[0.08] p-4 sm:p-5 flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="text-base font-semibold text-white">
               {SECTIONS.find(s => s.id === activeSection)?.label || 'Settings'}
             </h2>
-            <p className="text-[11px] font-mono text-slate-400 tabular-nums">
+            <p className="text-xs text-slate-400 tabular-nums mt-0.5">
               {autoSettings.updatedAt
-                ? `Last saved ${new Date(autoSettings.updatedAt).toLocaleString()} by ${autoSettings.updatedBy}`
+                ? `Last saved ${new Date(autoSettings.updatedAt).toLocaleString('en-IN')} by ${autoSettings.updatedBy}`
                 : 'Super Admin Enforced Governance'}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={() => onSelectSubmenu('ai-automation', 'automation-overview')}
-              className="px-3 py-2 rounded-lg bg-[#050507] border border-slate-800 hover:border-[#d4af37]/40 text-xs text-slate-200"
+              className="h-9 px-3.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.08] text-xs font-medium text-slate-200 transition-colors"
             >
-              Open AI Automation Dashboard
+              Open AI Automation
             </button>
             <button
               onClick={() => saveAutoSettings()}
               disabled={saving}
-              className="px-4 py-2 rounded-lg bg-[#d4af37] hover:bg-[#f0cf65] disabled:opacity-50 text-black text-xs font-bold inline-flex items-center gap-1.5"
+              className="h-9 px-4 rounded-xl bg-[#d4af37] hover:bg-[#e5c354] disabled:opacity-50 text-[#090a0e] text-xs font-semibold inline-flex items-center gap-1.5 transition-colors"
             >
               <Save className="w-3.5 h-3.5" />
               {saving ? 'Saving...' : 'Save Settings'}
@@ -381,44 +401,44 @@ export const SuperAdminSettingsHub: React.FC<Props> = ({
 
         {/* 1. GENERAL SETTINGS */}
         {activeSection === 'general-settings' && (
-          <div className="rounded-xl bg-[#0b0c10] border border-slate-800 p-5 space-y-4">
+          <div className="rounded-2xl bg-[#111319] border border-white/[0.08] p-5 space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
               <div>
-                <label className="block text-[11px] text-slate-400 mb-1">Brand Display Name</label>
+                <label className="block text-xs text-slate-400 mb-1.5">Brand Display Name</label>
                 <input
                   type="text"
                   value={autoSettings.general.brandName}
                   onChange={e => updateSectionField('general', 'brandName', e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg bg-[#050507] border border-slate-800 text-white"
+                  className="w-full h-10 px-3 rounded-xl bg-[#090a0e] border border-white/[0.08] focus:border-[#d4af37]/60 outline-none text-white"
                 />
               </div>
               <div>
-                <label className="block text-[11px] text-slate-400 mb-1">Official Support Email</label>
+                <label className="block text-xs text-slate-400 mb-1.5">Official Support Email</label>
                 <input
                   type="email"
                   value={autoSettings.general.supportEmail}
                   onChange={e => updateSectionField('general', 'supportEmail', e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg bg-[#050507] border border-slate-800 text-white"
+                  className="w-full h-10 px-3 rounded-xl bg-[#090a0e] border border-white/[0.08] focus:border-[#d4af37]/60 outline-none text-white"
                 />
               </div>
               <div>
-                <label className="block text-[11px] text-slate-400 mb-1">Default Platform Language</label>
+                <label className="block text-xs text-slate-400 mb-1.5">Default Platform Language</label>
                 <select
                   value={autoSettings.general.defaultLanguage}
                   onChange={e => updateSectionField('general', 'defaultLanguage', e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg bg-[#050507] border border-slate-800 text-white"
+                  className="w-full h-10 px-3 rounded-xl bg-[#090a0e] border border-white/[0.08] focus:border-[#d4af37]/60 outline-none text-white"
                 >
                   <option value="English">English</option>
                   <option value="Hindi">Hindi</option>
                 </select>
               </div>
               <div>
-                <label className="block text-[11px] text-slate-400 mb-1">Operations Timezone</label>
+                <label className="block text-xs text-slate-400 mb-1.5">Operations Timezone</label>
                 <input
                   type="text"
                   value={autoSettings.general.timezone}
                   onChange={e => updateSectionField('general', 'timezone', e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg bg-[#050507] border border-slate-800 text-white font-mono"
+                  className="w-full h-10 px-3 rounded-xl bg-[#090a0e] border border-white/[0.08] focus:border-[#d4af37]/60 outline-none text-white"
                 />
               </div>
             </div>
@@ -428,7 +448,7 @@ export const SuperAdminSettingsHub: React.FC<Props> = ({
         {/* 2. CHAT HISTORY MANAGEMENT */}
         {activeSection === 'chat-history' && (
           <div className="space-y-4">
-            <div className="rounded-xl bg-[#0b0c10] border border-slate-800 p-5 space-y-3">
+            <div className="rounded-2xl bg-[#111319] border border-white/[0.08] p-5 space-y-3">
               <ToggleRow
                 label="Allow Chat History Access"
                 description="When disabled, Rudra AI stops persisting conversation history and blocks history reads with audit logging."
@@ -443,7 +463,7 @@ export const SuperAdminSettingsHub: React.FC<Props> = ({
               />
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 text-xs">
                 <div>
-                  <label className="block text-[11px] text-slate-400 mb-1">
+                  <label className="block text-xs text-slate-400 mb-1.5">
                     Retention Period (Days)
                   </label>
                   <input
@@ -454,22 +474,22 @@ export const SuperAdminSettingsHub: React.FC<Props> = ({
                     onChange={e =>
                       updateSectionField('chatHistory', 'retentionDays', Number(e.target.value))
                     }
-                    className="w-full px-3 py-2 rounded-lg bg-[#050507] border border-slate-800 text-white font-mono tabular-nums"
+                    className="w-full h-9 px-3 rounded-xl bg-[#090a0e] border border-white/[0.08] focus:border-[#d4af37]/60 outline-none text-white tabular-nums"
                   />
                 </div>
-                <div className="flex items-end gap-2">
+                <div className="flex flex-wrap items-end gap-2">
                   <button
                     type="button"
                     onClick={loadChatHistory}
-                    className="px-3.5 py-2 rounded-lg bg-[#050507] border border-slate-800 text-xs text-slate-200 inline-flex items-center gap-1.5"
+                    className="h-9 px-3.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.08] text-xs font-medium text-slate-200 inline-flex items-center gap-1.5"
                   >
                     <RefreshCw className={`w-3.5 h-3.5 ${loadingChats ? 'animate-spin' : ''}`} />
-                    Reload Chat Logs
+                    Reload Logs
                   </button>
                   <button
                     type="button"
                     onClick={() => handleDeleteChatTurn()}
-                    className="px-3.5 py-2 rounded-lg bg-red-950/70 border border-red-700/50 text-xs text-red-300 inline-flex items-center gap-1.5"
+                    className="h-9 px-3.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-xs font-medium text-rose-300 inline-flex items-center gap-1.5"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                     Clear All History
@@ -478,9 +498,9 @@ export const SuperAdminSettingsHub: React.FC<Props> = ({
               </div>
             </div>
 
-            <div className="rounded-xl bg-[#0b0c10] border border-slate-800 p-5 space-y-3">
+            <div className="rounded-2xl bg-[#111319] border border-white/[0.08] p-5 space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <h3 className="text-xs font-semibold text-white">
+                <h3 className="text-sm font-semibold text-white">
                   Stored Rudra AI Chat History ({chatTurns.length})
                 </h3>
                 <input
@@ -488,33 +508,33 @@ export const SuperAdminSettingsHub: React.FC<Props> = ({
                   value={chatSearch}
                   onChange={e => setChatSearch(e.target.value)}
                   placeholder="Filter chat content..."
-                  className="px-3 py-1.5 rounded-lg bg-[#050507] border border-slate-800 text-xs text-white"
+                  className="h-9 px-3 rounded-xl bg-[#090a0e] border border-white/[0.08] focus:border-[#d4af37]/60 outline-none text-xs text-white"
                 />
               </div>
 
               {chatError ? (
-                <div className="p-3 rounded-lg bg-amber-950/50 border border-amber-700/50 text-xs text-amber-200">
+                <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/25 text-xs text-amber-200">
                   {chatError}
                 </div>
               ) : chatTurns.length === 0 ? (
-                <p className="text-xs text-slate-500 py-6 text-center">
+                <p className="text-xs text-slate-500 py-8 text-center">
                   No stored AI chat turns found yet.
                 </p>
               ) : (
-                <div className="divide-y divide-slate-800/70 max-h-80 overflow-y-auto text-xs">
+                <div className="divide-y divide-white/[0.06] max-h-80 overflow-y-auto text-xs">
                   {chatTurns.map(t => (
-                    <div key={t.id} className="py-2.5 flex items-start justify-between gap-3">
-                      <div className="space-y-0.5 min-w-0">
-                        <p className="font-mono text-[10px] text-[#f0cf65] tabular-nums">
-                          {t.role.toUpperCase()} · {t.actorEmail} ·{' '}
-                          {new Date(t.timestamp).toLocaleString()}
+                    <div key={t.id} className="py-3 flex items-start justify-between gap-3">
+                      <div className="space-y-1 min-w-0">
+                        <p className="text-[11px] font-medium text-[#f0cf65] tabular-nums">
+                          {t.role === 'assistant' ? 'Assistant' : 'User'} · {t.actorEmail} ·{' '}
+                          {new Date(t.timestamp).toLocaleString('en-IN')}
                         </p>
-                        <p className="text-slate-200 line-clamp-2">{t.content}</p>
+                        <p className="text-slate-200 line-clamp-2 leading-relaxed">{t.content}</p>
                       </div>
                       <button
                         type="button"
                         onClick={() => handleDeleteChatTurn(t.id)}
-                        className="p-1.5 rounded bg-[#050507] border border-slate-800 text-slate-400 hover:text-red-300 shrink-0"
+                        className="h-8 w-8 rounded-lg bg-[#090a0e] border border-white/[0.08] text-slate-400 hover:text-rose-300 shrink-0 inline-flex items-center justify-center"
                         aria-label="Delete chat turn"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -529,7 +549,7 @@ export const SuperAdminSettingsHub: React.FC<Props> = ({
 
         {/* 3. USER PERMISSIONS */}
         {activeSection === 'user-permissions' && (
-          <div className="rounded-xl bg-[#0b0c10] border border-slate-800 p-5 space-y-3">
+          <div className="rounded-2xl bg-[#111319] border border-white/[0.08] p-5 space-y-3">
             <ToggleRow
               label="Allow AI Access to User Data Context"
               description="Allows Rudra AI Executive Assistant to include registered artist counts and KYC/user status metrics during analysis."
@@ -554,7 +574,7 @@ export const SuperAdminSettingsHub: React.FC<Props> = ({
         {/* 4. PRIVACY & SECURITY */}
         {activeSection === 'privacy-security' && (
           <div className="space-y-4">
-            <div className="rounded-xl bg-[#0b0c10] border border-slate-800 p-5 space-y-3">
+            <div className="rounded-2xl bg-[#111319] border border-white/[0.08] p-5 space-y-3">
               <ToggleRow
                 label="Redact Sensitive PII in AI Prompts"
                 description="Automatically masks email addresses, phone numbers, Aadhaar, and PAN identifiers before sending support text to Gemini."
@@ -563,7 +583,7 @@ export const SuperAdminSettingsHub: React.FC<Props> = ({
               />
               <ToggleRow
                 label="Allow External LLM Analysis (Gemini API)"
-                description="When OFF, AI support triage uses local deterministic rule evaluation only and makes zero external LLM API calls."
+                description="When turned off, AI support triage uses local deterministic rule evaluation only and makes zero external LLM API calls."
                 checked={Boolean(autoSettings.privacySecurity.allowExternalAiContext)}
                 onChange={v => updateSectionField('privacySecurity', 'allowExternalAiContext', v)}
               />
@@ -576,18 +596,18 @@ export const SuperAdminSettingsHub: React.FC<Props> = ({
             </div>
 
             {platformSettings && (
-              <div className="rounded-xl bg-[#0b0c10] border border-slate-800 p-5 space-y-4">
-                <h3 className="text-xs font-semibold text-white flex items-center gap-1.5">
+              <div className="rounded-2xl bg-[#111319] border border-white/[0.08] p-5 space-y-4">
+                <h3 className="text-sm font-semibold text-white flex items-center gap-2">
                   <Lock className="w-4 h-4 text-[#d4af37]" />
                   Executive 2FA Security PIN (Owner Approval Required)
                 </h3>
-                <div className="p-3.5 rounded-xl bg-[#050507] border border-slate-800 space-y-3">
-                  <div className="flex items-center justify-between">
+                <div className="p-4 rounded-xl bg-[#090a0e] border border-white/[0.08] space-y-3">
+                  <div className="flex items-center justify-between gap-4">
                     <div>
                       <p className="text-xs font-semibold text-[#f0cf65]">
                         Enforce Super Admin 2FA PIN on Sign-In
                       </p>
-                      <p className="text-[11px] text-slate-400">
+                      <p className="text-xs text-slate-400 mt-0.5">
                         Requires 4+ digit executive PIN alongside password
                       </p>
                     </div>
@@ -600,7 +620,7 @@ export const SuperAdminSettingsHub: React.FC<Props> = ({
                           adminTwoFactorEnabled: e.target.checked
                         })
                       }
-                      className="w-4 h-4 accent-[#d4af37]"
+                      className="w-4 h-4 accent-[#d4af37] cursor-pointer"
                     />
                   </div>
                   <input
@@ -608,7 +628,7 @@ export const SuperAdminSettingsHub: React.FC<Props> = ({
                     value={new2faPin}
                     onChange={e => setNew2faPin(e.target.value)}
                     placeholder="Set or update 4+ digit 2FA PIN"
-                    className="w-full px-3 py-2 rounded-lg bg-[#0b0c10] border border-slate-800 text-xs text-white font-mono"
+                    className="w-full h-10 px-3 rounded-xl bg-[#111319] border border-white/[0.08] focus:border-[#d4af37]/60 outline-none text-xs text-white"
                   />
                 </div>
                 <button
@@ -633,7 +653,7 @@ export const SuperAdminSettingsHub: React.FC<Props> = ({
                       }
                     })
                   }
-                  className="px-4 py-2.5 rounded-lg bg-[#d4af37] hover:bg-[#f0cf65] text-black font-bold text-xs"
+                  className="h-10 px-4 rounded-xl bg-[#d4af37] hover:bg-[#e5c354] text-[#090a0e] font-semibold text-xs"
                 >
                   Save 2FA Security Policy (Owner Approval)
                 </button>
@@ -644,7 +664,7 @@ export const SuperAdminSettingsHub: React.FC<Props> = ({
 
         {/* 5. AI BEHAVIOUR */}
         {activeSection === 'ai-behaviour' && (
-          <div className="rounded-xl bg-[#0b0c10] border border-slate-800 p-5 space-y-4">
+          <div className="rounded-2xl bg-[#111319] border border-white/[0.08] p-5 space-y-4">
             <ToggleRow
               label="Master AI Engine Enabled"
               description="Global permission required for any AI analysis, drafting, or executive assistant inference."
@@ -660,11 +680,11 @@ export const SuperAdminSettingsHub: React.FC<Props> = ({
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs pt-2">
               <div>
-                <label className="block text-[11px] text-slate-400 mb-1">Active Gemini Model</label>
+                <label className="block text-xs text-slate-400 mb-1.5">Active Gemini Model</label>
                 <select
                   value={autoSettings.aiBehaviour.activeModel}
                   onChange={e => updateSectionField('aiBehaviour', 'activeModel', e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg bg-[#050507] border border-slate-800 text-white font-mono"
+                  className="w-full h-10 px-3 rounded-xl bg-[#090a0e] border border-white/[0.08] focus:border-[#d4af37]/60 outline-none text-white"
                 >
                   <option value="gemini-2.5-flash">gemini-2.5-flash</option>
                   <option value="gemini-3.8-flash">gemini-3.8-flash</option>
@@ -672,11 +692,11 @@ export const SuperAdminSettingsHub: React.FC<Props> = ({
                 </select>
               </div>
               <div>
-                <label className="block text-[11px] text-slate-400 mb-1">Response Tone</label>
+                <label className="block text-xs text-slate-400 mb-1.5">Response Tone</label>
                 <select
                   value={autoSettings.aiBehaviour.responseTone}
                   onChange={e => updateSectionField('aiBehaviour', 'responseTone', e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg bg-[#050507] border border-slate-800 text-white"
+                  className="w-full h-10 px-3 rounded-xl bg-[#090a0e] border border-white/[0.08] focus:border-[#d4af37]/60 outline-none text-white"
                 >
                   <option value="professional">Professional</option>
                   <option value="concise">Concise</option>
@@ -684,7 +704,7 @@ export const SuperAdminSettingsHub: React.FC<Props> = ({
                 </select>
               </div>
               <div>
-                <label className="block text-[11px] text-slate-400 mb-1">
+                <label className="block text-xs text-slate-400 mb-1.5 tabular-nums">
                   Confidence Threshold ({autoSettings.aiBehaviour.confidenceThreshold}%)
                 </label>
                 <input
@@ -699,20 +719,20 @@ export const SuperAdminSettingsHub: React.FC<Props> = ({
                       Number(e.target.value)
                     )
                   }
-                  className="w-full px-3 py-2 rounded-lg bg-[#050507] border border-slate-800 text-white font-mono tabular-nums"
+                  className="w-full h-10 px-3 rounded-xl bg-[#090a0e] border border-white/[0.08] focus:border-[#d4af37]/60 outline-none text-white tabular-nums"
                 />
               </div>
             </div>
 
             <div className="text-xs">
-              <label className="block text-[11px] text-slate-400 mb-1">
+              <label className="block text-xs text-slate-400 mb-1.5">
                 System Guidance Prompt
               </label>
               <textarea
                 rows={3}
                 value={autoSettings.aiBehaviour.systemGuidance}
                 onChange={e => updateSectionField('aiBehaviour', 'systemGuidance', e.target.value)}
-                className="w-full px-3 py-2 rounded-lg bg-[#050507] border border-slate-800 text-white"
+                className="w-full p-3 rounded-xl bg-[#090a0e] border border-white/[0.08] focus:border-[#d4af37]/60 outline-none text-white"
               />
             </div>
           </div>
@@ -721,10 +741,10 @@ export const SuperAdminSettingsHub: React.FC<Props> = ({
         {/* 6. EMAIL & NOTIFICATIONS */}
         {activeSection === 'email-notifications' && (
           <div className="space-y-4">
-            <div className="rounded-xl bg-[#0b0c10] border border-slate-800 p-5 space-y-3">
+            <div className="rounded-2xl bg-[#111319] border border-white/[0.08] p-5 space-y-3">
               <ToggleRow
                 label="Allow AI Promotional Email Automation"
-                description="Master toggle controlling promotional emails. OFF = AI cannot prepare or send promotional emails. ON = AI can prepare/send per Super Admin approval policy."
+                description="Master toggle controlling promotional emails. When disabled, AI cannot prepare or send promotional emails. When enabled, campaigns follow Super Admin approval policy."
                 checked={Boolean(autoSettings.emailNotifications.allowAiPromotionalEmailAutomation)}
                 onChange={v =>
                   updateSectionField('emailNotifications', 'allowAiPromotionalEmailAutomation', v)
@@ -740,14 +760,14 @@ export const SuperAdminSettingsHub: React.FC<Props> = ({
               />
               <ToggleRow
                 label="Require Super Admin Approval Before Promotional Dispatch"
-                description="When ON, promotional campaigns must be explicitly approved by Super Admin before sending or scheduled dispatch."
+                description="When enabled, promotional campaigns must be explicitly approved by Super Admin before sending or scheduled dispatch."
                 checked={Boolean(autoSettings.emailNotifications.promoRequireSuperAdminApproval)}
                 onChange={v =>
                   updateSectionField('emailNotifications', 'promoRequireSuperAdminApproval', v)
                 }
               />
               <div className="pt-2 text-xs">
-                <label className="block text-[11px] text-slate-400 mb-1">
+                <label className="block text-xs text-slate-400 mb-1.5">
                   Daily Promotional Email Send Cap (24h Rolling)
                 </label>
                 <input
@@ -762,52 +782,53 @@ export const SuperAdminSettingsHub: React.FC<Props> = ({
                       Number(e.target.value)
                     )
                   }
-                  className="w-48 px-3 py-2 rounded-lg bg-[#050507] border border-slate-800 text-white font-mono tabular-nums"
+                  className="w-48 h-9 px-3 rounded-xl bg-[#090a0e] border border-white/[0.08] focus:border-[#d4af37]/60 outline-none text-white tabular-nums"
                 />
               </div>
             </div>
 
             {/* Preserved Email Relay Diagnostics & OTP Email Preview + Broadcast */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="rounded-xl bg-[#0b0c10] border border-slate-800 p-5 space-y-3 text-xs">
-                <p className="font-semibold text-[#f0cf65] flex items-center gap-1.5">
-                  <Mail className="w-4 h-4" /> Transactional OTP & Relay Status (Isolated Channel)
+              <div className="rounded-2xl bg-[#111319] border border-white/[0.08] p-5 space-y-3 text-xs">
+                <p className="text-sm font-semibold text-[#f0cf65] flex items-center gap-2">
+                  <Mail className="w-4 h-4" /> Transactional OTP & Relay Status
                 </p>
-                <p className="font-mono text-[11px] text-slate-300">
+                <p className="text-slate-300">
                   Provider: {emailConfig?.provider || 'Google Apps Script HTTPS Relay'}
                 </p>
-                <p
-                  className={`font-mono text-[11px] ${
-                    emailConfig?.configured && emailConfig?.validHttpsUrl
-                      ? 'text-emerald-300'
-                      : 'text-red-300'
-                  }`}
-                >
-                  Status:{' '}
-                  {emailConfig?.configured && emailConfig?.validHttpsUrl
-                    ? 'CONFIGURED & READY'
-                    : 'MISCONFIGURED / MISSING ENV'}
-                </p>
-                <div className="flex flex-wrap gap-2">
+                <div>
+                  <span
+                    className={`inline-flex items-center px-2.5 py-0.5 rounded-lg text-xs font-medium ${
+                      emailConfig?.configured && emailConfig?.validHttpsUrl
+                        ? 'bg-emerald-500/15 text-emerald-300'
+                        : 'bg-rose-500/15 text-rose-300'
+                    }`}
+                  >
+                    {emailConfig?.configured && emailConfig?.validHttpsUrl
+                      ? 'Configured & Ready'
+                      : 'Configuration Needed'}
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-2 pt-1">
                   <button
                     type="button"
                     onClick={onTestEmailRelay}
                     disabled={testingEmail}
-                    className="px-3 py-1.5 rounded-lg bg-[#d4af37]/15 border border-[#d4af37]/40 text-[#f0cf65]"
+                    className="h-9 px-3.5 rounded-xl bg-[#d4af37]/15 hover:bg-[#d4af37]/25 border border-[#d4af37]/40 text-xs font-medium text-[#f0cf65]"
                   >
                     {testingEmail ? 'Checking...' : 'Test Email Relay'}
                   </button>
                   <button
                     type="button"
                     onClick={onOpenOtpPreview}
-                    className="px-3 py-1.5 rounded-lg bg-[#050507] border border-slate-700 hover:border-[#d4af37]/50 text-slate-200 inline-flex items-center gap-1.5"
+                    className="h-9 px-3.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.08] text-xs font-medium text-slate-200 inline-flex items-center gap-1.5"
                   >
                     <Eye className="w-3.5 h-3.5" />
                     Preview OTP Email
                   </button>
                 </div>
                 {emailTestResult && (
-                  <p className={`text-[11px] ${emailTestResult.ok ? 'text-emerald-300' : 'text-red-300'}`}>
+                  <p className={`text-xs ${emailTestResult.ok ? 'text-emerald-300' : 'text-rose-300'}`}>
                     {emailTestResult.message}
                   </p>
                 )}
@@ -815,9 +836,9 @@ export const SuperAdminSettingsHub: React.FC<Props> = ({
 
               <form
                 onSubmit={handleBroadcast}
-                className="rounded-xl bg-[#0b0c10] border border-slate-800 p-5 space-y-3"
+                className="rounded-2xl bg-[#111319] border border-white/[0.08] p-5 space-y-3"
               >
-                <h3 className="text-xs font-semibold text-white flex items-center gap-2">
+                <h3 className="text-sm font-semibold text-white flex items-center gap-2">
                   <Megaphone className="w-4 h-4 text-[#d4af37]" /> Broadcast In-App Notification
                 </h3>
                 <input
@@ -826,7 +847,7 @@ export const SuperAdminSettingsHub: React.FC<Props> = ({
                   value={broadcastTitle}
                   onChange={e => setBroadcastTitle(e.target.value)}
                   placeholder="Notification title..."
-                  className="w-full px-3 py-2 rounded-lg bg-[#050507] border border-slate-800 text-xs text-white"
+                  className="w-full h-9 px-3 rounded-xl bg-[#090a0e] border border-white/[0.08] focus:border-[#d4af37]/60 outline-none text-xs text-white"
                 />
                 <textarea
                   rows={2}
@@ -834,12 +855,12 @@ export const SuperAdminSettingsHub: React.FC<Props> = ({
                   value={broadcastMessage}
                   onChange={e => setBroadcastMessage(e.target.value)}
                   placeholder="Message to all active artists..."
-                  className="w-full px-3 py-2 rounded-lg bg-[#050507] border border-slate-800 text-xs text-white"
+                  className="w-full p-3 rounded-xl bg-[#090a0e] border border-white/[0.08] focus:border-[#d4af37]/60 outline-none text-xs text-white"
                 />
                 <button
                   type="submit"
                   disabled={sendingBroadcast}
-                  className="px-4 py-2 rounded-lg bg-[#d4af37]/20 border border-[#d4af37]/50 text-[#f0cf65] text-xs font-semibold inline-flex items-center gap-1.5"
+                  className="h-9 px-4 rounded-xl bg-[#d4af37]/15 hover:bg-[#d4af37]/25 border border-[#d4af37]/40 text-[#f0cf65] text-xs font-semibold inline-flex items-center gap-1.5"
                 >
                   <Send className="w-3.5 h-3.5" /> {sendingBroadcast ? 'Sending...' : 'Send Broadcast'}
                 </button>
@@ -850,7 +871,7 @@ export const SuperAdminSettingsHub: React.FC<Props> = ({
 
         {/* 7. SUPPORT MANAGEMENT */}
         {activeSection === 'support-management' && (
-          <div className="rounded-xl bg-[#0b0c10] border border-slate-800 p-5 space-y-3">
+          <div className="rounded-2xl bg-[#111319] border border-white/[0.08] p-5 space-y-3">
             <ToggleRow
               label="Allow AI to Read Support Tickets"
               description="Allows AI automation to read newly created support tickets for category classification and urgency triage."
@@ -859,7 +880,7 @@ export const SuperAdminSettingsHub: React.FC<Props> = ({
             />
             <ToggleRow
               label="Allow AI to Generate Replies"
-              description="Allows AI to prepare a suggested reply draft. When Automatic Reply is OFF, drafts wait for Super Admin approval."
+              description="Allows AI to prepare a suggested reply draft. When Automatic Reply is turned off, drafts wait for Super Admin approval."
               checked={Boolean(autoSettings.supportManagement.allowAiGenerateSupportReplies)}
               onChange={v =>
                 updateSectionField('supportManagement', 'allowAiGenerateSupportReplies', v)
@@ -867,7 +888,7 @@ export const SuperAdminSettingsHub: React.FC<Props> = ({
             />
             <ToggleRow
               label="Allow AI to Automatically Reply"
-              description="When ON (for non-escalated tickets above confidence threshold), posts automated replies immediately without holding for approval."
+              description="When enabled (for non-escalated tickets above confidence threshold), posts automated replies immediately without holding for approval."
               checked={Boolean(autoSettings.supportManagement.allowAiAutoReplyTickets)}
               onChange={v => updateSectionField('supportManagement', 'allowAiAutoReplyTickets', v)}
             />
@@ -887,7 +908,7 @@ export const SuperAdminSettingsHub: React.FC<Props> = ({
             />
 
             <div className="pt-2 text-xs">
-              <label className="block text-[11px] text-slate-400 mb-1">
+              <label className="block text-xs text-slate-400 mb-1.5">
                 Mandatory Escalation Keywords (comma-separated)
               </label>
               <input
@@ -903,7 +924,7 @@ export const SuperAdminSettingsHub: React.FC<Props> = ({
                       .filter(Boolean)
                   )
                 }
-                className="w-full px-3 py-2 rounded-lg bg-[#050507] border border-slate-800 text-white font-mono"
+                className="w-full h-10 px-3 rounded-xl bg-[#090a0e] border border-white/[0.08] focus:border-[#d4af37]/60 outline-none text-white"
               />
             </div>
           </div>
@@ -911,7 +932,7 @@ export const SuperAdminSettingsHub: React.FC<Props> = ({
 
         {/* 8. AUTOMATION & APPROVALS */}
         {activeSection === 'automation-approvals' && (
-          <div className="rounded-xl bg-[#0b0c10] border border-slate-800 p-5 space-y-3">
+          <div className="rounded-2xl bg-[#111319] border border-white/[0.08] p-5 space-y-3">
             <ToggleRow
               label="Require Super Admin Approval for Bulk Promotional Sends"
               description="Prevents unapproved promotional broadcasts from executing via scheduler or manual dispatch."
@@ -929,7 +950,7 @@ export const SuperAdminSettingsHub: React.FC<Props> = ({
               }
             />
             <div className="pt-2 text-xs">
-              <label className="block text-[11px] text-slate-400 mb-1">
+              <label className="block text-xs text-slate-400 mb-1.5">
                 Failure Rate Auto-Pause Threshold (%)
               </label>
               <input
@@ -944,7 +965,7 @@ export const SuperAdminSettingsHub: React.FC<Props> = ({
                     Number(e.target.value)
                   )
                 }
-                className="w-40 px-3 py-2 rounded-lg bg-[#050507] border border-slate-800 text-white font-mono tabular-nums"
+                className="w-40 h-9 px-3 rounded-xl bg-[#090a0e] border border-white/[0.08] focus:border-[#d4af37]/60 outline-none text-white tabular-nums"
               />
             </div>
           </div>
@@ -972,7 +993,7 @@ export const SuperAdminSettingsHub: React.FC<Props> = ({
                 key: 'email',
                 title: 'Google Apps Script Mail Relay',
                 configured: Boolean(emailConfig?.configured && emailConfig?.validHttpsUrl),
-                detail: `Provider: ${emailConfig?.provider || 'unconfigured'}`
+                detail: `Provider: ${emailConfig?.provider || 'Not configured'}`
               },
               {
                 key: 'razorpay',
@@ -983,13 +1004,15 @@ export const SuperAdminSettingsHub: React.FC<Props> = ({
             ].map(item => (
               <div
                 key={item.key}
-                className="p-4 rounded-xl bg-[#0b0c10] border border-slate-800 space-y-2.5"
+                className="p-5 rounded-2xl bg-[#111319] border border-white/[0.08] space-y-3"
               >
                 <div className="flex items-center justify-between gap-2">
-                  <span className="font-semibold text-[#f0cf65]">{item.title}</span>
+                  <span className="text-sm font-semibold text-[#f0cf65]">{item.title}</span>
                   <span
-                    className={`font-mono text-[11px] inline-flex items-center gap-1 ${
-                      item.configured ? 'text-emerald-400' : 'text-amber-400'
+                    className={`px-2.5 py-0.5 rounded-lg text-[11px] font-medium inline-flex items-center gap-1 shrink-0 ${
+                      item.configured
+                        ? 'bg-emerald-500/15 text-emerald-300'
+                        : 'bg-amber-500/15 text-amber-300'
                     }`}
                   >
                     {item.configured ? (
@@ -997,10 +1020,10 @@ export const SuperAdminSettingsHub: React.FC<Props> = ({
                     ) : (
                       <AlertCircle className="w-3.5 h-3.5" />
                     )}
-                    {item.configured ? 'CONNECTED' : 'NOT CONFIGURED'}
+                    {item.configured ? 'Connected' : 'Not Configured'}
                   </span>
                 </div>
-                <p className="text-[11px] font-mono text-slate-400">{item.detail}</p>
+                <p className="text-xs text-slate-400">{item.detail}</p>
                 {item.key !== 'razorpay' && (
                   <button
                     type="button"
@@ -1010,15 +1033,15 @@ export const SuperAdminSettingsHub: React.FC<Props> = ({
                         ? onTestEmailRelay()
                         : handleTestIntegration(item.key)
                     }
-                    className="px-3 py-1.5 rounded-lg bg-[#050507] border border-slate-700 hover:border-[#d4af37]/50 text-slate-200 text-[11px]"
+                    className="h-9 px-3.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.08] text-slate-200 text-xs font-medium"
                   >
                     {testingService === item.key ? 'Testing...' : 'Verify Connectivity'}
                   </button>
                 )}
                 {serviceTestMsg[item.key] && (
                   <p
-                    className={`text-[11px] ${
-                      serviceTestMsg[item.key].ok ? 'text-emerald-300' : 'text-red-300'
+                    className={`text-xs ${
+                      serviceTestMsg[item.key].ok ? 'text-emerald-300' : 'text-rose-300'
                     }`}
                   >
                     {serviceTestMsg[item.key].text}
@@ -1031,21 +1054,21 @@ export const SuperAdminSettingsHub: React.FC<Props> = ({
 
         {/* 10. ACCOUNT MANAGEMENT */}
         {activeSection === 'account-management' && (
-          <div className="rounded-xl bg-[#0b0c10] border border-slate-800 p-5 space-y-4 text-xs">
+          <div className="rounded-2xl bg-[#111319] border border-white/[0.08] p-5 space-y-4 text-xs">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-[11px] text-slate-400 mb-1">
+                <label className="block text-xs text-slate-400 mb-1.5">
                   Super Admin Primary Email
                 </label>
                 <input
                   type="text"
                   disabled
-                  value={adminEmail || 'SUPER_ADMIN'}
-                  className="w-full px-3 py-2 rounded-lg bg-[#050507] border border-slate-800 text-slate-400 font-mono"
+                  value={adminEmail || 'Super Admin'}
+                  className="w-full h-10 px-3 rounded-xl bg-[#090a0e] border border-white/[0.08] text-slate-400"
                 />
               </div>
               <div>
-                <label className="block text-[11px] text-slate-400 mb-1">
+                <label className="block text-xs text-slate-400 mb-1.5">
                   Emergency Escalation Contact Email
                 </label>
                 <input
@@ -1058,18 +1081,18 @@ export const SuperAdminSettingsHub: React.FC<Props> = ({
                       e.target.value
                     )
                   }
-                  className="w-full px-3 py-2 rounded-lg bg-[#050507] border border-slate-800 text-white"
+                  className="w-full h-10 px-3 rounded-xl bg-[#090a0e] border border-white/[0.08] focus:border-[#d4af37]/60 outline-none text-white"
                 />
               </div>
             </div>
 
-            <div className="p-4 rounded-xl bg-[#050507] border border-slate-800 space-y-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="p-4 rounded-xl bg-[#090a0e] border border-white/[0.08] space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <p className="font-semibold text-white">
+                  <p className="text-sm font-semibold text-white">
                     Emergency AI Automation Revocation & Session Controls
                   </p>
-                  <p className="text-[11px] text-slate-400">
+                  <p className="text-xs text-slate-400 mt-0.5">
                     Immediately pause all automated AI execution or revoke sensitive email &
                     auto-reply permissions across the platform.
                   </p>
@@ -1077,7 +1100,7 @@ export const SuperAdminSettingsHub: React.FC<Props> = ({
                 <button
                   type="button"
                   onClick={onOpenSessionModal}
-                  className="px-3 py-1.5 rounded-lg bg-[#0b0c10] border border-slate-700 text-slate-200"
+                  className="h-9 px-3.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.08] text-xs font-medium text-slate-200"
                 >
                   Inspect Active Session
                 </button>
@@ -1086,10 +1109,10 @@ export const SuperAdminSettingsHub: React.FC<Props> = ({
                 <button
                   type="button"
                   onClick={() => handleEmergencyPauseOrRevoke(false)}
-                  className={`px-3.5 py-2 rounded-lg font-bold inline-flex items-center gap-1.5 ${
+                  className={`h-9 px-4 rounded-xl text-xs font-semibold inline-flex items-center gap-1.5 ${
                     autoSettings.aiBehaviour.aiMasterPaused
-                      ? 'bg-emerald-600 text-white'
-                      : 'bg-amber-950/70 border border-amber-700/60 text-amber-200'
+                      ? 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                      : 'bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-200'
                   }`}
                 >
                   {autoSettings.aiBehaviour.aiMasterPaused ? (
@@ -1105,7 +1128,7 @@ export const SuperAdminSettingsHub: React.FC<Props> = ({
                 <button
                   type="button"
                   onClick={() => handleEmergencyPauseOrRevoke(true)}
-                  className="px-3.5 py-2 rounded-lg bg-red-950/80 hover:bg-red-900 border border-red-700/60 text-red-200 font-bold"
+                  className="h-9 px-4 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-200 text-xs font-semibold"
                 >
                   Pause & Revoke Email / Auto-Reply Permissions
                 </button>

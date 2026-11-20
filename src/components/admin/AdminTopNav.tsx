@@ -82,7 +82,6 @@ export const AdminTopNav: React.FC<AdminTopNavProps> = ({
   const searchRef = useRef<HTMLDivElement | null>(null);
   const notifRef = useRef<HTMLDivElement | null>(null);
 
-  // Close popovers on outside click
   useEffect(() => {
     const handleOutside = (e: MouseEvent) => {
       if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
@@ -96,7 +95,6 @@ export const AdminTopNav: React.FC<AdminTopNavProps> = ({
     return () => document.removeEventListener('mousedown', handleOutside);
   }, []);
 
-  // Load notifications on mount & refresh
   const fetchNotifications = async () => {
     if (!token) return;
     setNotifLoading(true);
@@ -119,7 +117,6 @@ export const AdminTopNav: React.FC<AdminTopNavProps> = ({
     fetchNotifications();
   }, [token]);
 
-  // Debounced live global search
   useEffect(() => {
     const trimmed = query.trim();
     if (!token || trimmed.length < 2) {
@@ -159,25 +156,25 @@ export const AdminTopNav: React.FC<AdminTopNavProps> = ({
     : 0;
 
   return (
-    <header className="sticky top-0 z-30 bg-[#08090d]/95 backdrop-blur-md border-b border-[#d4af37]/25 px-4 sm:px-6 py-3">
+    <header className="sticky top-0 z-30 bg-[#0b0c11]/95 backdrop-blur-md border-b border-white/[0.08] px-4 sm:px-6 py-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        {/* Zone 1: Brand Identity + Active Section */}
+        {/* Brand Identity & Breadcrumb */}
         <div className="flex items-center gap-3 min-w-0">
           <BrandLogo size="sm" showSubtitle={false} />
-          <div className="min-w-0 hidden sm:block border-l border-slate-800 pl-3">
-            <p className="text-[11px] font-mono text-[#d4af37] uppercase tracking-wider truncate">
-              Distribution · Devotion · Beyond
+          <div className="min-w-0 hidden sm:block border-l border-white/[0.08] pl-3">
+            <p className="text-[11px] font-medium text-[#d4af37] truncate">
+              Super Admin Console
             </p>
-            <p className="text-xs text-slate-300 truncate">
-              {categoryLabel} <span className="text-slate-600">/</span>{' '}
+            <p className="text-xs text-slate-400 truncate">
+              {categoryLabel} <span className="text-slate-600 mx-1">/</span>
               <span className="text-white font-medium">{submenuLabel}</span>
             </p>
           </div>
         </div>
 
-        {/* Zone 2: Global Search Bar */}
-        <div ref={searchRef} className="relative flex-1 min-w-[210px] max-w-md order-3 lg:order-2 w-full lg:w-auto">
-          <Search className="w-3.5 h-3.5 text-[#d4af37] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+        {/* Global Search */}
+        <div ref={searchRef} className="relative flex-1 min-w-[200px] max-w-md order-3 lg:order-2 w-full lg:w-auto">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
           <input
             type="text"
             value={query}
@@ -188,8 +185,8 @@ export const AdminTopNav: React.FC<AdminTopNavProps> = ({
               setQuery(e.target.value);
               if (e.target.value.trim().length >= 2) setSearchOpen(true);
             }}
-            placeholder="Search users, releases, transactions, tickets, or modules..."
-            className="w-full min-h-[40px] pl-9 pr-8 py-2 rounded-xl bg-[#050507] border border-slate-800 focus:border-[#d4af37]/60 focus:outline-none text-xs text-white placeholder:text-slate-500 transition-colors"
+            placeholder="Search users, releases, orders, tickets..."
+            className="w-full h-10 pl-10 pr-9 rounded-xl bg-[#13151d] border border-white/[0.08] focus:border-[#d4af37]/60 focus:outline-none text-sm text-white placeholder:text-slate-500 transition-colors"
             aria-label="Global Super Admin Search"
           />
           {query && (
@@ -199,18 +196,18 @@ export const AdminTopNav: React.FC<AdminTopNavProps> = ({
                 setResults(null);
                 setSearchOpen(false);
               }}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white p-1"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white p-1"
               aria-label="Clear search"
             >
-              <X className="w-3.5 h-3.5" />
+              <X className="w-4 h-4" />
             </button>
           )}
 
           {searchOpen && query.trim().length >= 2 && (
-            <div className="absolute left-0 right-0 mt-2 rounded-xl bg-[#0b0c10] border border-[#d4af37]/40 shadow-2xl max-h-96 overflow-y-auto z-50 divide-y divide-slate-800/80 text-xs">
+            <div className="absolute left-0 right-0 mt-2 rounded-2xl bg-[#13151d] border border-white/[0.1] shadow-2xl max-h-96 overflow-y-auto z-50 divide-y divide-white/[0.06] text-xs">
               {searching && (
-                <div className="p-4 text-center text-slate-400 font-mono">
-                  Searching live database records...
+                <div className="p-4 text-center text-slate-400">
+                  Searching records...
                 </div>
               )}
 
@@ -222,8 +219,8 @@ export const AdminTopNav: React.FC<AdminTopNavProps> = ({
 
               {!searching && results && results.actions.length > 0 && (
                 <div className="p-2">
-                  <p className="px-2 py-1 text-[10px] font-mono uppercase tracking-wider text-[#d4af37]">
-                    Admin Modules
+                  <p className="px-2.5 py-1 text-[11px] font-semibold text-[#d4af37]">
+                    Modules
                   </p>
                   {results.actions.map(act => (
                     <button
@@ -232,13 +229,13 @@ export const AdminTopNav: React.FC<AdminTopNavProps> = ({
                         onNavigateTab(act.tab as AdminTab, act.submenu);
                         setSearchOpen(false);
                       }}
-                      className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-white/[0.04] flex items-center justify-between gap-2"
+                      className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-white/[0.05] flex items-center justify-between gap-2"
                     >
                       <span className="flex items-center gap-2 text-slate-200 truncate">
                         <Compass className="w-3.5 h-3.5 text-[#d4af37] shrink-0" />
                         <span className="truncate">{act.label}</span>
                       </span>
-                      <ArrowRight className="w-3 h-3 text-slate-500 shrink-0" />
+                      <ArrowRight className="w-3.5 h-3.5 text-slate-500 shrink-0" />
                     </button>
                   ))}
                 </div>
@@ -246,7 +243,7 @@ export const AdminTopNav: React.FC<AdminTopNavProps> = ({
 
               {!searching && results && results.users.length > 0 && (
                 <div className="p-2">
-                  <p className="px-2 py-1 text-[10px] font-mono uppercase tracking-wider text-[#d4af37]">
+                  <p className="px-2.5 py-1 text-[11px] font-semibold text-[#d4af37]">
                     Users ({results.users.length})
                   </p>
                   {results.users.map(u => (
@@ -256,14 +253,14 @@ export const AdminTopNav: React.FC<AdminTopNavProps> = ({
                         onInspectUserById(u.id);
                         setSearchOpen(false);
                       }}
-                      className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-white/[0.04] flex items-center justify-between gap-2"
+                      className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-white/[0.05] flex items-center justify-between gap-2"
                     >
                       <span className="flex items-center gap-2 min-w-0">
                         <Users className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                         <span className="truncate text-white font-medium">{u.fullName}</span>
-                        <span className="truncate text-slate-400 font-mono text-[11px]">{u.email}</span>
+                        <span className="truncate text-slate-400">{u.email}</span>
                       </span>
-                      <span className="font-mono text-[10px] text-[#f0cf65] shrink-0">{u.kycStatus}</span>
+                      <span className="text-[11px] font-medium text-[#f0cf65] shrink-0">{u.kycStatus}</span>
                     </button>
                   ))}
                 </div>
@@ -271,8 +268,8 @@ export const AdminTopNav: React.FC<AdminTopNavProps> = ({
 
               {!searching && results && results.releases.length > 0 && (
                 <div className="p-2">
-                  <p className="px-2 py-1 text-[10px] font-mono uppercase tracking-wider text-[#d4af37]">
-                    Music Releases ({results.releases.length})
+                  <p className="px-2.5 py-1 text-[11px] font-semibold text-[#d4af37]">
+                    Releases ({results.releases.length})
                   </p>
                   {results.releases.map(r => (
                     <button
@@ -281,14 +278,14 @@ export const AdminTopNav: React.FC<AdminTopNavProps> = ({
                         onInspectReleaseById(r.id);
                         setSearchOpen(false);
                       }}
-                      className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-white/[0.04] flex items-center justify-between gap-2"
+                      className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-white/[0.05] flex items-center justify-between gap-2"
                     >
                       <span className="flex items-center gap-2 min-w-0">
                         <Disc3 className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                         <span className="truncate text-white font-medium">{r.title}</span>
-                        <span className="truncate text-slate-400 text-[11px]">{r.artist}</span>
+                        <span className="truncate text-slate-400">{r.artist}</span>
                       </span>
-                      <span className="font-mono text-[10px] text-[#f0cf65] shrink-0">{r.status}</span>
+                      <span className="text-[11px] font-medium text-[#f0cf65] shrink-0">{r.status}</span>
                     </button>
                   ))}
                 </div>
@@ -296,7 +293,7 @@ export const AdminTopNav: React.FC<AdminTopNavProps> = ({
 
               {!searching && results && results.orders.length > 0 && (
                 <div className="p-2">
-                  <p className="px-2 py-1 text-[10px] font-mono uppercase tracking-wider text-[#d4af37]">
+                  <p className="px-2.5 py-1 text-[11px] font-semibold text-[#d4af37]">
                     Transactions ({results.orders.length})
                   </p>
                   {results.orders.map(o => (
@@ -306,14 +303,14 @@ export const AdminTopNav: React.FC<AdminTopNavProps> = ({
                         onNavigateTab('finance', 'transactions');
                         setSearchOpen(false);
                       }}
-                      className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-white/[0.04] flex items-center justify-between gap-2"
+                      className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-white/[0.05] flex items-center justify-between gap-2"
                     >
                       <span className="flex items-center gap-2 min-w-0">
                         <CreditCard className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                        <span className="truncate font-mono text-white">{o.orderId}</span>
-                        <span className="truncate text-slate-400 text-[11px]">{o.userEmail}</span>
+                        <span className="truncate text-white font-medium tabular-nums">{o.orderId}</span>
+                        <span className="truncate text-slate-400">{o.userEmail}</span>
                       </span>
-                      <span className="font-mono text-[11px] text-[#f0cf65] shrink-0">
+                      <span className="text-[11px] font-medium text-[#f0cf65] tabular-nums shrink-0">
                         ₹{o.amount} · {o.status}
                       </span>
                     </button>
@@ -323,7 +320,7 @@ export const AdminTopNav: React.FC<AdminTopNavProps> = ({
 
               {!searching && results && results.tickets.length > 0 && (
                 <div className="p-2">
-                  <p className="px-2 py-1 text-[10px] font-mono uppercase tracking-wider text-[#d4af37]">
+                  <p className="px-2.5 py-1 text-[11px] font-semibold text-[#d4af37]">
                     Support Tickets ({results.tickets.length})
                   </p>
                   {results.tickets.map(t => (
@@ -333,14 +330,14 @@ export const AdminTopNav: React.FC<AdminTopNavProps> = ({
                         onNavigateTab('support', 'open-tickets');
                         setSearchOpen(false);
                       }}
-                      className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-white/[0.04] flex items-center justify-between gap-2"
+                      className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-white/[0.05] flex items-center justify-between gap-2"
                     >
                       <span className="flex items-center gap-2 min-w-0">
                         <MessageSquare className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                         <span className="truncate text-white">{t.subject}</span>
-                        <span className="truncate text-slate-400 font-mono text-[11px]">{t.userEmail}</span>
+                        <span className="truncate text-slate-400">{t.userEmail}</span>
                       </span>
-                      <span className="font-mono text-[10px] text-[#f0cf65] shrink-0">{t.status}</span>
+                      <span className="text-[11px] font-medium text-[#f0cf65] shrink-0">{t.status}</span>
                     </button>
                   ))}
                 </div>
@@ -349,41 +346,41 @@ export const AdminTopNav: React.FC<AdminTopNavProps> = ({
           )}
         </div>
 
-        {/* Zone 3: Notification Centre, Sync, Profile, Account Settings, Logout */}
+        {/* Actions & Session */}
         <div className="flex items-center gap-2 shrink-0 order-2 lg:order-3">
-          {/* Notification Bell */}
+          {/* Alerts Popover */}
           <div ref={notifRef} className="relative">
             <button
               onClick={() => {
                 setNotifOpen(v => !v);
                 if (!notifOpen) fetchNotifications();
               }}
-              className="min-h-[40px] px-3 py-2 rounded-xl bg-[#050507] border border-slate-800 hover:border-[#d4af37]/50 text-slate-200 inline-flex items-center gap-1.5 text-xs transition-colors whitespace-nowrap shrink-0"
+              className="h-10 px-3 rounded-xl bg-[#13151d] border border-white/[0.08] hover:border-[#d4af37]/50 text-slate-200 inline-flex items-center gap-2 text-xs font-medium transition-colors whitespace-nowrap shrink-0"
               aria-label="Open Notification Centre"
             >
               <Bell className="w-4 h-4 text-[#d4af37]" />
-              <span className="font-mono tabular-nums text-[11px] text-[#f0cf65]">
+              <span className="tabular-nums text-xs font-semibold text-[#f0cf65]">
                 {notifications.length}
               </span>
             </button>
 
             {notifOpen && (
-              <div className="absolute right-0 mt-2 w-80 sm:w-96 rounded-xl bg-[#0b0c10] border border-[#d4af37]/40 shadow-2xl z-50 overflow-hidden">
-                <div className="px-4 py-3 border-b border-slate-800 flex items-center justify-between">
+              <div className="absolute right-0 mt-2 w-80 sm:w-96 rounded-2xl bg-[#13151d] border border-white/[0.1] shadow-2xl z-50 overflow-hidden">
+                <div className="px-4 py-3 border-b border-white/[0.08] flex items-center justify-between">
                   <div>
-                    <p className="text-xs font-semibold text-[#f0cf65]">Operational Alerts</p>
-                    <p className="text-[10px] text-slate-400">Live system, compliance & finance queues</p>
+                    <p className="text-sm font-semibold text-white">Operational Alerts</p>
+                    <p className="text-xs text-slate-400">Live system, compliance & finance queues</p>
                   </div>
                   <button
                     onClick={fetchNotifications}
-                    className="p-1.5 rounded-lg bg-[#050507] border border-slate-800 text-slate-400 hover:text-white"
+                    className="p-1.5 rounded-lg bg-[#0b0c11] border border-white/[0.08] text-slate-400 hover:text-white transition-colors"
                     title="Refresh Alerts"
                   >
                     <RefreshCw className={`w-3.5 h-3.5 ${notifLoading ? 'animate-spin' : ''}`} />
                   </button>
                 </div>
 
-                <div className="max-h-80 overflow-y-auto divide-y divide-slate-800/80">
+                <div className="max-h-80 overflow-y-auto divide-y divide-white/[0.06]">
                   {notifications.length === 0 ? (
                     <p className="p-5 text-center text-xs text-slate-500">
                       No pending alerts in operational queues.
@@ -396,12 +393,12 @@ export const AdminTopNav: React.FC<AdminTopNavProps> = ({
                           onNavigateTab(n.tab as AdminTab, n.submenu || 'executive-overview');
                           setNotifOpen(false);
                         }}
-                        className="w-full text-left p-3.5 hover:bg-white/[0.03] transition-colors space-y-1"
+                        className="w-full text-left p-3.5 hover:bg-white/[0.04] transition-colors space-y-1"
                       >
                         <div className="flex items-center justify-between gap-2">
                           <span className="text-xs font-semibold text-white truncate">{n.title}</span>
                           <span
-                            className={`text-[10px] font-mono uppercase shrink-0 ${
+                            className={`text-[11px] font-medium capitalize shrink-0 ${
                               n.severity === 'critical'
                                 ? 'text-red-400'
                                 : n.severity === 'high'
@@ -412,7 +409,7 @@ export const AdminTopNav: React.FC<AdminTopNavProps> = ({
                             {n.severity}
                           </span>
                         </div>
-                        <p className="text-[11px] text-slate-400 line-clamp-2">{n.detail}</p>
+                        <p className="text-xs text-slate-400 line-clamp-2">{n.detail}</p>
                       </button>
                     ))
                   )}
@@ -426,26 +423,26 @@ export const AdminTopNav: React.FC<AdminTopNavProps> = ({
               onRefreshAll();
               fetchNotifications();
             }}
-            className="min-h-[40px] px-3 py-2 rounded-xl bg-[#050507] border border-[#d4af37]/35 hover:border-[#d4af37] text-xs text-[#f0cf65] inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0"
+            className="h-10 px-3.5 rounded-xl bg-[#13151d] border border-white/[0.08] hover:border-[#d4af37]/50 text-xs font-medium text-slate-200 hover:text-white inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-            <span className="hidden xl:inline">Sync DB</span>
+            <RefreshCw className={`w-3.5 h-3.5 text-[#d4af37] ${loading ? 'animate-spin' : ''}`} />
+            <span className="hidden xl:inline">Refresh</span>
           </button>
 
           <button
             onClick={onOpenSessionModal}
-            className="min-h-[40px] px-3 py-2 rounded-xl bg-[#050507] border border-slate-800 hover:border-[#d4af37]/45 text-xs text-slate-200 inline-flex items-center gap-2 transition-colors whitespace-nowrap shrink-0"
+            className="h-10 px-3.5 rounded-xl bg-[#13151d] border border-white/[0.08] hover:border-[#d4af37]/50 text-xs font-medium text-slate-200 inline-flex items-center gap-2 transition-colors whitespace-nowrap shrink-0"
             title="Super Admin Identity & Session"
           >
-            <UserCheck className="w-3.5 h-3.5 text-[#d4af37]" />
-            <span className="hidden md:inline max-w-[140px] truncate font-mono text-[11px]">
+            <UserCheck className="w-4 h-4 text-[#d4af37]" />
+            <span className="hidden md:inline max-w-[150px] truncate">
               {sessionInfo?.email || userEmail || 'Super Admin'}
             </span>
           </button>
 
           <button
             onClick={() => onNavigateTab('settings', 'general-settings')}
-            className="hidden sm:inline-flex min-h-[40px] px-2.5 py-2 rounded-xl bg-[#050507] border border-slate-800 hover:border-[#d4af37]/45 text-slate-300 hover:text-white items-center transition-colors shrink-0"
+            className="hidden sm:inline-flex h-10 w-10 justify-center rounded-xl bg-[#13151d] border border-white/[0.08] hover:border-[#d4af37]/50 text-slate-300 hover:text-white items-center transition-colors shrink-0"
             title="Account & Platform Settings"
             aria-label="Account & Platform Settings"
           >
@@ -454,16 +451,16 @@ export const AdminTopNav: React.FC<AdminTopNavProps> = ({
 
           <button
             onClick={onSignOut}
-            className="hidden sm:inline-flex min-h-[40px] px-3 py-2 rounded-xl bg-[#121318] hover:bg-red-950/60 border border-slate-800 hover:border-red-700/50 text-xs text-slate-300 hover:text-red-200 items-center gap-1.5 transition-colors whitespace-nowrap shrink-0"
-            title="Secure Logout"
+            className="hidden sm:inline-flex h-10 px-3.5 rounded-xl bg-[#13151d] hover:bg-red-950/60 border border-white/[0.08] hover:border-red-500/40 text-xs font-medium text-slate-300 hover:text-red-200 items-center gap-1.5 transition-colors whitespace-nowrap shrink-0"
+            title="Sign Out"
           >
             <LogOut className="w-3.5 h-3.5" />
-            <span className="hidden xl:inline">Logout</span>
+            <span className="hidden xl:inline">Sign Out</span>
           </button>
 
           <button
             onClick={onOpenMobileDrawer}
-            className="lg:hidden min-h-[40px] px-3 py-2 rounded-xl bg-[#050507] border border-[#d4af37]/45 text-[#f0cf65] inline-flex items-center gap-1.5 text-xs whitespace-nowrap shrink-0"
+            className="lg:hidden h-10 px-3.5 rounded-xl bg-[#d4af37]/15 border border-[#d4af37]/40 text-[#f0cf65] inline-flex items-center gap-1.5 text-xs font-semibold whitespace-nowrap shrink-0"
             aria-label="Open Navigation Drawer"
           >
             <Menu className="w-4 h-4" /> Menu
